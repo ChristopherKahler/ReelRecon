@@ -33,7 +33,7 @@ if not ffmpeg_available:
         print("        (You may need to press RETURN and enter your password)")
         print()
         result = subprocess.run(
-            ["/bin/bash", "-c", 'NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"'],
+            ["/bin/bash", "-c", '/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"'],
             shell=False
         )
         # Add brew to PATH for this session (Apple Silicon vs Intel)
