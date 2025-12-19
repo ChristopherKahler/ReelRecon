@@ -9,6 +9,7 @@ import sys
 import os
 import webbrowser
 import time
+import shutil
 
 # Change to script directory
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
@@ -18,14 +19,52 @@ print("  REELRECON // TACTICAL")
 print("=" * 40)
 print()
 
+# Check for ffmpeg
+ffmpeg_available = shutil.which("ffmpeg") is not None
+
+if not ffmpeg_available:
+    print("[WARNING] ffmpeg not found!")
+    print("          Transcription requires ffmpeg.")
+    print()
+
+    # Check if Homebrew is available
+    if shutil.which("brew"):
+        print("[SETUP] Installing ffmpeg via Homebrew...")
+        result = subprocess.run(["brew", "install", "ffmpeg"], capture_output=True)
+        if result.returncode == 0:
+            print("[OK] ffmpeg installed successfully!")
+            ffmpeg_available = True
+        else:
+            print("[SKIP] ffmpeg install failed. Install manually: brew install ffmpeg")
+    else:
+        print("To enable transcription, install ffmpeg:")
+        print("  1. Install Homebrew: /bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"")
+        print("  2. Then run: brew install ffmpeg")
+    print()
+
 # Install dependencies
-print("[SETUP] Installing dependencies...")
+print("[SETUP] Installing core dependencies...")
+subprocess.run([sys.executable, "-m", "pip", "install", "--upgrade", "pip", "-q"], capture_output=True)
 subprocess.run([sys.executable, "-m", "pip", "install", "flask", "requests", "-q"])
+
+print("[SETUP] Installing optional dependencies...")
 subprocess.run([sys.executable, "-m", "pip", "install", "yt-dlp", "-q"], capture_output=True)
+
+# Install whisper for transcription
+if ffmpeg_available:
+    print("[SETUP] Installing transcription support (this may take a minute)...")
+    result = subprocess.run([sys.executable, "-m", "pip", "install", "openai-whisper", "-q"], capture_output=True)
+    if result.returncode == 0:
+        print("[OK] Whisper installed - transcription enabled!")
+    else:
+        print("[SKIP] Whisper install failed (optional)")
+else:
+    print("[SKIP] Skipping Whisper (requires ffmpeg)")
 
 # Create output directory
 os.makedirs("output", exist_ok=True)
 
+print()
 print("[READY] Starting server...")
 print()
 print("Opening browser to: http://localhost:5001")
