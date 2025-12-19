@@ -1,0 +1,13 @@
+# ReelRecon - Tactical Content Intelligence
+# Core dependencies
+flask>=2.0.0
+requests>=2.25.0
+
+# Optional - for transcription
+openai-whisper>=20231117
+
+# Optional - fallback video download
+yt-dlp>=2023.0.0
+
+# For bundling as Windows executable
+pyinstaller>=5.0.0

@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ReelRecon // TACTICAL</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/tactical.css') }}">
+</head>
+<body>
+    <!-- Scan Lines Overlay -->
+    <div class="scan-lines"></div>
+
+    <!-- Corner HUD Elements -->
+    <div class="corner-hud top-left">
+        <div class="hud-bracket"></div>
+        <span class="hud-label">SYS.ONLINE</span>
+    </div>
+    <div class="corner-hud top-right">
+        <div class="hud-bracket"></div>
+        <span class="hud-label" id="clock">--:--:--</span>
+    </div>
+    <div class="corner-hud bottom-left">
+        <div class="hud-bracket"></div>
+        <span class="hud-label">v1.0.0</span>
+    </div>
+    <div class="corner-hud bottom-right">
+        <div class="hud-bracket"></div>
+        <span class="hud-label">LOCAL</span>
+    </div>
+
+    <!-- Main Container -->
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <div class="logo-section">
+                    <div class="logo-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="2" y="2" width="20" height="20" rx="5"/>
+                            <circle cx="12" cy="12" r="4"/>
+                            <circle cx="18" cy="6" r="1.5" fill="currentColor"/>
+                        </svg>
+                    </div>
+                    <div class="logo-text">
+                        <h1>REELRECON</h1>
+                        <span class="logo-subtitle">// TACTICAL CONTENT INTELLIGENCE</span>
+                    </div>
+                </div>
+                <div class="status-indicators">
+                    <div class="status-item {% if cookies_exist %}active{% else %}inactive{% endif %}">
+                        <span class="status-dot"></span>
+                        <span class="status-text">COOKIES</span>
+                    </div>
+                    <div class="status-item {% if whisper_available %}active{% else %}inactive{% endif %}">
+                        <span class="status-dot"></span>
+                        <span class="status-text">WHISPER</span>
+                    </div>
+                    <button class="settings-btn" id="openSettingsBtn" title="AI Settings">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="3"/>
+                            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Grid -->
+        <div class="main-grid">
+            <!-- Left Panel - Configuration -->
+            <div class="panel config-panel">
+                <div class="panel-header">
+                    <span class="panel-icon">//</span>
+                    <span class="panel-title">MISSION CONFIG</span>
+                </div>
+                <div class="panel-content">
+                    <form id="scrapeForm">
+                        <!-- Target Input -->
+                        <div class="form-group">
+                            <label class="form-label">TARGET USERNAME</label>
+                            <div class="input-wrapper">
+                                <span class="input-prefix">@</span>
+                                <input type="text" id="username" name="username" class="form-input" placeholder="username" required>
+                            </div>
+                        </div>
+
+                        <!-- Parameters -->
+                        <div class="form-row">
+                            <div class="form-group half">
+                                <label class="form-label">MAX REELS</label>
+                                <input type="number" id="maxReels" value="100" min="10" max="500" class="form-input">
+                            </div>
+                            <div class="form-group half">
+                                <label class="form-label">TOP N</label>
+                                <input type="number" id="topN" value="10" min="1" max="50" class="form-input">
+                            </div>
+                        </div>
+
+                        <!-- Options -->
+                        <div class="form-group">
+                            <label class="form-label">EXTRACTION OPTIONS</label>
+                            <div class="checkbox-group">
+                                <label class="checkbox-item">
+                                    <input type="checkbox" id="downloadVideos">
+                                    <span class="checkbox-box"></span>
+                                    <span class="checkbox-label">DOWNLOAD VIDEOS</span>
+                                </label>
+                                <label class="checkbox-item">
+                                    <input type="checkbox" id="transcribe" {% if not whisper_available %}disabled{% endif %}>
+                                    <span class="checkbox-box"></span>
+                                    <span class="checkbox-label">TRANSCRIBE {% if not whisper_available %}(N/A){% endif %}</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Transcription Provider -->
+                        <div class="form-group" id="transcribeOptionsGroup" style="display: none;">
+                            <label class="form-label">TRANSCRIPTION METHOD</label>
+                            <select id="transcribeProvider" class="form-input" onchange="updateTranscribeOptions()">
+                                <option value="local">Local (Whisper)</option>
+                                <option value="openai">OpenAI Whisper API</option>
+                            </select>
+                            <span class="form-hint" id="transcribeProviderHint">Uses local Whisper model (free, requires download)</span>
+                        </div>
+
+                        <!-- Whisper Model (for local) -->
+                        <div class="form-group" id="whisperModelGroup" style="display: none;">
+                            <label class="form-label">LOCAL MODEL</label>
+                            <select id="whisperModel" class="form-input">
+                                <option value="tiny.en" data-size="39MB">tiny.en (39MB, fastest)</option>
+                                <option value="base.en" data-size="74MB">base.en (74MB)</option>
+                                <option value="small.en" data-size="244MB" selected>small.en (244MB, recommended)</option>
+                                <option value="medium.en" data-size="769MB">medium.en (769MB)</option>
+                                <option value="large" data-size="1550MB">large (1.5GB, slowest)</option>
+                            </select>
+                        </div>
+
+                        <!-- Execute Button -->
+                        <button type="submit" class="execute-btn" id="executeBtn">
+                            <span class="btn-text">EXECUTE SCRAPE</span>
+                            <span class="btn-icon">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polygon points="5,3 19,12 5,21"/>
+                                </svg>
+                            </span>
+                        </button>
+                    </form>
+
+                    <!-- Progress Display -->
+                    <div id="progressSection" class="progress-section" style="display: none;">
+                        <div class="progress-header">
+                            <span class="progress-label">OPERATION IN PROGRESS</span>
+                            <span class="progress-spinner"></span>
+                        </div>
+                        <div class="progress-text" id="progressText">Initializing...</div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="progressFill"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Panel - Results -->
+            <div class="panel results-panel">
+                <div class="panel-header">
+                    <span class="panel-icon">//</span>
+                    <span class="panel-title">INTEL REPORT</span>
+                    <div class="panel-actions">
+                        <!-- View Toggle -->
+                        <div class="view-toggle">
+                            <button class="view-btn active" id="listViewBtn" onclick="switchView('list')" title="List View">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                                    <line x1="8" y1="6" x2="21" y2="6"/>
+                                    <line x1="8" y1="12" x2="21" y2="12"/>
+                                    <line x1="8" y1="18" x2="21" y2="18"/>
+                                    <line x1="3" y1="6" x2="3.01" y2="6"/>
+                                    <line x1="3" y1="12" x2="3.01" y2="12"/>
+                                    <line x1="3" y1="18" x2="3.01" y2="18"/>
+                                </svg>
+                            </button>
+                            <button class="view-btn" id="galleryViewBtn" onclick="switchView('gallery')" title="Video Gallery">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                                    <rect x="3" y="3" width="7" height="7"/>
+                                    <rect x="14" y="3" width="7" height="7"/>
+                                    <rect x="14" y="14" width="7" height="7"/>
+                                    <rect x="3" y="14" width="7" height="7"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <button class="panel-btn" id="clearResultsBtn" title="Clear Results">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                <!-- List View (default) -->
+                <div class="panel-content" id="resultsContent">
+                    <!-- Results will be populated here -->
+                    <div class="empty-state">
+                        <div class="empty-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <circle cx="11" cy="11" r="8"/>
+                                <path d="M21 21l-4.35-4.35"/>
+                            </svg>
+                        </div>
+                        <div class="empty-text">NO INTEL GATHERED</div>
+                        <div class="empty-subtext">Configure target and execute scrape</div>
+                    </div>
+                </div>
+                <!-- Video Gallery View -->
+                <div class="panel-content video-gallery" id="videoGallery" style="display: none;">
+                    <div class="gallery-header">
+                        <span class="gallery-count" id="galleryCount">0 videos</span>
+                        <div class="gallery-actions">
+                            <button class="gallery-see-all" id="gallerySeeAllBtn" onclick="toggleShowAllVideos()" title="Toggle between current profile and all videos">SEE ALL</button>
+                            <button class="gallery-refresh" onclick="refreshVideoGallery()" title="Refresh">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                                    <path d="M23 4v6h-6M1 20v-6h6"/>
+                                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="video-grid" id="videoGrid">
+                        <!-- Videos populated dynamically -->
+                        <div class="empty-state">
+                            <div class="empty-icon">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                    <polygon points="23 7 16 12 23 17 23 7"/>
+                                    <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+                                </svg>
+                            </div>
+                            <div class="empty-text">NO VIDEOS</div>
+                            <div class="empty-subtext">Enable "Download Videos" to populate gallery</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- History Panel -->
+        <div class="panel history-panel">
+            <div class="panel-header">
+                <span class="panel-icon">//</span>
+                <span class="panel-title">MISSION HISTORY</span>
+                <div class="panel-actions">
+                    <button class="panel-btn danger" id="clearHistoryBtn" title="Clear All History">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14"/>
+                        </svg>
+                        <span>CLEAR ALL</span>
+                    </button>
+                </div>
+            </div>
+            <div class="panel-content">
+                <div class="history-list" id="historyList">
+                    {% if history %}
+                        {% for item in history %}
+                        <div class="history-item" data-id="{{ item.id }}">
+                            <div class="history-main">
+                                <span class="history-username">@{{ item.username }}</span>
+                                <span class="history-stats">{{ item.top_count }} reels / {{ item.total_reels }} total</span>
+                            </div>
+                            <div class="history-meta">
+                                <span class="history-time">{{ item.timestamp[:16] }}</span>
+                                <div class="history-actions">
+                                    <button class="history-btn load" onclick="loadHistoryItem('{{ item.id }}')">LOAD</button>
+                                    <button class="history-btn delete" onclick="deleteHistoryItem('{{ item.id }}')">DEL</button>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="empty-state small">
+                            <div class="empty-text">NO HISTORY</div>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Result Detail Modal -->
+    <div class="modal" id="reelModal">
+        <div class="modal-backdrop" onclick="closeModal()"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <span class="modal-title">REEL INTEL</span>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="modalBody">
+                <!-- Populated dynamically -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div class="modal" id="settingsModal">
+        <div class="modal-backdrop" onclick="closeSettingsModal()"></div>
+        <div class="modal-content settings-modal">
+            <div class="modal-header">
+                <span class="modal-title">SETTINGS</span>
+                <button class="modal-close" onclick="closeSettingsModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- Output Directory Section -->
+                <div class="provider-section" id="outputSection">
+                    <div class="section-header">OUTPUT DIRECTORY</div>
+                    <div class="form-group">
+                        <label class="form-label">VIDEO SAVE LOCATION</label>
+                        <input type="text" id="outputDirectory" class="form-input" placeholder="Leave empty for default">
+                        <span class="form-hint" id="outputDirHint">Default: ./output</span>
+                    </div>
+                </div>
+
+                <!-- AI Configuration Section Header -->
+                <div class="section-divider">AI CONFIGURATION</div>
+
+                <div class="form-group">
+                    <label class="form-label">DEFAULT PROVIDER</label>
+                    <select id="aiProvider" class="form-input">
+                        <option value="copy">Copy Prompt Only (No AI)</option>
+                        <option value="local">Local (Ollama)</option>
+                        <option value="openai">OpenAI</option>
+                        <option value="anthropic">Anthropic</option>
+                        <option value="google">Google Gemini</option>
+                    </select>
+                    <span class="form-hint">Pre-selected when opening the rewrite modal</span>
+                </div>
+
+                <!-- Local Model Section -->
+                <div class="provider-section" id="localSection">
+                    <div class="section-header">LOCAL (OLLAMA)</div>
+                    <div class="form-group">
+                        <label class="form-label">MODEL</label>
+                        <div class="input-row">
+                            <select id="localModel" class="form-input">
+                                <option value="">-- Select Model --</option>
+                            </select>
+                            <button type="button" class="refresh-btn" onclick="refreshOllamaModels()">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M23 4v6h-6M1 20v-6h6"/>
+                                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <span class="form-hint" id="ollamaStatus">Click refresh to detect models</span>
+                    </div>
+                </div>
+
+                <!-- OpenAI Section -->
+                <div class="provider-section" id="openaiSection">
+                    <div class="section-header">OPENAI</div>
+                    <div class="form-group">
+                        <label class="form-label">MODEL</label>
+                        <select id="openaiModel" class="form-input">
+                            <option value="gpt-4o-mini">gpt-4o-mini (recommended)</option>
+                            <option value="gpt-4o">gpt-4o</option>
+                            <option value="gpt-4-turbo">gpt-4-turbo</option>
+                            <option value="gpt-3.5-turbo">gpt-3.5-turbo</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">API KEY</label>
+                        <input type="password" id="openaiKey" class="form-input" placeholder="sk-...">
+                        <span class="form-hint" id="openaiKeyStatus">Not configured</span>
+                    </div>
+                </div>
+
+                <!-- Anthropic Section -->
+                <div class="provider-section" id="anthropicSection">
+                    <div class="section-header">ANTHROPIC</div>
+                    <div class="form-group">
+                        <label class="form-label">MODEL</label>
+                        <select id="anthropicModel" class="form-input">
+                            <option value="claude-3-5-haiku-20241022">claude-3.5-haiku (recommended)</option>
+                            <option value="claude-3-5-sonnet-20241022">claude-3.5-sonnet</option>
+                            <option value="claude-3-opus-20240229">claude-3-opus</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">API KEY</label>
+                        <input type="password" id="anthropicKey" class="form-input" placeholder="sk-ant-...">
+                        <span class="form-hint" id="anthropicKeyStatus">Not configured</span>
+                    </div>
+                </div>
+
+                <!-- Google Section -->
+                <div class="provider-section" id="googleSection">
+                    <div class="section-header">GOOGLE GEMINI</div>
+                    <div class="form-group">
+                        <label class="form-label">MODEL</label>
+                        <select id="googleModel" class="form-input">
+                            <option value="gemini-1.5-flash">gemini-1.5-flash (recommended)</option>
+                            <option value="gemini-1.5-pro">gemini-1.5-pro</option>
+                            <option value="gemini-2.0-flash-exp">gemini-2.0-flash-exp</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">API KEY</label>
+                        <input type="password" id="googleKey" class="form-input" placeholder="AIza...">
+                        <span class="form-hint" id="googleKeyStatus">Not configured</span>
+                    </div>
+                </div>
+
+                <div class="modal-actions">
+                    <button class="modal-btn primary" onclick="saveSettings()">SAVE SETTINGS</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Rewrite Modal -->
+    <div class="modal" id="rewriteModal">
+        <div class="modal-backdrop" onclick="closeRewriteModal()"></div>
+        <div class="modal-content rewrite-modal">
+            <div class="modal-header">
+                <span class="modal-title">AI SCRIPT REWRITER</span>
+                <button class="modal-close" onclick="closeRewriteModal()">&times;</button>
+            </div>
+            <div class="modal-body rewrite-layout">
+                <!-- Left Column: Wizard -->
+                <div class="rewrite-wizard">
+                    <!-- Mode Toggle -->
+                    <div class="wizard-mode-toggle">
+                        <button class="mode-btn active" data-mode="guided" onclick="setWizardMode('guided')">GUIDED</button>
+                        <button class="mode-btn" data-mode="quick" onclick="setWizardMode('quick')">QUICK</button>
+                    </div>
+
+                    <!-- GUIDED MODE -->
+                    <div id="guidedMode">
+                        <!-- Progress indicator -->
+                        <div class="wizard-progress">
+                            <div class="wizard-progress-bar" id="wizardProgressBar"></div>
+                        </div>
+                        <div class="wizard-step-count" id="wizardStepCount">Step 1 of 8</div>
+
+                        <!-- Step 0: Provider Selection -->
+                        <div class="wizard-step active" data-step="0">
+                            <div class="wizard-question">Select AI Provider & Model</div>
+                            <div class="provider-select-row">
+                                <div class="form-group compact">
+                                    <label class="form-label">PROVIDER</label>
+                                    <select id="rewriteProvider" class="form-input" onchange="updateRewriteModel()">
+                                        <option value="local">Local (Ollama)</option>
+                                        <option value="openai">OpenAI</option>
+                                        <option value="anthropic">Anthropic</option>
+                                        <option value="google">Google Gemini</option>
+                                    </select>
+                                </div>
+                                <div class="form-group compact">
+                                    <label class="form-label">MODEL</label>
+                                    <select id="rewriteModel" class="form-input"></select>
+                                </div>
+                            </div>
+                            <div id="rewriteProviderStatus" class="form-hint provider-status"></div>
+                        </div>
+
+                        <!-- Step 1: Topic/Niche -->
+                        <div class="wizard-step" data-step="1">
+                            <div class="wizard-question">What's the topic or niche?</div>
+                            <div class="wizard-hint">The subject area or industry this content is about</div>
+                            <input type="text" id="wizardNiche" class="form-input" placeholder="AI tools, fitness, finance, entertainment...">
+                        </div>
+
+                        <!-- Step 2: Voice/Tone -->
+                        <div class="wizard-step" data-step="2">
+                            <div class="wizard-question">What tone or vibe?</div>
+                            <div class="wizard-hint">How should this come across?</div>
+                            <div class="voice-options">
+                                <button class="voice-btn" data-voice="Passionate & Tactical">Passionate & Tactical</button>
+                                <button class="voice-btn" data-voice="Calm & Educational">Calm & Educational</button>
+                                <button class="voice-btn" data-voice="Energetic & Hype">Energetic & Hype</button>
+                                <button class="voice-btn" data-voice="Professional & Authoritative">Professional & Authoritative</button>
+                                <button class="voice-btn" data-voice="Casual & Relatable">Casual & Relatable</button>
+                                <button class="voice-btn" data-voice="Humorous & Irreverent">Humorous & Irreverent</button>
+                            </div>
+                            <input type="text" id="wizardVoice" class="form-input" placeholder="Or describe your own...">
+                        </div>
+
+                        <!-- Step 3: Angle/Spin -->
+                        <div class="wizard-step" data-step="3">
+                            <div class="wizard-question">What's your unique spin?</div>
+                            <div class="wizard-hint">What makes YOUR version different from the original?</div>
+                            <input type="text" id="wizardAngle" class="form-input" placeholder="Your perspective, twist, or differentiator...">
+                        </div>
+
+                        <!-- Step 4: Main Focus -->
+                        <div class="wizard-step" data-step="4">
+                            <div class="wizard-question">What's the main focus?</div>
+                            <div class="wizard-hint">Product, service, idea, story, or message to highlight</div>
+                            <textarea id="wizardProduct" class="form-input textarea" rows="3" placeholder="What you're promoting, teaching, or sharing..."></textarea>
+                        </div>
+
+                        <!-- Step 5: Key Details -->
+                        <div class="wizard-step" data-step="5">
+                            <div class="wizard-question">Any key details to include?</div>
+                            <div class="wizard-hint">Steps, features, facts, or specifics to work in</div>
+                            <textarea id="wizardSetup" class="form-input textarea" rows="3" placeholder="Bullet points, steps, or details..."></textarea>
+                        </div>
+
+                        <!-- Step 6: CTA -->
+                        <div class="wizard-step" data-step="6">
+                            <div class="wizard-question">What's the call-to-action?</div>
+                            <div class="wizard-hint">What should viewers do next?</div>
+                            <div class="cta-options">
+                                <button class="cta-btn" data-cta="Comment [WORD] for the link">Comment [WORD]</button>
+                                <button class="cta-btn" data-cta="DM me for the link">DM me</button>
+                                <button class="cta-btn" data-cta="Link in bio">Link in bio</button>
+                                <button class="cta-btn" data-cta="Follow for more">Follow</button>
+                                <button class="cta-btn" data-cta="Save this for later">Save this</button>
+                                <button class="cta-btn" data-cta="Share with someone who needs this">Share</button>
+                            </div>
+                            <input type="text" id="wizardCta" class="form-input" placeholder="Or type your own...">
+                        </div>
+
+                        <!-- Step 7: Time Limit -->
+                        <div class="wizard-step" data-step="7">
+                            <div class="wizard-question">Target length?</div>
+                            <div class="wizard-hint">How long should the spoken script be?</div>
+                            <div class="time-options">
+                                <button class="time-btn" data-time="Under 30 seconds">Under 30s</button>
+                                <button class="time-btn selected" data-time="Under 60 seconds">Under 60s</button>
+                                <button class="time-btn" data-time="Under 90 seconds">Under 90s</button>
+                            </div>
+                        </div>
+
+                        <!-- Navigation -->
+                        <div class="wizard-nav">
+                            <button class="modal-btn" id="wizardBackBtn" onclick="wizardBack()" style="display: none;">BACK</button>
+                            <button class="modal-btn skip-btn" id="wizardSkipBtn" onclick="wizardSkip()">SKIP</button>
+                            <button class="modal-btn primary" id="wizardNextBtn" onclick="wizardNext()">NEXT</button>
+                        </div>
+                    </div>
+
+                    <!-- QUICK MODE -->
+                    <div id="quickMode" style="display: none;">
+                        <div class="provider-select-row">
+                            <div class="form-group compact">
+                                <label class="form-label">PROVIDER</label>
+                                <select id="quickProvider" class="form-input" onchange="updateQuickModel()">
+                                    <option value="local">Local (Ollama)</option>
+                                    <option value="openai">OpenAI</option>
+                                    <option value="anthropic">Anthropic</option>
+                                    <option value="google">Google Gemini</option>
+                                </select>
+                            </div>
+                            <div class="form-group compact">
+                                <label class="form-label">MODEL</label>
+                                <select id="quickModel" class="form-input"></select>
+                            </div>
+                        </div>
+                        <div class="form-group" style="flex: 1; display: flex; flex-direction: column;">
+                            <label class="form-label">CONTEXT (Optional)</label>
+                            <div class="wizard-hint">Niche, tone, angle, what you're promoting, CTA - anything the AI should know</div>
+                            <textarea id="quickContext" class="form-input textarea" style="flex: 1; min-height: 200px;" placeholder="Example:&#10;&#10;NICHE: AI automation&#10;TONE: Passionate, direct&#10;ANGLE: 100% free tool, no subscriptions&#10;PROMOTING: Instagram scraper tool&#10;CTA: Comment FIRE for the link&#10;LENGTH: Under 60 seconds"></textarea>
+                        </div>
+                        <div class="wizard-nav">
+                            <button class="modal-btn primary" onclick="generateQuickRewrite()">GENERATE</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Column: Result -->
+                <div class="rewrite-result-panel" id="rewriteResultPanel">
+                    <div class="result-placeholder" id="resultPlaceholder">
+                        <div class="placeholder-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                            </svg>
+                        </div>
+                        <div class="placeholder-text">Your rewritten script will appear here</div>
+                        <div class="placeholder-hint">Complete the wizard and click Generate</div>
+                    </div>
+                    <div id="rewriteResult" class="rewrite-result" style="display: none;">
+                        <div class="form-label">AI GENERATED SCRIPT</div>
+                        <div id="rewriteOutput" class="rewrite-output"></div>
+                        <div class="modal-actions">
+                            <button class="modal-btn" onclick="copyRewriteResult()">COPY SCRIPT</button>
+                            <button class="modal-btn primary" onclick="generateRewrite()">REGENERATE</button>
+                            <button class="modal-btn" onclick="editWizardContext()">EDIT CONTEXT</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Model Download Modal -->
+    <div class="modal" id="downloadModal">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content download-modal">
+            <div class="modal-header">
+                <span class="modal-title">MODEL DOWNLOAD REQUIRED</span>
+            </div>
+            <div class="modal-body">
+                <div class="download-info">
+                    <div class="download-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                            <polyline points="7 10 12 15 17 10"/>
+                            <line x1="12" y1="15" x2="12" y2="3"/>
+                        </svg>
+                    </div>
+                    <div class="download-text">
+                        <p>The <strong id="downloadModelName">small.en</strong> Whisper model is not installed.</p>
+                        <p>It will be downloaded automatically on first use.</p>
+                    </div>
+                </div>
+                <div class="download-details">
+                    <div class="detail-row">
+                        <span class="detail-label">MODEL SIZE</span>
+                        <span class="detail-value" id="downloadModelSize">~244 MB</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">EST. TIME</span>
+                        <span class="detail-value" id="downloadEstTime">1-3 minutes</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">LOCATION</span>
+                        <span class="detail-value">~/.cache/whisper/</span>
+                    </div>
+                </div>
+                <div class="download-note">
+                    <strong>Note:</strong> This is a one-time download. The model will be cached locally for future use.
+                </div>
+                <div class="modal-actions">
+                    <button class="modal-btn" onclick="closeDownloadModal()">CANCEL</button>
+                    <button class="modal-btn primary" onclick="confirmDownload()">CONTINUE &amp; DOWNLOAD</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
