@@ -379,7 +379,7 @@ function showReelDetail(scrapeId, index) {
         <div class="modal-section ai-section">
             <div class="modal-section-title">AI ACTIONS</div>
             <div class="modal-actions">
-                <button class="modal-btn ai-btn" onclick="copyAIPrompt('${scrapeId}', '${reel.shortcode}')">
+                <button class="modal-btn ai-btn" onclick="copyAIPrompt(event, '${scrapeId}', '${reel.shortcode}')">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
                         <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
                         <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
@@ -886,8 +886,8 @@ async function copyToClipboard(text) {
 }
 
 // Copy AI prompt to clipboard
-async function copyAIPrompt(scrapeId, shortcode) {
-    const btn = event.target.closest('button');
+async function copyAIPrompt(event, scrapeId, shortcode) {
+    const btn = event?.target?.closest('button') || document.activeElement;
     const originalHTML = btn.innerHTML;
 
     try {
@@ -1355,12 +1355,12 @@ async function generateRewrite() {
 }
 
 // Copy rewrite result
-async function copyRewriteResult() {
+async function copyRewriteResult(event) {
     const output = document.getElementById('rewriteOutput').textContent;
     const success = await copyToClipboard(output);
 
     if (success) {
-        const btn = event.target;
+        const btn = event?.target || document.querySelector('.copy-rewrite-btn');
         const originalText = btn.textContent;
         btn.textContent = 'COPIED!';
         btn.style.color = 'var(--color-accent-primary)';
