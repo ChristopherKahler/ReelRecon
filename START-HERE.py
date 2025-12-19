@@ -28,18 +28,32 @@ if not ffmpeg_available:
     print()
 
     # Check if Homebrew is available
+    if not shutil.which("brew"):
+        print("[SETUP] Homebrew not found. Installing Homebrew first...")
+        print("        (You may need to press RETURN and enter your password)")
+        print()
+        result = subprocess.run(
+            ["/bin/bash", "-c", 'NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"'],
+            shell=False
+        )
+        # Add brew to PATH for this session (Apple Silicon vs Intel)
+        if os.path.exists("/opt/homebrew/bin/brew"):
+            os.environ["PATH"] = "/opt/homebrew/bin:" + os.environ.get("PATH", "")
+        elif os.path.exists("/usr/local/bin/brew"):
+            os.environ["PATH"] = "/usr/local/bin:" + os.environ.get("PATH", "")
+
     if shutil.which("brew"):
         print("[SETUP] Installing ffmpeg via Homebrew...")
-        result = subprocess.run(["brew", "install", "ffmpeg"], capture_output=True)
+        result = subprocess.run(["brew", "install", "ffmpeg"])
         if result.returncode == 0:
             print("[OK] ffmpeg installed successfully!")
             ffmpeg_available = True
         else:
             print("[SKIP] ffmpeg install failed. Install manually: brew install ffmpeg")
     else:
-        print("To enable transcription, install ffmpeg:")
-        print("  1. Install Homebrew: /bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"")
-        print("  2. Then run: brew install ffmpeg")
+        print("[SKIP] Homebrew installation failed or not in PATH.")
+        print("       Restart terminal and run this script again, or install manually:")
+        print("       /bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"")
     print()
 
 # Install dependencies
