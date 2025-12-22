@@ -27,7 +27,15 @@ from .synthesizer import PatternSynthesizer, SynthesisResult, generate_report
 from utils.logger import get_logger
 
 # Import existing scraper infrastructure
-from scraper.core import run_scrape
+from scraper.core import (
+    create_session,
+    get_user_reels,
+    download_video,
+    transcribe_video_openai,
+    transcribe_video,
+    load_whisper_model,
+    WHISPER_AVAILABLE
+)
 
 logger = get_logger()
 
@@ -298,12 +306,14 @@ class SkeletonRipperPipeline:
         on_progress: Optional[Callable]
     ) -> list[dict]:
         """
-        Scrape videos and get transcripts using existing ReelRecon infrastructure.
+        Scrape videos and get transcripts using iterative approach.
 
-        Leverages run_scrape() for each creator to:
-        1. Fetch top videos by view count
-        2. Download videos
-        3. Transcribe using OpenAI or local Whisper
+        Strategy:
+        1. Fetch 100 most recent reels (metadata only)
+        2. Sort by views (highest first)
+        3. Iterate through sorted list, download/transcribe one at a time
+        4. Stop when we have N valid transcripts
+        5. Cache valid transcripts for future runs
         """
         transcripts = []
 
@@ -323,6 +333,26 @@ class SkeletonRipperPipeline:
         # Get OpenAI API key for transcription
         openai_key = config.openai_api_key or os.getenv('OPENAI_API_KEY')
 
+        # Load local Whisper model if needed (once for all creators)
+        whisper_model = None
+        if config.transcribe_provider == 'local' and WHISPER_AVAILABLE:
+            progress.message = f"Loading Whisper model ({config.whisper_model})..."
+            self._notify(on_progress, progress)
+            whisper_model = load_whisper_model(config.whisper_model)
+            if not whisper_model:
+                logger.warning("Failed to load Whisper model, falling back to OpenAI")
+                config.transcribe_provider = 'openai'
+
+        # Create authenticated session
+        try:
+            session = create_session(cookies_path)
+        except Exception as e:
+            raise RuntimeError(f"Failed to create session: {e}")
+
+        # Setup temp directory for downloads
+        temp_dir = self.base_dir / 'output' / 'skeleton_temp'
+        temp_dir.mkdir(parents=True, exist_ok=True)
+
         for idx, username in enumerate(config.usernames):
             logger.info(f"Processing creator {idx + 1}/{len(config.usernames)}: @{username}")
             progress.phase = f"Scraping @{username}..."
@@ -337,50 +367,125 @@ class SkeletonRipperPipeline:
                 # Have enough cached - use those
                 logger.info(f"Using {len(cached_transcripts)} cached transcripts for @{username}")
                 progress.transcripts_from_cache += len(cached_transcripts)
-                transcripts.extend(cached_transcripts)
-                progress.videos_scraped += len(cached_transcripts)
-                progress.videos_transcribed += len(cached_transcripts)
+                transcripts.extend(cached_transcripts[:config.videos_per_creator])
+                progress.videos_scraped += len(cached_transcripts[:config.videos_per_creator])
+                progress.videos_transcribed += len(cached_transcripts[:config.videos_per_creator])
                 self._notify(on_progress, progress)
                 continue
 
-            # Need to scrape fresh - use existing ReelRecon infrastructure
+            # Fetch reel metadata (100 most recent, no download)
+            progress.message = f"Fetching reels from @{username}..."
+            self._notify(on_progress, progress)
+
             try:
-                def scrape_progress(msg):
-                    progress.message = msg
-                    self._notify(on_progress, progress)
+                reels, profile, error = get_user_reels(session, username, max_reels=100)
 
-                scrape_result = run_scrape(
-                    username=username,
-                    cookies_path=cookies_path,
-                    max_reels=50,  # Fetch more to ensure we get enough with transcripts
-                    top_n=config.videos_per_creator,
-                    download=True,
-                    transcribe=True,
-                    whisper_model=config.whisper_model,
-                    transcribe_provider=config.transcribe_provider,
-                    openai_key=openai_key,
-                    output_dir=str(self.base_dir / 'output' / 'skeleton_temp'),
-                    progress_callback=scrape_progress
-                )
-
-                if scrape_result.get('status') == 'error':
-                    error_msg = scrape_result.get('error', 'Unknown scrape error')
-                    logger.warning(f"Scrape failed for @{username}: {error_msg}")
-                    progress.errors.append(f"@{username}: {error_msg}")
+                if error:
+                    logger.warning(f"Failed to fetch reels for @{username}: {error}")
+                    progress.errors.append(f"@{username}: {error}")
                     continue
 
-                # Process results
-                reels = scrape_result.get('top_reels', [])
+                if not reels:
+                    logger.warning(f"No reels found for @{username}")
+                    progress.errors.append(f"@{username}: No reels found")
+                    continue
+
                 progress.videos_scraped += len(reels)
+                logger.info(f"Found {len(reels)} reels for @{username}, sorting by views...")
 
-                for reel in reels:
-                    transcript_text = reel.get('transcript', '')
-                    video_id = reel.get('shortcode', 'unknown')
+            except Exception as e:
+                logger.error(f"Error fetching reels for @{username}: {e}")
+                progress.errors.append(f"@{username}: {str(e)}")
+                continue
 
-                    # Cache valid transcripts
-                    if is_valid_transcript(transcript_text):
-                        self.cache.set(config.platform, username, video_id, transcript_text)
-                        progress.videos_transcribed += 1
+            # Sort by views (highest first)
+            reels_sorted = sorted(reels, key=lambda x: x.get('views', 0), reverse=True)
+
+            # Iterate through sorted reels until we have enough valid transcripts
+            valid_count = 0
+            attempted = 0
+
+            for reel in reels_sorted:
+                if valid_count >= config.videos_per_creator:
+                    break  # Have enough valid transcripts
+
+                video_id = reel.get('shortcode', 'unknown')
+                attempted += 1
+
+                # Check if already cached
+                cached = self.cache.get(config.platform, username, video_id)
+                if cached and is_valid_transcript(cached):
+                    logger.debug(f"Cache hit for {video_id}")
+                    transcripts.append({
+                        'video_id': video_id,
+                        'username': username,
+                        'platform': config.platform,
+                        'views': reel.get('views', 0),
+                        'likes': reel.get('likes', 0),
+                        'url': reel.get('url', ''),
+                        'transcript': cached,
+                        'from_cache': True
+                    })
+                    valid_count += 1
+                    progress.transcripts_from_cache += 1
+                    progress.videos_transcribed += 1
+                    self._notify(on_progress, progress)
+                    continue
+
+                # Need to download and transcribe
+                progress.message = f"Processing video {valid_count + 1}/{config.videos_per_creator} for @{username} (#{attempted} by views)..."
+                self._notify(on_progress, progress)
+
+                # Download video
+                video_path = temp_dir / f"{username}_{video_id}.mp4"
+                try:
+                    download_success = download_video(
+                        reel_url=reel.get('url', ''),
+                        output_path=str(video_path),
+                        cookies_file=cookies_path,
+                        video_url=reel.get('video_url')
+                    )
+
+                    if not download_success or not video_path.exists():
+                        logger.warning(f"Download failed for {video_id}, trying next...")
+                        continue
+
+                except Exception as e:
+                    logger.warning(f"Download error for {video_id}: {e}")
+                    continue
+
+                # Transcribe video
+                transcript_text = None
+                try:
+                    if config.transcribe_provider == 'openai' and openai_key:
+                        transcript_text = transcribe_video_openai(
+                            video_path=str(video_path),
+                            api_key=openai_key
+                        )
+                    elif whisper_model:
+                        transcript_text = transcribe_video(
+                            video_path=str(video_path),
+                            model=whisper_model
+                        )
+                    else:
+                        logger.warning(f"No transcription method available for {video_id}")
+                        continue
+
+                except Exception as e:
+                    logger.warning(f"Transcription error for {video_id}: {e}")
+                    transcript_text = None
+
+                # Clean up video file
+                try:
+                    if video_path.exists():
+                        video_path.unlink()
+                except:
+                    pass
+
+                # Validate transcript
+                if transcript_text and is_valid_transcript(transcript_text):
+                    # Cache for future use
+                    self.cache.set(config.platform, username, video_id, transcript_text)
 
                     transcripts.append({
                         'video_id': video_id,
@@ -392,12 +497,21 @@ class SkeletonRipperPipeline:
                         'transcript': transcript_text,
                         'from_cache': False
                     })
+                    valid_count += 1
+                    progress.videos_transcribed += 1
+                    logger.info(f"Valid transcript #{valid_count} for @{username}: {video_id} ({reel.get('views', 0):,} views)")
+                    self._notify(on_progress, progress)
+                else:
+                    logger.debug(f"Invalid/empty transcript for {video_id}, trying next...")
 
-                self._notify(on_progress, progress)
-
-            except Exception as e:
-                logger.error(f"Error scraping @{username}: {e}")
-                progress.errors.append(f"@{username}: {str(e)}")
+            if valid_count < config.videos_per_creator:
+                logger.warning(
+                    f"Only got {valid_count}/{config.videos_per_creator} valid transcripts "
+                    f"for @{username} after trying {attempted} videos"
+                )
+                progress.errors.append(
+                    f"@{username}: Only {valid_count}/{config.videos_per_creator} valid transcripts"
+                )
 
         return transcripts
 
