@@ -14,7 +14,7 @@ from .llm_client import LLMClient
 from .prompts import get_extraction_prompt, validate_skeleton
 from utils.logger import get_logger
 
-logger = get_logger(__name__)
+logger = get_logger()
 
 
 # =============================================================================

@@ -17,7 +17,7 @@ from datetime import datetime
 from typing import Optional
 from utils.logger import get_logger
 
-logger = get_logger(__name__)
+logger = get_logger()
 
 
 class TranscriptCache:

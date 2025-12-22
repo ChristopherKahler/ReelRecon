@@ -15,7 +15,7 @@ from .prompts import get_synthesis_prompts
 from .aggregator import AggregatedData, format_aggregation_summary
 from utils.logger import get_logger
 
-logger = get_logger(__name__)
+logger = get_logger()
 
 
 # =============================================================================

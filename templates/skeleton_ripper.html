@@ -9,113 +9,155 @@
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/tactical.css') }}">
     <style>
-        /* Skeleton Ripper specific styles */
+        /* Skeleton Ripper Page Styles - Using tactical.css variables */
+        .sr-page {
+            min-height: 100vh;
+            padding: var(--space-lg);
+        }
+
         .sr-container {
             max-width: 1400px;
             margin: 0 auto;
-            padding: 2rem;
         }
 
+        /* Header */
         .sr-header {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            margin-bottom: 2rem;
-            padding-bottom: 1rem;
-            border-bottom: 1px solid var(--border-color);
+            margin-bottom: var(--space-xl);
+            padding-bottom: var(--space-md);
+            border-bottom: 1px solid var(--color-border);
         }
 
         .sr-title {
             display: flex;
-            align-items: center;
-            gap: 1rem;
+            align-items: baseline;
+            gap: var(--space-md);
         }
 
         .sr-title h1 {
             font-family: var(--font-mono);
             font-size: 1.5rem;
-            color: var(--accent-color);
+            color: var(--color-accent-primary);
             margin: 0;
+            text-shadow: 0 0 20px var(--color-accent-glow);
         }
 
         .sr-title .subtitle {
-            font-size: 0.75rem;
-            color: var(--text-secondary);
+            font-family: var(--font-mono);
+            font-size: 0.7rem;
+            color: var(--color-text-muted);
             text-transform: uppercase;
-            letter-spacing: 0.1em;
+            letter-spacing: 0.15em;
         }
 
         .back-link {
             display: flex;
             align-items: center;
-            gap: 0.5rem;
-            color: var(--text-secondary);
+            gap: var(--space-xs);
+            color: var(--color-text-muted);
             text-decoration: none;
             font-family: var(--font-mono);
-            font-size: 0.85rem;
-            transition: color 0.2s;
+            font-size: 0.8rem;
+            padding: var(--space-sm) var(--space-md);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-sm);
+            transition: all 0.2s;
         }
 
         .back-link:hover {
-            color: var(--accent-color);
+            color: var(--color-accent-primary);
+            border-color: var(--color-accent-primary);
+            background: var(--color-accent-muted);
         }
 
+        /* Main Grid */
         .sr-grid {
             display: grid;
-            grid-template-columns: 400px 1fr;
-            gap: 2rem;
+            grid-template-columns: 380px 1fr;
+            gap: var(--space-lg);
         }
 
-        /* Config Panel */
-        .sr-config {
-            background: var(--panel-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            padding: 1.5rem;
+        /* Panels */
+        .sr-panel {
+            background: var(--color-bg-panel);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            overflow: hidden;
         }
 
+        .panel-header {
+            background: var(--color-bg-elevated);
+            border-bottom: 1px solid var(--color-border);
+            padding: var(--space-sm) var(--space-md);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .panel-title {
+            font-family: var(--font-mono);
+            font-size: 0.7rem;
+            color: var(--color-accent-primary);
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+        }
+
+        .panel-status {
+            font-family: var(--font-mono);
+            font-size: 0.7rem;
+            color: var(--color-text-muted);
+        }
+
+        .panel-body {
+            padding: var(--space-md);
+        }
+
+        /* Config Sections */
         .config-section {
-            margin-bottom: 1.5rem;
+            margin-bottom: var(--space-lg);
         }
 
         .config-section:last-child {
             margin-bottom: 0;
         }
 
-        .section-header {
+        .section-label {
             font-family: var(--font-mono);
-            font-size: 0.7rem;
-            color: var(--accent-color);
+            font-size: 0.65rem;
+            color: var(--color-accent-primary);
             text-transform: uppercase;
             letter-spacing: 0.15em;
-            margin-bottom: 1rem;
-            padding-bottom: 0.5rem;
-            border-bottom: 1px solid var(--border-color);
+            margin-bottom: var(--space-sm);
+            padding-bottom: var(--space-xs);
+            border-bottom: 1px solid var(--color-border-dim);
         }
 
+        /* Username Inputs */
         .username-list {
             display: flex;
             flex-direction: column;
-            gap: 0.5rem;
+            gap: var(--space-xs);
         }
 
-        .username-input-row {
+        .username-row {
             display: flex;
-            gap: 0.5rem;
+            gap: var(--space-xs);
             align-items: center;
         }
 
-        .username-input-row .input-wrapper {
+        .username-row .input-wrapper {
             flex: 1;
         }
 
         .remove-btn {
             background: transparent;
-            border: 1px solid var(--error-color);
-            color: var(--error-color);
+            border: 1px solid var(--color-danger);
+            color: var(--color-danger);
             width: 32px;
             height: 32px;
-            border-radius: 4px;
+            border-radius: var(--radius-sm);
             cursor: pointer;
             display: flex;
             align-items: center;
@@ -124,258 +166,96 @@
         }
 
         .remove-btn:hover {
-            background: var(--error-color);
-            color: var(--bg-primary);
+            background: var(--color-danger);
+            color: var(--color-bg-deep);
         }
 
-        .add-username-btn {
+        .add-btn {
             background: transparent;
-            border: 1px dashed var(--border-color);
-            color: var(--text-secondary);
-            padding: 0.5rem;
-            border-radius: 4px;
+            border: 1px dashed var(--color-border);
+            color: var(--color-text-muted);
+            padding: var(--space-sm);
+            border-radius: var(--radius-sm);
             cursor: pointer;
             font-family: var(--font-mono);
-            font-size: 0.8rem;
+            font-size: 0.75rem;
             transition: all 0.2s;
-            margin-top: 0.5rem;
+            margin-top: var(--space-xs);
+            width: 100%;
         }
 
-        .add-username-btn:hover {
-            border-color: var(--accent-color);
-            color: var(--accent-color);
+        .add-btn:hover:not(:disabled) {
+            border-color: var(--color-accent-primary);
+            color: var(--color-accent-primary);
         }
 
-        .add-username-btn:disabled {
-            opacity: 0.5;
+        .add-btn:disabled {
+            opacity: 0.4;
             cursor: not-allowed;
         }
 
+        /* Provider Status */
         .provider-status {
+            font-family: var(--font-mono);
             font-size: 0.75rem;
-            padding: 0.5rem;
-            border-radius: 4px;
-            margin-top: 0.5rem;
+            padding: var(--space-sm);
+            border-radius: var(--radius-sm);
+            margin-top: var(--space-sm);
         }
 
-        .provider-status.available {
-            background: rgba(0, 255, 136, 0.1);
-            color: var(--success-color);
+        .provider-status.ready {
+            background: var(--color-accent-dim);
+            color: var(--color-success);
+            border: 1px solid var(--color-accent-primary);
         }
 
         .provider-status.unavailable {
-            background: rgba(255, 68, 68, 0.1);
-            color: var(--error-color);
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--color-danger);
+            border: 1px solid var(--color-danger);
         }
 
+        /* Start Button */
         .start-btn {
             width: 100%;
-            padding: 1rem;
-            background: var(--accent-color);
-            color: var(--bg-primary);
+            padding: var(--space-md);
+            background: var(--color-accent-primary);
+            color: var(--color-bg-deep);
             border: none;
-            border-radius: 4px;
+            border-radius: var(--radius-sm);
             font-family: var(--font-mono);
-            font-size: 0.9rem;
+            font-size: 0.85rem;
             font-weight: 600;
             text-transform: uppercase;
             letter-spacing: 0.1em;
             cursor: pointer;
             transition: all 0.2s;
+            box-shadow: 0 0 20px var(--color-accent-glow);
         }
 
         .start-btn:hover:not(:disabled) {
-            background: var(--accent-hover);
+            background: #0ea271;
             transform: translateY(-1px);
+            box-shadow: 0 0 30px var(--color-accent-glow);
         }
 
         .start-btn:disabled {
             opacity: 0.5;
             cursor: not-allowed;
+            box-shadow: none;
         }
 
         /* Results Panel */
-        .sr-results {
-            background: var(--panel-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
+        .results-panel {
+            min-height: 600px;
             display: flex;
             flex-direction: column;
-            min-height: 600px;
-        }
-
-        .results-header {
-            padding: 1rem 1.5rem;
-            border-bottom: 1px solid var(--border-color);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-
-        .results-title {
-            font-family: var(--font-mono);
-            font-size: 0.7rem;
-            color: var(--accent-color);
-            text-transform: uppercase;
-            letter-spacing: 0.15em;
-        }
-
-        .results-status {
-            font-family: var(--font-mono);
-            font-size: 0.75rem;
-            color: var(--text-secondary);
         }
 
         .results-body {
             flex: 1;
-            padding: 1.5rem;
+            padding: var(--space-md);
             overflow-y: auto;
-        }
-
-        /* Progress Display */
-        .progress-section {
-            margin-bottom: 2rem;
-        }
-
-        .progress-phase {
-            font-family: var(--font-mono);
-            font-size: 0.9rem;
-            color: var(--text-primary);
-            margin-bottom: 0.75rem;
-        }
-
-        .progress-bar-container {
-            height: 8px;
-            background: var(--bg-secondary);
-            border-radius: 4px;
-            overflow: hidden;
-            margin-bottom: 1rem;
-        }
-
-        .progress-bar {
-            height: 100%;
-            background: var(--accent-color);
-            transition: width 0.3s ease;
-            width: 0%;
-        }
-
-        .progress-stats {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 1rem;
-        }
-
-        .stat-item {
-            text-align: center;
-            padding: 0.75rem;
-            background: var(--bg-secondary);
-            border-radius: 4px;
-        }
-
-        .stat-value {
-            font-family: var(--font-mono);
-            font-size: 1.5rem;
-            color: var(--accent-color);
-            font-weight: 600;
-        }
-
-        .stat-label {
-            font-size: 0.65rem;
-            color: var(--text-secondary);
-            text-transform: uppercase;
-            letter-spacing: 0.1em;
-            margin-top: 0.25rem;
-        }
-
-        /* Report Display */
-        .report-content {
-            font-family: var(--font-sans);
-            line-height: 1.7;
-            color: var(--text-primary);
-        }
-
-        .report-content h1 {
-            font-size: 1.5rem;
-            color: var(--accent-color);
-            margin-bottom: 1rem;
-            font-family: var(--font-mono);
-        }
-
-        .report-content h2 {
-            font-size: 1.1rem;
-            color: var(--text-primary);
-            margin-top: 1.5rem;
-            margin-bottom: 0.75rem;
-            font-family: var(--font-mono);
-            border-bottom: 1px solid var(--border-color);
-            padding-bottom: 0.5rem;
-        }
-
-        .report-content h3 {
-            font-size: 0.95rem;
-            color: var(--accent-color);
-            margin-top: 1rem;
-            margin-bottom: 0.5rem;
-        }
-
-        .report-content ul, .report-content ol {
-            margin-left: 1.5rem;
-            margin-bottom: 1rem;
-        }
-
-        .report-content li {
-            margin-bottom: 0.5rem;
-        }
-
-        .report-content code {
-            background: var(--bg-secondary);
-            padding: 0.2rem 0.4rem;
-            border-radius: 3px;
-            font-family: var(--font-mono);
-            font-size: 0.85em;
-        }
-
-        .report-content blockquote {
-            border-left: 3px solid var(--accent-color);
-            padding-left: 1rem;
-            margin: 1rem 0;
-            color: var(--text-secondary);
-            font-style: italic;
-        }
-
-        .report-actions {
-            display: flex;
-            gap: 1rem;
-            margin-top: 1.5rem;
-            padding-top: 1.5rem;
-            border-top: 1px solid var(--border-color);
-        }
-
-        .action-btn {
-            padding: 0.75rem 1.5rem;
-            background: transparent;
-            border: 1px solid var(--border-color);
-            color: var(--text-primary);
-            border-radius: 4px;
-            font-family: var(--font-mono);
-            font-size: 0.8rem;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .action-btn:hover {
-            border-color: var(--accent-color);
-            color: var(--accent-color);
-        }
-
-        .action-btn.primary {
-            background: var(--accent-color);
-            border-color: var(--accent-color);
-            color: var(--bg-primary);
-        }
-
-        .action-btn.primary:hover {
-            background: var(--accent-hover);
         }
 
         /* Empty State */
@@ -385,54 +265,200 @@
             align-items: center;
             justify-content: center;
             height: 100%;
-            color: var(--text-secondary);
+            min-height: 400px;
+            color: var(--color-text-muted);
             text-align: center;
         }
 
         .empty-icon {
             width: 64px;
             height: 64px;
-            margin-bottom: 1rem;
-            opacity: 0.5;
+            margin-bottom: var(--space-md);
+            opacity: 0.3;
+            color: var(--color-accent-primary);
         }
 
-        .empty-text {
+        .empty-title {
             font-family: var(--font-mono);
             font-size: 0.9rem;
-            margin-bottom: 0.5rem;
+            color: var(--color-text-secondary);
+            margin-bottom: var(--space-xs);
         }
 
         .empty-hint {
             font-size: 0.8rem;
             max-width: 300px;
+            line-height: 1.5;
+        }
+
+        /* Progress Section */
+        .progress-section {
+            padding: var(--space-md);
+        }
+
+        .progress-phase {
+            font-family: var(--font-mono);
+            font-size: 0.9rem;
+            color: var(--color-text-primary);
+            margin-bottom: var(--space-sm);
+        }
+
+        .progress-bar-wrap {
+            height: 6px;
+            background: var(--color-bg-input);
+            border-radius: 3px;
+            overflow: hidden;
+            margin-bottom: var(--space-md);
+            border: 1px solid var(--color-border-dim);
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: var(--color-accent-primary);
+            box-shadow: 0 0 10px var(--color-accent-glow);
+            transition: width 0.3s ease;
+            width: 0%;
+        }
+
+        .progress-stats {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: var(--space-sm);
+        }
+
+        .stat-box {
+            text-align: center;
+            padding: var(--space-sm);
+            background: var(--color-bg-elevated);
+            border: 1px solid var(--color-border-dim);
+            border-radius: var(--radius-sm);
+        }
+
+        .stat-value {
+            font-family: var(--font-mono);
+            font-size: 1.25rem;
+            color: var(--color-accent-primary);
+            font-weight: 600;
+        }
+
+        .stat-label {
+            font-size: 0.6rem;
+            color: var(--color-text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-top: 2px;
+        }
+
+        /* Report Content */
+        .report-content {
+            font-family: var(--font-sans);
+            line-height: 1.7;
+            color: var(--color-text-primary);
+        }
+
+        .report-content h1 {
+            font-size: 1.3rem;
+            color: var(--color-accent-primary);
+            margin-bottom: var(--space-md);
+            font-family: var(--font-mono);
+        }
+
+        .report-content h2 {
+            font-size: 1rem;
+            color: var(--color-text-primary);
+            margin-top: var(--space-lg);
+            margin-bottom: var(--space-sm);
+            font-family: var(--font-mono);
+            border-bottom: 1px solid var(--color-border);
+            padding-bottom: var(--space-xs);
+        }
+
+        .report-content h3 {
+            font-size: 0.9rem;
+            color: var(--color-accent-primary);
+            margin-top: var(--space-md);
+            margin-bottom: var(--space-xs);
+        }
+
+        .report-content ul, .report-content ol {
+            margin-left: var(--space-lg);
+            margin-bottom: var(--space-md);
+        }
+
+        .report-content li {
+            margin-bottom: var(--space-xs);
+        }
+
+        .report-content code {
+            background: var(--color-bg-input);
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: var(--font-mono);
+            font-size: 0.85em;
+            color: var(--color-accent-primary);
+        }
+
+        .report-actions {
+            display: flex;
+            gap: var(--space-sm);
+            margin-top: var(--space-lg);
+            padding-top: var(--space-md);
+            border-top: 1px solid var(--color-border);
+        }
+
+        .action-btn {
+            padding: var(--space-sm) var(--space-md);
+            background: transparent;
+            border: 1px solid var(--color-border);
+            color: var(--color-text-secondary);
+            border-radius: var(--radius-sm);
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .action-btn:hover {
+            border-color: var(--color-accent-primary);
+            color: var(--color-accent-primary);
+        }
+
+        .action-btn.primary {
+            background: var(--color-accent-primary);
+            border-color: var(--color-accent-primary);
+            color: var(--color-bg-deep);
+        }
+
+        .action-btn.primary:hover {
+            background: #0ea271;
         }
 
         /* Error Display */
-        .error-list {
-            margin-top: 1rem;
-            padding: 1rem;
-            background: rgba(255, 68, 68, 0.1);
-            border: 1px solid var(--error-color);
-            border-radius: 4px;
+        .error-box {
+            margin-top: var(--space-md);
+            padding: var(--space-md);
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid var(--color-danger);
+            border-radius: var(--radius-sm);
         }
 
-        .error-list h4 {
-            color: var(--error-color);
+        .error-box h4 {
+            color: var(--color-danger);
             font-family: var(--font-mono);
             font-size: 0.8rem;
-            margin-bottom: 0.5rem;
+            margin-bottom: var(--space-xs);
         }
 
-        .error-list ul {
+        .error-box ul {
             list-style: none;
             padding: 0;
             margin: 0;
         }
 
-        .error-list li {
+        .error-box li {
             font-size: 0.8rem;
-            color: var(--error-color);
-            padding: 0.25rem 0;
+            color: var(--color-danger);
+            padding: var(--space-xs) 0;
         }
 
         @media (max-width: 1024px) {
@@ -440,8 +466,8 @@
                 grid-template-columns: 1fr;
             }
 
-            .sr-results {
-                min-height: 500px;
+            .results-panel {
+                min-height: 400px;
             }
         }
     </style>
@@ -468,143 +494,150 @@
         <span class="hud-label" id="statusLabel">READY</span>
     </div>
 
-    <div class="sr-container">
-        <!-- Header -->
-        <div class="sr-header">
-            <div class="sr-title">
-                <h1>// SKELETON RIPPER</h1>
-                <span class="subtitle">Multi-Creator Content Pattern Analysis</span>
-            </div>
-            <a href="/" class="back-link">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M19 12H5M12 19l-7-7 7-7"/>
-                </svg>
-                BACK TO RECON
-            </a>
-        </div>
-
-        <!-- Main Grid -->
-        <div class="sr-grid">
-            <!-- Config Panel -->
-            <div class="sr-config">
-                <!-- Creators Section -->
-                <div class="config-section">
-                    <div class="section-header">// TARGET CREATORS</div>
-                    <div class="username-list" id="usernameList">
-                        <div class="username-input-row">
-                            <div class="input-wrapper">
-                                <span class="input-prefix">@</span>
-                                <input type="text" class="form-input username-input" placeholder="creator_username" data-index="0">
-                            </div>
-                        </div>
-                    </div>
-                    <button class="add-username-btn" id="addUsernameBtn" onclick="addUsernameField()">
-                        + ADD CREATOR (MAX 5)
-                    </button>
+    <div class="sr-page">
+        <div class="sr-container">
+            <!-- Header -->
+            <div class="sr-header">
+                <div class="sr-title">
+                    <h1>// SKELETON RIPPER</h1>
+                    <span class="subtitle">Multi-Creator Content Pattern Analysis</span>
                 </div>
-
-                <!-- Platform Section -->
-                <div class="config-section">
-                    <div class="section-header">// PLATFORM</div>
-                    <div class="platform-toggle">
-                        <button type="button" class="platform-btn active" data-platform="instagram" onclick="selectPlatform('instagram')">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
-                                <rect x="2" y="2" width="20" height="20" rx="5"/>
-                                <circle cx="12" cy="12" r="4"/>
-                                <circle cx="18" cy="6" r="1.5" fill="currentColor"/>
-                            </svg>
-                            INSTAGRAM
-                        </button>
-                        <button type="button" class="platform-btn" data-platform="tiktok" onclick="selectPlatform('tiktok')">
-                            <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
-                                <path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-5.2 1.74 2.89 2.89 0 012.31-4.64 2.93 2.93 0 01.88.13V9.4a6.84 6.84 0 00-1-.05A6.33 6.33 0 005 20.1a6.34 6.34 0 0010.86-4.43v-7a8.16 8.16 0 004.77 1.52v-3.4a4.85 4.85 0 01-1-.1z"/>
-                            </svg>
-                            TIKTOK
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Videos Per Creator -->
-                <div class="config-section">
-                    <div class="section-header">// VIDEOS PER CREATOR</div>
-                    <div class="form-group">
-                        <select id="videosPerCreator" class="form-input">
-                            <option value="1">1 video</option>
-                            <option value="2">2 videos</option>
-                            <option value="3" selected>3 videos (recommended)</option>
-                            <option value="4">4 videos</option>
-                            <option value="5">5 videos</option>
-                        </select>
-                    </div>
-                </div>
-
-                <!-- LLM Provider Section -->
-                <div class="config-section">
-                    <div class="section-header">// LLM PROVIDER</div>
-                    <div class="form-group">
-                        <label class="form-label">PROVIDER</label>
-                        <select id="llmProvider" class="form-input" onchange="updateProviderStatus()">
-                            <!-- Populated dynamically -->
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">MODEL</label>
-                        <select id="llmModel" class="form-input">
-                            <!-- Populated dynamically -->
-                        </select>
-                    </div>
-                    <div id="providerStatus" class="provider-status"></div>
-                </div>
-
-                <!-- Start Button -->
-                <button class="start-btn" id="startBtn" onclick="startAnalysis()">
-                    INITIATE ANALYSIS
-                </button>
+                <a href="/" class="back-link">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M19 12H5M12 19l-7-7 7-7"/>
+                    </svg>
+                    BACK TO RECON
+                </a>
             </div>
 
-            <!-- Results Panel -->
-            <div class="sr-results">
-                <div class="results-header">
-                    <span class="results-title">// ANALYSIS RESULTS</span>
-                    <span class="results-status" id="resultsStatus">Awaiting input</span>
+            <!-- Main Grid -->
+            <div class="sr-grid">
+                <!-- Config Panel -->
+                <div class="sr-panel">
+                    <div class="panel-header">
+                        <span class="panel-title">// Mission Config</span>
+                    </div>
+                    <div class="panel-body">
+                        <!-- Creators Section -->
+                        <div class="config-section">
+                            <div class="section-label">Target Creators</div>
+                            <div class="username-list" id="usernameList">
+                                <div class="username-row">
+                                    <div class="input-wrapper">
+                                        <span class="input-prefix">@</span>
+                                        <input type="text" class="form-input username-input" placeholder="creator_username">
+                                    </div>
+                                </div>
+                            </div>
+                            <button class="add-btn" id="addUsernameBtn" onclick="addUsername()">
+                                + ADD CREATOR (MAX 5)
+                            </button>
+                        </div>
+
+                        <!-- Platform Section -->
+                        <div class="config-section">
+                            <div class="section-label">Platform</div>
+                            <div class="platform-toggle">
+                                <button type="button" class="platform-btn active" data-platform="instagram" onclick="selectPlatform('instagram')">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                                        <rect x="2" y="2" width="20" height="20" rx="5"/>
+                                        <circle cx="12" cy="12" r="4"/>
+                                        <circle cx="18" cy="6" r="1.5" fill="currentColor"/>
+                                    </svg>
+                                    INSTAGRAM
+                                </button>
+                                <button type="button" class="platform-btn" data-platform="tiktok" onclick="selectPlatform('tiktok')">
+                                    <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14">
+                                        <path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-5.2 1.74 2.89 2.89 0 012.31-4.64 2.93 2.93 0 01.88.13V9.4a6.84 6.84 0 00-1-.05A6.33 6.33 0 005 20.1a6.34 6.34 0 0010.86-4.43v-7a8.16 8.16 0 004.77 1.52v-3.4a4.85 4.85 0 01-1-.1z"/>
+                                    </svg>
+                                    TIKTOK
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Videos Per Creator -->
+                        <div class="config-section">
+                            <div class="section-label">Videos Per Creator</div>
+                            <div class="form-group">
+                                <select id="videosPerCreator" class="form-input">
+                                    <option value="1">1 video</option>
+                                    <option value="2">2 videos</option>
+                                    <option value="3" selected>3 videos (recommended)</option>
+                                    <option value="4">4 videos</option>
+                                    <option value="5">5 videos</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- LLM Provider Section -->
+                        <div class="config-section">
+                            <div class="section-label">LLM Provider</div>
+                            <div class="form-group">
+                                <label class="form-label">PROVIDER</label>
+                                <select id="llmProvider" class="form-input" onchange="updateModels()">
+                                    <!-- Populated dynamically -->
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">MODEL</label>
+                                <select id="llmModel" class="form-input">
+                                    <!-- Populated dynamically -->
+                                </select>
+                            </div>
+                            <div id="providerStatus" class="provider-status ready">Ready</div>
+                        </div>
+
+                        <!-- Start Button -->
+                        <button class="start-btn" id="startBtn" onclick="startAnalysis()">
+                            INITIATE ANALYSIS
+                        </button>
+                    </div>
                 </div>
-                <div class="results-body" id="resultsBody">
-                    <div class="empty-state" id="emptyState">
-                        <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                            <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/>
-                            <rect x="9" y="3" width="6" height="4" rx="1"/>
-                            <path d="M9 12h6M9 16h6"/>
-                        </svg>
-                        <div class="empty-text">NO ANALYSIS RUNNING</div>
-                        <div class="empty-hint">Enter 1-5 creator usernames and click "Initiate Analysis" to extract content patterns</div>
-                    </div>
 
-                    <div class="progress-section" id="progressSection" style="display: none;">
-                        <div class="progress-phase" id="progressPhase">Initializing...</div>
-                        <div class="progress-bar-container">
-                            <div class="progress-bar" id="progressBar"></div>
-                        </div>
-                        <div class="progress-stats">
-                            <div class="stat-item">
-                                <div class="stat-value" id="statScraped">0</div>
-                                <div class="stat-label">Scraped</div>
-                            </div>
-                            <div class="stat-item">
-                                <div class="stat-value" id="statTranscribed">0</div>
-                                <div class="stat-label">Transcribed</div>
-                            </div>
-                            <div class="stat-item">
-                                <div class="stat-value" id="statExtracted">0</div>
-                                <div class="stat-label">Extracted</div>
-                            </div>
-                            <div class="stat-item">
-                                <div class="stat-value" id="statCached">0</div>
-                                <div class="stat-label">From Cache</div>
-                            </div>
-                        </div>
+                <!-- Results Panel -->
+                <div class="sr-panel results-panel">
+                    <div class="panel-header">
+                        <span class="panel-title">// Analysis Results</span>
+                        <span class="panel-status" id="resultsStatus">Awaiting input</span>
                     </div>
+                    <div class="results-body" id="resultsBody">
+                        <div class="empty-state" id="emptyState">
+                            <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/>
+                                <rect x="9" y="3" width="6" height="4" rx="1"/>
+                                <path d="M9 12h6M9 16h6"/>
+                            </svg>
+                            <div class="empty-title">NO ANALYSIS RUNNING</div>
+                            <div class="empty-hint">Enter 1-5 creator usernames and click "Initiate Analysis" to extract content patterns</div>
+                        </div>
 
-                    <div class="report-content" id="reportContent" style="display: none;"></div>
+                        <div class="progress-section" id="progressSection" style="display: none;">
+                            <div class="progress-phase" id="progressPhase">Initializing...</div>
+                            <div class="progress-bar-wrap">
+                                <div class="progress-bar" id="progressBar"></div>
+                            </div>
+                            <div class="progress-stats">
+                                <div class="stat-box">
+                                    <div class="stat-value" id="statScraped">0</div>
+                                    <div class="stat-label">Scraped</div>
+                                </div>
+                                <div class="stat-box">
+                                    <div class="stat-value" id="statTranscribed">0</div>
+                                    <div class="stat-label">Transcribed</div>
+                                </div>
+                                <div class="stat-box">
+                                    <div class="stat-value" id="statExtracted">0</div>
+                                    <div class="stat-label">Extracted</div>
+                                </div>
+                                <div class="stat-box">
+                                    <div class="stat-value" id="statCached">0</div>
+                                    <div class="stat-label">Cached</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="report-content" id="reportContent" style="display: none;"></div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -615,7 +648,7 @@
         let currentPlatform = 'instagram';
         let currentJobId = null;
         let pollInterval = null;
-        let providers = {};
+        let providersData = [];  // Array of provider objects
 
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
@@ -638,61 +671,68 @@
             try {
                 const response = await fetch('/api/skeleton-ripper/providers');
                 const data = await response.json();
-                providers = data.providers;
-                populateProviderDropdown();
+                providersData = data.providers || [];
+                populateProviders();
             } catch (error) {
                 console.error('Failed to load providers:', error);
+                document.getElementById('providerStatus').className = 'provider-status unavailable';
+                document.getElementById('providerStatus').textContent = 'Failed to load providers';
             }
         }
 
-        function populateProviderDropdown() {
+        function populateProviders() {
             const select = document.getElementById('llmProvider');
             select.innerHTML = '';
 
-            for (const [id, info] of Object.entries(providers)) {
+            providersData.forEach(provider => {
                 const option = document.createElement('option');
-                option.value = id;
-                option.textContent = info.name + (info.available ? '' : ' (Not configured)');
-                option.disabled = !info.available;
+                option.value = provider.id;
+                option.textContent = provider.name + (provider.available ? '' : ' (Not configured)');
+                option.disabled = !provider.available;
                 select.appendChild(option);
-            }
+            });
 
-            // Select first available
-            const firstAvailable = Object.entries(providers).find(([id, info]) => info.available);
+            // Select first available provider
+            const firstAvailable = providersData.find(p => p.available);
             if (firstAvailable) {
-                select.value = firstAvailable[0];
+                select.value = firstAvailable.id;
             }
 
-            updateProviderStatus();
+            updateModels();
         }
 
-        function updateProviderStatus() {
+        function updateModels() {
             const providerId = document.getElementById('llmProvider').value;
-            const provider = providers[providerId];
-            const statusDiv = document.getElementById('providerStatus');
+            const provider = providersData.find(p => p.id === providerId);
             const modelSelect = document.getElementById('llmModel');
+            const statusDiv = document.getElementById('providerStatus');
 
-            if (!provider) return;
+            modelSelect.innerHTML = '';
 
-            // Update status
-            if (provider.available) {
-                statusDiv.className = 'provider-status available';
-                statusDiv.textContent = 'Ready';
-            } else {
+            if (!provider) {
                 statusDiv.className = 'provider-status unavailable';
-                statusDiv.textContent = provider.reason || 'Not configured';
+                statusDiv.textContent = 'No provider selected';
+                return;
             }
 
-            // Update models
-            modelSelect.innerHTML = '';
-            for (const model of provider.models) {
-                const option = document.createElement('option');
-                option.value = model;
-                option.textContent = model;
-                if (model === provider.default_model) {
-                    option.selected = true;
-                }
-                modelSelect.appendChild(option);
+            // Update status
+            if (provider.available && provider.models && provider.models.length > 0) {
+                statusDiv.className = 'provider-status ready';
+                statusDiv.textContent = 'Ready';
+
+                // Populate models
+                provider.models.forEach(model => {
+                    const option = document.createElement('option');
+                    option.value = model.id;
+                    option.textContent = model.name || model.id;
+                    modelSelect.appendChild(option);
+                });
+            } else if (provider.available) {
+                statusDiv.className = 'provider-status unavailable';
+                statusDiv.textContent = 'No models available';
+            } else {
+                statusDiv.className = 'provider-status unavailable';
+                statusDiv.textContent = 'API key not configured';
             }
         }
 
@@ -705,32 +745,31 @@
         }
 
         // Username management
-        function addUsernameField() {
+        function addUsername() {
             const list = document.getElementById('usernameList');
             const count = list.children.length;
 
             if (count >= 5) return;
 
             const row = document.createElement('div');
-            row.className = 'username-input-row';
+            row.className = 'username-row';
             row.innerHTML = `
                 <div class="input-wrapper">
                     <span class="input-prefix">@</span>
-                    <input type="text" class="form-input username-input" placeholder="creator_username" data-index="${count}">
+                    <input type="text" class="form-input username-input" placeholder="creator_username">
                 </div>
-                <button class="remove-btn" onclick="removeUsernameField(this)">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <button class="remove-btn" onclick="removeUsername(this)">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <line x1="18" y1="6" x2="6" y2="18"/>
                         <line x1="6" y1="6" x2="18" y2="18"/>
                     </svg>
                 </button>
             `;
             list.appendChild(row);
-
             updateAddButton();
         }
 
-        function removeUsernameField(btn) {
+        function removeUsername(btn) {
             btn.parentElement.remove();
             updateAddButton();
         }
@@ -762,7 +801,7 @@
             }
 
             const providerId = document.getElementById('llmProvider').value;
-            const provider = providers[providerId];
+            const provider = providersData.find(p => p.id === providerId);
 
             if (!provider || !provider.available) {
                 alert('Please select an available LLM provider');
@@ -813,7 +852,7 @@
         function startPolling() {
             if (pollInterval) clearInterval(pollInterval);
             pollInterval = setInterval(pollStatus, 2000);
-            pollStatus(); // Immediate first poll
+            pollStatus();
         }
 
         async function pollStatus() {
@@ -847,16 +886,12 @@
         }
 
         function updateProgress(progress) {
-            // Update phase text
             document.getElementById('progressPhase').textContent = progress.phase || 'Processing...';
-
-            // Update stats
             document.getElementById('statScraped').textContent = progress.videos_scraped || 0;
             document.getElementById('statTranscribed').textContent = progress.videos_transcribed || 0;
             document.getElementById('statExtracted').textContent = progress.skeletons_extracted || 0;
             document.getElementById('statCached').textContent = progress.transcripts_from_cache || 0;
 
-            // Update progress bar
             const total = progress.total_target || 1;
             const current = progress.skeletons_extracted || 0;
             const percent = Math.min((current / total) * 100, 100);
@@ -883,24 +918,21 @@
         }
 
         function formatReport(markdown) {
-            // Basic markdown to HTML conversion
             let html = markdown
                 .replace(/^### (.*$)/gim, '<h3>$1</h3>')
                 .replace(/^## (.*$)/gim, '<h2>$1</h2>')
                 .replace(/^# (.*$)/gim, '<h1>$1</h1>')
                 .replace(/^\* (.*$)/gim, '<li>$1</li>')
                 .replace(/^- (.*$)/gim, '<li>$1</li>')
-                .replace(/\*\*(.*)\*\*/gim, '<strong>$1</strong>')
-                .replace(/\*(.*)\*/gim, '<em>$1</em>')
+                .replace(/\*\*(.*?)\*\*/gim, '<strong>$1</strong>')
+                .replace(/\*(.*?)\*/gim, '<em>$1</em>')
                 .replace(/`([^`]+)`/g, '<code>$1</code>')
                 .replace(/\n/g, '<br>');
 
-            // Wrap consecutive list items in ul
             html = html.replace(/(<li>.*<\/li>(<br>)?)+/g, match => {
                 return '<ul>' + match.replace(/<br>/g, '') + '</ul>';
             });
 
-            // Add action buttons
             html += `
                 <div class="report-actions">
                     <button class="action-btn primary" onclick="downloadReport()">DOWNLOAD REPORT</button>
@@ -913,11 +945,12 @@
         }
 
         function showError(errors) {
-            document.getElementById('progressSection').innerHTML += `
-                <div class="error-list">
+            const section = document.getElementById('progressSection');
+            section.innerHTML += `
+                <div class="error-box">
                     <h4>ERRORS</h4>
                     <ul>
-                        ${errors.map(e => `<li>${e}</li>`).join('')}
+                        ${(errors || ['Unknown error']).map(e => `<li>${e}</li>`).join('')}
                     </ul>
                 </div>
             `;
