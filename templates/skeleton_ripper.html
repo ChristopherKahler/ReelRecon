@@ -1,0 +1,962 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ReelRecon // SKELETON RIPPER</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/tactical.css') }}">
+    <style>
+        /* Skeleton Ripper specific styles */
+        .sr-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .sr-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .sr-title {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .sr-title h1 {
+            font-family: var(--font-mono);
+            font-size: 1.5rem;
+            color: var(--accent-color);
+            margin: 0;
+        }
+
+        .sr-title .subtitle {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        .back-link {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            transition: color 0.2s;
+        }
+
+        .back-link:hover {
+            color: var(--accent-color);
+        }
+
+        .sr-grid {
+            display: grid;
+            grid-template-columns: 400px 1fr;
+            gap: 2rem;
+        }
+
+        /* Config Panel */
+        .sr-config {
+            background: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1.5rem;
+        }
+
+        .config-section {
+            margin-bottom: 1.5rem;
+        }
+
+        .config-section:last-child {
+            margin-bottom: 0;
+        }
+
+        .section-header {
+            font-family: var(--font-mono);
+            font-size: 0.7rem;
+            color: var(--accent-color);
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .username-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .username-input-row {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+
+        .username-input-row .input-wrapper {
+            flex: 1;
+        }
+
+        .remove-btn {
+            background: transparent;
+            border: 1px solid var(--error-color);
+            color: var(--error-color);
+            width: 32px;
+            height: 32px;
+            border-radius: 4px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+
+        .remove-btn:hover {
+            background: var(--error-color);
+            color: var(--bg-primary);
+        }
+
+        .add-username-btn {
+            background: transparent;
+            border: 1px dashed var(--border-color);
+            color: var(--text-secondary);
+            padding: 0.5rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            transition: all 0.2s;
+            margin-top: 0.5rem;
+        }
+
+        .add-username-btn:hover {
+            border-color: var(--accent-color);
+            color: var(--accent-color);
+        }
+
+        .add-username-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .provider-status {
+            font-size: 0.75rem;
+            padding: 0.5rem;
+            border-radius: 4px;
+            margin-top: 0.5rem;
+        }
+
+        .provider-status.available {
+            background: rgba(0, 255, 136, 0.1);
+            color: var(--success-color);
+        }
+
+        .provider-status.unavailable {
+            background: rgba(255, 68, 68, 0.1);
+            color: var(--error-color);
+        }
+
+        .start-btn {
+            width: 100%;
+            padding: 1rem;
+            background: var(--accent-color);
+            color: var(--bg-primary);
+            border: none;
+            border-radius: 4px;
+            font-family: var(--font-mono);
+            font-size: 0.9rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .start-btn:hover:not(:disabled) {
+            background: var(--accent-hover);
+            transform: translateY(-1px);
+        }
+
+        .start-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Results Panel */
+        .sr-results {
+            background: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            min-height: 600px;
+        }
+
+        .results-header {
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .results-title {
+            font-family: var(--font-mono);
+            font-size: 0.7rem;
+            color: var(--accent-color);
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+        }
+
+        .results-status {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .results-body {
+            flex: 1;
+            padding: 1.5rem;
+            overflow-y: auto;
+        }
+
+        /* Progress Display */
+        .progress-section {
+            margin-bottom: 2rem;
+        }
+
+        .progress-phase {
+            font-family: var(--font-mono);
+            font-size: 0.9rem;
+            color: var(--text-primary);
+            margin-bottom: 0.75rem;
+        }
+
+        .progress-bar-container {
+            height: 8px;
+            background: var(--bg-secondary);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 1rem;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: var(--accent-color);
+            transition: width 0.3s ease;
+            width: 0%;
+        }
+
+        .progress-stats {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1rem;
+        }
+
+        .stat-item {
+            text-align: center;
+            padding: 0.75rem;
+            background: var(--bg-secondary);
+            border-radius: 4px;
+        }
+
+        .stat-value {
+            font-family: var(--font-mono);
+            font-size: 1.5rem;
+            color: var(--accent-color);
+            font-weight: 600;
+        }
+
+        .stat-label {
+            font-size: 0.65rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-top: 0.25rem;
+        }
+
+        /* Report Display */
+        .report-content {
+            font-family: var(--font-sans);
+            line-height: 1.7;
+            color: var(--text-primary);
+        }
+
+        .report-content h1 {
+            font-size: 1.5rem;
+            color: var(--accent-color);
+            margin-bottom: 1rem;
+            font-family: var(--font-mono);
+        }
+
+        .report-content h2 {
+            font-size: 1.1rem;
+            color: var(--text-primary);
+            margin-top: 1.5rem;
+            margin-bottom: 0.75rem;
+            font-family: var(--font-mono);
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 0.5rem;
+        }
+
+        .report-content h3 {
+            font-size: 0.95rem;
+            color: var(--accent-color);
+            margin-top: 1rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .report-content ul, .report-content ol {
+            margin-left: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .report-content li {
+            margin-bottom: 0.5rem;
+        }
+
+        .report-content code {
+            background: var(--bg-secondary);
+            padding: 0.2rem 0.4rem;
+            border-radius: 3px;
+            font-family: var(--font-mono);
+            font-size: 0.85em;
+        }
+
+        .report-content blockquote {
+            border-left: 3px solid var(--accent-color);
+            padding-left: 1rem;
+            margin: 1rem 0;
+            color: var(--text-secondary);
+            font-style: italic;
+        }
+
+        .report-actions {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1.5rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .action-btn {
+            padding: 0.75rem 1.5rem;
+            background: transparent;
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            border-radius: 4px;
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .action-btn:hover {
+            border-color: var(--accent-color);
+            color: var(--accent-color);
+        }
+
+        .action-btn.primary {
+            background: var(--accent-color);
+            border-color: var(--accent-color);
+            color: var(--bg-primary);
+        }
+
+        .action-btn.primary:hover {
+            background: var(--accent-hover);
+        }
+
+        /* Empty State */
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: var(--text-secondary);
+            text-align: center;
+        }
+
+        .empty-icon {
+            width: 64px;
+            height: 64px;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+
+        .empty-text {
+            font-family: var(--font-mono);
+            font-size: 0.9rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .empty-hint {
+            font-size: 0.8rem;
+            max-width: 300px;
+        }
+
+        /* Error Display */
+        .error-list {
+            margin-top: 1rem;
+            padding: 1rem;
+            background: rgba(255, 68, 68, 0.1);
+            border: 1px solid var(--error-color);
+            border-radius: 4px;
+        }
+
+        .error-list h4 {
+            color: var(--error-color);
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .error-list ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .error-list li {
+            font-size: 0.8rem;
+            color: var(--error-color);
+            padding: 0.25rem 0;
+        }
+
+        @media (max-width: 1024px) {
+            .sr-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .sr-results {
+                min-height: 500px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Scan Lines Overlay -->
+    <div class="scan-lines"></div>
+
+    <!-- Corner HUD Elements -->
+    <div class="corner-hud top-left">
+        <div class="hud-bracket"></div>
+        <span class="hud-label">SR.ACTIVE</span>
+    </div>
+    <div class="corner-hud top-right">
+        <div class="hud-bracket"></div>
+        <span class="hud-label" id="clock">--:--:--</span>
+    </div>
+    <div class="corner-hud bottom-left">
+        <div class="hud-bracket"></div>
+        <span class="hud-label">v2.1.0-alpha</span>
+    </div>
+    <div class="corner-hud bottom-right">
+        <div class="hud-bracket"></div>
+        <span class="hud-label" id="statusLabel">READY</span>
+    </div>
+
+    <div class="sr-container">
+        <!-- Header -->
+        <div class="sr-header">
+            <div class="sr-title">
+                <h1>// SKELETON RIPPER</h1>
+                <span class="subtitle">Multi-Creator Content Pattern Analysis</span>
+            </div>
+            <a href="/" class="back-link">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M19 12H5M12 19l-7-7 7-7"/>
+                </svg>
+                BACK TO RECON
+            </a>
+        </div>
+
+        <!-- Main Grid -->
+        <div class="sr-grid">
+            <!-- Config Panel -->
+            <div class="sr-config">
+                <!-- Creators Section -->
+                <div class="config-section">
+                    <div class="section-header">// TARGET CREATORS</div>
+                    <div class="username-list" id="usernameList">
+                        <div class="username-input-row">
+                            <div class="input-wrapper">
+                                <span class="input-prefix">@</span>
+                                <input type="text" class="form-input username-input" placeholder="creator_username" data-index="0">
+                            </div>
+                        </div>
+                    </div>
+                    <button class="add-username-btn" id="addUsernameBtn" onclick="addUsernameField()">
+                        + ADD CREATOR (MAX 5)
+                    </button>
+                </div>
+
+                <!-- Platform Section -->
+                <div class="config-section">
+                    <div class="section-header">// PLATFORM</div>
+                    <div class="platform-toggle">
+                        <button type="button" class="platform-btn active" data-platform="instagram" onclick="selectPlatform('instagram')">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                                <rect x="2" y="2" width="20" height="20" rx="5"/>
+                                <circle cx="12" cy="12" r="4"/>
+                                <circle cx="18" cy="6" r="1.5" fill="currentColor"/>
+                            </svg>
+                            INSTAGRAM
+                        </button>
+                        <button type="button" class="platform-btn" data-platform="tiktok" onclick="selectPlatform('tiktok')">
+                            <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
+                                <path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-5.2 1.74 2.89 2.89 0 012.31-4.64 2.93 2.93 0 01.88.13V9.4a6.84 6.84 0 00-1-.05A6.33 6.33 0 005 20.1a6.34 6.34 0 0010.86-4.43v-7a8.16 8.16 0 004.77 1.52v-3.4a4.85 4.85 0 01-1-.1z"/>
+                            </svg>
+                            TIKTOK
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Videos Per Creator -->
+                <div class="config-section">
+                    <div class="section-header">// VIDEOS PER CREATOR</div>
+                    <div class="form-group">
+                        <select id="videosPerCreator" class="form-input">
+                            <option value="1">1 video</option>
+                            <option value="2">2 videos</option>
+                            <option value="3" selected>3 videos (recommended)</option>
+                            <option value="4">4 videos</option>
+                            <option value="5">5 videos</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- LLM Provider Section -->
+                <div class="config-section">
+                    <div class="section-header">// LLM PROVIDER</div>
+                    <div class="form-group">
+                        <label class="form-label">PROVIDER</label>
+                        <select id="llmProvider" class="form-input" onchange="updateProviderStatus()">
+                            <!-- Populated dynamically -->
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">MODEL</label>
+                        <select id="llmModel" class="form-input">
+                            <!-- Populated dynamically -->
+                        </select>
+                    </div>
+                    <div id="providerStatus" class="provider-status"></div>
+                </div>
+
+                <!-- Start Button -->
+                <button class="start-btn" id="startBtn" onclick="startAnalysis()">
+                    INITIATE ANALYSIS
+                </button>
+            </div>
+
+            <!-- Results Panel -->
+            <div class="sr-results">
+                <div class="results-header">
+                    <span class="results-title">// ANALYSIS RESULTS</span>
+                    <span class="results-status" id="resultsStatus">Awaiting input</span>
+                </div>
+                <div class="results-body" id="resultsBody">
+                    <div class="empty-state" id="emptyState">
+                        <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/>
+                            <rect x="9" y="3" width="6" height="4" rx="1"/>
+                            <path d="M9 12h6M9 16h6"/>
+                        </svg>
+                        <div class="empty-text">NO ANALYSIS RUNNING</div>
+                        <div class="empty-hint">Enter 1-5 creator usernames and click "Initiate Analysis" to extract content patterns</div>
+                    </div>
+
+                    <div class="progress-section" id="progressSection" style="display: none;">
+                        <div class="progress-phase" id="progressPhase">Initializing...</div>
+                        <div class="progress-bar-container">
+                            <div class="progress-bar" id="progressBar"></div>
+                        </div>
+                        <div class="progress-stats">
+                            <div class="stat-item">
+                                <div class="stat-value" id="statScraped">0</div>
+                                <div class="stat-label">Scraped</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-value" id="statTranscribed">0</div>
+                                <div class="stat-label">Transcribed</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-value" id="statExtracted">0</div>
+                                <div class="stat-label">Extracted</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-value" id="statCached">0</div>
+                                <div class="stat-label">From Cache</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="report-content" id="reportContent" style="display: none;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // State
+        let currentPlatform = 'instagram';
+        let currentJobId = null;
+        let pollInterval = null;
+        let providers = {};
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            initClock();
+            loadProviders();
+        });
+
+        // Clock
+        function initClock() {
+            function updateClock() {
+                const now = new Date();
+                document.getElementById('clock').textContent = now.toLocaleTimeString('en-US', { hour12: false });
+            }
+            updateClock();
+            setInterval(updateClock, 1000);
+        }
+
+        // Load available providers
+        async function loadProviders() {
+            try {
+                const response = await fetch('/api/skeleton-ripper/providers');
+                const data = await response.json();
+                providers = data.providers;
+                populateProviderDropdown();
+            } catch (error) {
+                console.error('Failed to load providers:', error);
+            }
+        }
+
+        function populateProviderDropdown() {
+            const select = document.getElementById('llmProvider');
+            select.innerHTML = '';
+
+            for (const [id, info] of Object.entries(providers)) {
+                const option = document.createElement('option');
+                option.value = id;
+                option.textContent = info.name + (info.available ? '' : ' (Not configured)');
+                option.disabled = !info.available;
+                select.appendChild(option);
+            }
+
+            // Select first available
+            const firstAvailable = Object.entries(providers).find(([id, info]) => info.available);
+            if (firstAvailable) {
+                select.value = firstAvailable[0];
+            }
+
+            updateProviderStatus();
+        }
+
+        function updateProviderStatus() {
+            const providerId = document.getElementById('llmProvider').value;
+            const provider = providers[providerId];
+            const statusDiv = document.getElementById('providerStatus');
+            const modelSelect = document.getElementById('llmModel');
+
+            if (!provider) return;
+
+            // Update status
+            if (provider.available) {
+                statusDiv.className = 'provider-status available';
+                statusDiv.textContent = 'Ready';
+            } else {
+                statusDiv.className = 'provider-status unavailable';
+                statusDiv.textContent = provider.reason || 'Not configured';
+            }
+
+            // Update models
+            modelSelect.innerHTML = '';
+            for (const model of provider.models) {
+                const option = document.createElement('option');
+                option.value = model;
+                option.textContent = model;
+                if (model === provider.default_model) {
+                    option.selected = true;
+                }
+                modelSelect.appendChild(option);
+            }
+        }
+
+        // Platform selection
+        function selectPlatform(platform) {
+            currentPlatform = platform;
+            document.querySelectorAll('.platform-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.platform === platform);
+            });
+        }
+
+        // Username management
+        function addUsernameField() {
+            const list = document.getElementById('usernameList');
+            const count = list.children.length;
+
+            if (count >= 5) return;
+
+            const row = document.createElement('div');
+            row.className = 'username-input-row';
+            row.innerHTML = `
+                <div class="input-wrapper">
+                    <span class="input-prefix">@</span>
+                    <input type="text" class="form-input username-input" placeholder="creator_username" data-index="${count}">
+                </div>
+                <button class="remove-btn" onclick="removeUsernameField(this)">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"/>
+                        <line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                </button>
+            `;
+            list.appendChild(row);
+
+            updateAddButton();
+        }
+
+        function removeUsernameField(btn) {
+            btn.parentElement.remove();
+            updateAddButton();
+        }
+
+        function updateAddButton() {
+            const count = document.getElementById('usernameList').children.length;
+            const btn = document.getElementById('addUsernameBtn');
+            btn.disabled = count >= 5;
+            btn.textContent = count >= 5 ? 'MAX CREATORS REACHED' : '+ ADD CREATOR (MAX 5)';
+        }
+
+        function getSelectedUsernames() {
+            const inputs = document.querySelectorAll('.username-input');
+            const usernames = [];
+            inputs.forEach(input => {
+                const value = input.value.trim().replace('@', '');
+                if (value) usernames.push(value);
+            });
+            return usernames;
+        }
+
+        // Start analysis
+        async function startAnalysis() {
+            const usernames = getSelectedUsernames();
+
+            if (usernames.length === 0) {
+                alert('Please enter at least one creator username');
+                return;
+            }
+
+            const providerId = document.getElementById('llmProvider').value;
+            const provider = providers[providerId];
+
+            if (!provider || !provider.available) {
+                alert('Please select an available LLM provider');
+                return;
+            }
+
+            // Disable start button
+            const startBtn = document.getElementById('startBtn');
+            startBtn.disabled = true;
+            startBtn.textContent = 'INITIATING...';
+
+            // Show progress section
+            document.getElementById('emptyState').style.display = 'none';
+            document.getElementById('progressSection').style.display = 'block';
+            document.getElementById('reportContent').style.display = 'none';
+            document.getElementById('resultsStatus').textContent = 'Running';
+            document.getElementById('statusLabel').textContent = 'ACTIVE';
+
+            try {
+                const response = await fetch('/api/skeleton-ripper/start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        usernames: usernames,
+                        platform: currentPlatform,
+                        videos_per_creator: parseInt(document.getElementById('videosPerCreator').value),
+                        llm_provider: providerId,
+                        llm_model: document.getElementById('llmModel').value
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    currentJobId = data.job_id;
+                    startPolling();
+                } else {
+                    throw new Error(data.error || 'Failed to start analysis');
+                }
+            } catch (error) {
+                console.error('Failed to start analysis:', error);
+                alert('Failed to start analysis: ' + error.message);
+                resetUI();
+            }
+        }
+
+        // Polling
+        function startPolling() {
+            if (pollInterval) clearInterval(pollInterval);
+            pollInterval = setInterval(pollStatus, 2000);
+            pollStatus(); // Immediate first poll
+        }
+
+        async function pollStatus() {
+            if (!currentJobId) return;
+
+            try {
+                const response = await fetch(`/api/skeleton-ripper/status/${currentJobId}`);
+                const data = await response.json();
+
+                if (data.success) {
+                    updateProgress(data.progress);
+
+                    if (data.progress.status === 'complete') {
+                        stopPolling();
+                        loadReport();
+                    } else if (data.progress.status === 'failed') {
+                        stopPolling();
+                        showError(data.progress.errors);
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to poll status:', error);
+            }
+        }
+
+        function stopPolling() {
+            if (pollInterval) {
+                clearInterval(pollInterval);
+                pollInterval = null;
+            }
+        }
+
+        function updateProgress(progress) {
+            // Update phase text
+            document.getElementById('progressPhase').textContent = progress.phase || 'Processing...';
+
+            // Update stats
+            document.getElementById('statScraped').textContent = progress.videos_scraped || 0;
+            document.getElementById('statTranscribed').textContent = progress.videos_transcribed || 0;
+            document.getElementById('statExtracted').textContent = progress.skeletons_extracted || 0;
+            document.getElementById('statCached').textContent = progress.transcripts_from_cache || 0;
+
+            // Update progress bar
+            const total = progress.total_target || 1;
+            const current = progress.skeletons_extracted || 0;
+            const percent = Math.min((current / total) * 100, 100);
+            document.getElementById('progressBar').style.width = percent + '%';
+        }
+
+        async function loadReport() {
+            try {
+                const response = await fetch(`/api/skeleton-ripper/report/${currentJobId}`);
+                const data = await response.json();
+
+                if (data.success && data.report) {
+                    document.getElementById('progressSection').style.display = 'none';
+                    document.getElementById('reportContent').style.display = 'block';
+                    document.getElementById('reportContent').innerHTML = formatReport(data.report);
+                    document.getElementById('resultsStatus').textContent = 'Complete';
+                    document.getElementById('statusLabel').textContent = 'COMPLETE';
+                }
+            } catch (error) {
+                console.error('Failed to load report:', error);
+            } finally {
+                resetStartButton();
+            }
+        }
+
+        function formatReport(markdown) {
+            // Basic markdown to HTML conversion
+            let html = markdown
+                .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+                .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+                .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+                .replace(/^\* (.*$)/gim, '<li>$1</li>')
+                .replace(/^- (.*$)/gim, '<li>$1</li>')
+                .replace(/\*\*(.*)\*\*/gim, '<strong>$1</strong>')
+                .replace(/\*(.*)\*/gim, '<em>$1</em>')
+                .replace(/`([^`]+)`/g, '<code>$1</code>')
+                .replace(/\n/g, '<br>');
+
+            // Wrap consecutive list items in ul
+            html = html.replace(/(<li>.*<\/li>(<br>)?)+/g, match => {
+                return '<ul>' + match.replace(/<br>/g, '') + '</ul>';
+            });
+
+            // Add action buttons
+            html += `
+                <div class="report-actions">
+                    <button class="action-btn primary" onclick="downloadReport()">DOWNLOAD REPORT</button>
+                    <button class="action-btn" onclick="copyReport()">COPY TO CLIPBOARD</button>
+                    <button class="action-btn" onclick="newAnalysis()">NEW ANALYSIS</button>
+                </div>
+            `;
+
+            return html;
+        }
+
+        function showError(errors) {
+            document.getElementById('progressSection').innerHTML += `
+                <div class="error-list">
+                    <h4>ERRORS</h4>
+                    <ul>
+                        ${errors.map(e => `<li>${e}</li>`).join('')}
+                    </ul>
+                </div>
+            `;
+            document.getElementById('resultsStatus').textContent = 'Failed';
+            document.getElementById('statusLabel').textContent = 'FAILED';
+            resetStartButton();
+        }
+
+        function resetUI() {
+            document.getElementById('emptyState').style.display = 'flex';
+            document.getElementById('progressSection').style.display = 'none';
+            document.getElementById('reportContent').style.display = 'none';
+            document.getElementById('resultsStatus').textContent = 'Awaiting input';
+            document.getElementById('statusLabel').textContent = 'READY';
+            resetStartButton();
+        }
+
+        function resetStartButton() {
+            const startBtn = document.getElementById('startBtn');
+            startBtn.disabled = false;
+            startBtn.textContent = 'INITIATE ANALYSIS';
+        }
+
+        function downloadReport() {
+            if (!currentJobId) return;
+            window.open(`/api/skeleton-ripper/report/${currentJobId}?download=true`, '_blank');
+        }
+
+        function copyReport() {
+            const content = document.getElementById('reportContent').innerText;
+            navigator.clipboard.writeText(content).then(() => {
+                alert('Report copied to clipboard');
+            });
+        }
+
+        function newAnalysis() {
+            currentJobId = null;
+            resetUI();
+        }
+    </script>
+</body>
+</html>
