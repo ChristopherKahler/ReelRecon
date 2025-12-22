@@ -6,6 +6,7 @@ Checks GitHub for new releases and handles updates via git pull.
 import subprocess
 import requests
 import os
+import time
 from pathlib import Path
 from .logger import get_logger
 
@@ -16,6 +17,10 @@ GITHUB_OWNER = "ChristopherKahler"
 GITHUB_REPO = "ReelRecon"
 # Use /releases instead of /releases/latest to include pre-releases
 GITHUB_API_URL = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/releases"
+
+# Retry configuration
+MAX_RETRIES = 3
+RETRY_DELAYS = [1, 2, 4]  # Exponential backoff in seconds
 
 def get_current_version():
     """Read current version from VERSION file."""
@@ -28,15 +33,68 @@ def get_current_version():
         logger.warning("UPDATER", f"Could not read VERSION file: {e}")
         return "unknown"
 
+def _fetch_github_releases():
+    """
+    Fetch releases from GitHub API with retry logic.
+    Returns (response, error_message) tuple.
+    """
+    last_error = None
+    logger.info("UPDATER", f"Checking GitHub API (will retry up to {MAX_RETRIES} times if needed)")
+
+    for attempt in range(MAX_RETRIES):
+        logger.debug("UPDATER", f"Attempt {attempt + 1}/{MAX_RETRIES}")
+        try:
+            response = requests.get(GITHUB_API_URL, timeout=10)
+
+            # Success or definitive failure (404 = no releases)
+            if response.status_code in [200, 404]:
+                return response, None
+
+            # Server error - worth retrying
+            if response.status_code >= 500:
+                last_error = f"GitHub API returned status {response.status_code}"
+                if attempt < MAX_RETRIES - 1:
+                    delay = RETRY_DELAYS[attempt]
+                    logger.warning("UPDATER", f"{last_error}, retrying in {delay}s... (attempt {attempt + 1}/{MAX_RETRIES})")
+                    time.sleep(delay)
+                    continue
+            else:
+                # Client error (4xx except 404) - don't retry
+                return response, None
+
+        except requests.exceptions.Timeout:
+            last_error = "GitHub API request timed out"
+            if attempt < MAX_RETRIES - 1:
+                delay = RETRY_DELAYS[attempt]
+                logger.warning("UPDATER", f"{last_error}, retrying in {delay}s... (attempt {attempt + 1}/{MAX_RETRIES})")
+                time.sleep(delay)
+            continue
+
+        except requests.exceptions.RequestException as e:
+            last_error = f"Network error: {e}"
+            if attempt < MAX_RETRIES - 1:
+                delay = RETRY_DELAYS[attempt]
+                logger.warning("UPDATER", f"{last_error}, retrying in {delay}s... (attempt {attempt + 1}/{MAX_RETRIES})")
+                time.sleep(delay)
+            continue
+
+    # All retries exhausted
+    logger.error("UPDATER", f"Failed after {MAX_RETRIES} attempts: {last_error}")
+    return None, last_error
+
 def check_for_updates():
     """
-    Check GitHub API for latest release.
+    Check GitHub API for latest release with automatic retries.
     Returns dict with update info or None if check fails.
     """
     current_version = get_current_version()
 
     try:
-        response = requests.get(GITHUB_API_URL, timeout=10)
+        response, error = _fetch_github_releases()
+
+        if response is None:
+            # All retries failed
+            return None
 
         if response.status_code == 200:
             releases = response.json()
@@ -90,12 +148,6 @@ def check_for_updates():
             logger.warning("UPDATER", f"GitHub API returned status {response.status_code}")
             return None
 
-    except requests.exceptions.Timeout:
-        logger.warning("UPDATER", "GitHub API request timed out")
-        return None
-    except requests.exceptions.RequestException as e:
-        logger.warning("UPDATER", f"Failed to check for updates: {e}")
-        return None
     except Exception as e:
         logger.error("UPDATER", f"Unexpected error checking for updates", exception=e)
         return None

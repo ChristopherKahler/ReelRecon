@@ -2420,13 +2420,7 @@ function showTacticalModal(options = {}) {
     // Remove existing modal if present
     closeTacticalModal();
 
-    const typeColors = {
-        info: 'var(--color-primary)',
-        success: 'var(--color-success)',
-        warning: 'var(--color-warning)',
-        danger: 'var(--color-danger)'
-    };
-    const borderColor = typeColors[type] || typeColors.info;
+    // Type colors removed - CSS handles styling
 
     const actionsHtml = actions.map(action => `
         <button class="tactical-modal-btn ${action.primary ? 'primary' : 'secondary'}"
@@ -2438,8 +2432,8 @@ function showTacticalModal(options = {}) {
 
     const modalHtml = `
         <div class="tactical-modal-overlay" onclick="${closeable ? 'closeTacticalModal()' : ''}">
-            <div class="tactical-modal" onclick="event.stopPropagation()" style="border-color: ${borderColor};">
-                <div class="tactical-modal-header" style="border-bottom-color: ${borderColor};">
+            <div class="tactical-modal" onclick="event.stopPropagation()">
+                <div class="tactical-modal-header">
                     <span class="tactical-modal-title">${title}</span>
                     ${closeable ? '<button class="tactical-modal-close" onclick="closeTacticalModal()">&times;</button>' : ''}
                 </div>
