@@ -7,6 +7,48 @@ let currentScrapeId = null;
 let currentResults = null;
 let historyData = [];
 let currentRewriteReel = null;  // For rewrite modal
+let currentPlatform = 'instagram';  // Default platform
+
+// Platform Selection
+function selectPlatform(platform) {
+    currentPlatform = platform;
+    document.getElementById('platform').value = platform;
+
+    // Update button states
+    document.querySelectorAll('.platform-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.platform === platform);
+    });
+
+    // Update label for MAX REELS/VIDEOS
+    const maxReelsLabel = document.querySelector('label[for="maxReels"]')?.parentElement?.querySelector('.form-label');
+    if (maxReelsLabel) {
+        maxReelsLabel.textContent = platform === 'tiktok' ? 'MAX VIDEOS' : 'MAX REELS';
+    }
+
+    // Update username input styling based on platform
+    updateUsernameInputStyling();
+}
+
+// Update username input styling based on platform and value
+function updateUsernameInputStyling() {
+    const usernameInput = document.getElementById('username');
+    const inputWrapper = usernameInput?.closest('.input-wrapper');
+
+    if (!usernameInput) return;
+
+    // Toggle has-value class
+    usernameInput.classList.toggle('has-value', usernameInput.value.trim() !== '');
+
+    // Toggle platform classes
+    usernameInput.classList.remove('platform-instagram', 'platform-tiktok');
+    usernameInput.classList.add(`platform-${currentPlatform}`);
+
+    // Update wrapper for prefix color
+    if (inputWrapper) {
+        inputWrapper.classList.remove('platform-instagram', 'platform-tiktok');
+        inputWrapper.classList.add(`platform-${currentPlatform}`);
+    }
+}
 
 // DOM Elements
 const scrapeForm = document.getElementById('scrapeForm');
@@ -29,6 +71,16 @@ function updateClock() {
 }
 setInterval(updateClock, 1000);
 updateClock();
+
+// Username input styling - update on input and initialize on load
+(function() {
+    const input = document.getElementById('username');
+    if (input) {
+        input.addEventListener('input', updateUsernameInputStyling);
+        // Initialize on load
+        updateUsernameInputStyling();
+    }
+})();
 
 // Toggle Transcription Options visibility
 transcribeCheckbox?.addEventListener('change', function() {
@@ -121,8 +173,10 @@ scrapeForm.addEventListener('submit', async function(e) {
     const whisperModel = document.getElementById('whisperModel').value;
 
     // Build scrape data
+    const platform = document.getElementById('platform')?.value || currentPlatform || 'instagram';
     const scrapeData = {
         username: username,
+        platform: platform,
         max_reels: parseInt(document.getElementById('maxReels').value) || 100,
         top_n: parseInt(document.getElementById('topN').value) || 10,
         download: document.getElementById('downloadVideos').checked,
@@ -169,9 +223,10 @@ scrapeForm.addEventListener('submit', async function(e) {
 async function executeScrape(scrapeData) {
     // Disable form
     executeBtn.disabled = true;
-    executeBtn.querySelector('.btn-text').textContent = 'EXECUTING...';
+    const platformLabel = scrapeData.platform === 'tiktok' ? 'TikTok' : 'Instagram';
+    executeBtn.querySelector('.btn-text').textContent = `EXECUTING ${platformLabel.toUpperCase()}...`;
     progressSection.style.display = 'block';
-    progressText.textContent = 'Initializing...';
+    progressText.textContent = `Initializing ${platformLabel} scrape...`;
     progressFill.style.width = '10%';
 
     try {
@@ -205,20 +260,45 @@ async function pollScrapeStatus() {
 
         // Handle server restart or lost scrape
         if (response.status === 404) {
-            throw new Error('Scrape job lost (server may have restarted). Please try again.');
+            const errorData = await response.json().catch(() => ({}));
+            throw {
+                message: 'Scrape job lost (server may have restarted). Please try again.',
+                code: errorData.error_code || 'SCRAPE-LOST'
+            };
         }
 
         if (!response.ok) {
-            throw new Error(`Server error: ${response.status}`);
+            throw { message: `Server error: ${response.status}`, code: null };
         }
 
         const data = await response.json();
 
         const progress = data.progress || '';
-        progressText.textContent = progress || 'Processing...';
+        const progressPct = data.progress_pct || 0;
 
-        // Update progress bar based on status
-        if (progress.includes('Found')) {
+        // Update progress text with phase info if available
+        let displayProgress = progress || 'Processing...';
+        if (data.phase && data.phase !== 'initializing') {
+            const phaseNames = {
+                'authenticating': 'Authenticating',
+                'fetching_profile': 'Fetching Profile',
+                'discovering_content': 'Discovering Content',
+                'downloading': 'Downloading',
+                'transcribing': 'Transcribing',
+                'processing': 'Processing',
+                'finalizing': 'Finalizing'
+            };
+            const phaseName = phaseNames[data.phase] || data.phase;
+            if (data.current_item && data.total_items) {
+                displayProgress = `${phaseName}: ${data.current_item}/${data.total_items}`;
+            }
+        }
+        progressText.textContent = displayProgress;
+
+        // Update progress bar based on percentage or message fallback
+        if (progressPct > 0) {
+            progressFill.style.width = `${progressPct}%`;
+        } else if (progress.includes('Found')) {
             progressFill.style.width = '30%';
         } else if (progress.includes('Downloading')) {
             progressFill.style.width = '50%';
@@ -228,8 +308,15 @@ async function pollScrapeStatus() {
             progressFill.style.width = '90%';
         }
 
-        if (data.status === 'complete') {
+        if (data.status === 'complete' || data.status === 'partial') {
             progressFill.style.width = '100%';
+
+            // Show warning for partial completion
+            if (data.status === 'partial') {
+                progressFill.style.background = 'linear-gradient(90deg, var(--color-success), var(--color-warning))';
+                progressText.innerHTML = `<span style="color: var(--color-warning);">Completed with some errors. Check results.</span>`;
+            }
+
             currentResults = data.result;
             renderResults(data.result);
             resetForm();
@@ -239,20 +326,29 @@ async function pollScrapeStatus() {
                 switchView('list');
             }
         } else if (data.status === 'error') {
-            throw new Error(data.result?.error || 'Scrape failed');
+            const errorMsg = data.error_message || data.result?.error || 'Scrape failed';
+            throw { message: errorMsg, code: data.error_code };
+        } else if (data.status === 'aborted') {
+            throw { message: 'Scrape was aborted', code: 'ABORTED' };
         } else {
             // Continue polling
             setTimeout(pollScrapeStatus, 1000);
         }
 
     } catch (error) {
-        showError(error.message);
+        // Handle both regular errors and our error objects
+        const message = error.message || String(error);
+        const code = error.code || null;
+        showError(message, code);
         resetForm();
     }
 }
 
 // Render results
 function renderResults(result) {
+    const platform = result?.platform || 'instagram';
+    const contentType = platform === 'tiktok' ? 'videos' : 'reels';
+
     if (!result || !result.top_reels || result.top_reels.length === 0) {
         resultsContent.innerHTML = `
             <div class="empty-state">
@@ -262,7 +358,7 @@ function renderResults(result) {
                         <path d="M12 8v4M12 16h.01"/>
                     </svg>
                 </div>
-                <div class="empty-text">NO REELS FOUND</div>
+                <div class="empty-text">NO ${contentType.toUpperCase()} FOUND</div>
                 <div class="empty-subtext">Check username or try again</div>
             </div>
         `;
@@ -270,31 +366,42 @@ function renderResults(result) {
     }
 
     const profile = result.profile || {};
+    const platformBadge = platform === 'tiktok'
+        ? '<span class="results-platform tiktok">TikTok</span>'
+        : '<span class="results-platform instagram">Instagram</span>';
     let html = `
         <div class="results-header">
-            <div class="results-title">@${result.username}</div>
-            <div class="results-meta">${profile.full_name || ''} • ${formatNumber(profile.followers)} followers</div>
+            <div class="results-title-row">
+                ${platformBadge}
+                <div class="results-title">@${result.username}</div>
+            </div>
+            <div class="results-meta">${profile.full_name || ''} ${profile.followers ? '• ' + formatNumber(profile.followers) + ' followers' : ''}</div>
         </div>
         <div class="results-summary">
-            <span>${result.total_reels} reels analyzed</span> •
+            <span>${result.total_reels || result.total_videos || 0} ${contentType} analyzed</span> •
             <span>Top ${result.top_reels.length} shown</span>
         </div>
     `;
 
     result.top_reels.forEach((reel, index) => {
-        const caption = reel.caption ? reel.caption.substring(0, 80) + '...' : 'No caption';
+        // Use caption/hook as title, fall back to shortcode/video_id
+        const videoId = reel.shortcode || reel.video_id || 'Unknown';
+        const captionFull = reel.caption || '';
+        const titleText = captionFull ? captionFull.substring(0, 60) + (captionFull.length > 60 ? '...' : '') : videoId;
         html += `
             <div class="reel-item" onclick="showReelDetail('${result.id}', ${index})">
-                <div>
+                <div class="reel-header">
                     <span class="reel-rank">${index + 1}</span>
-                    <span class="reel-shortcode">${reel.shortcode}</span>
+                    <span class="reel-title">${escapeHtml(titleText)}</span>
+                </div>
+                <div class="reel-meta">
+                    <span class="reel-id">${platform === 'tiktok' ? 'TT' : 'IG'}:${videoId}</span>
                 </div>
                 <div class="reel-stats">
                     <span class="reel-stat"><strong>${formatNumber(reel.views)}</strong> views</span>
                     <span class="reel-stat"><strong>${formatNumber(reel.likes)}</strong> likes</span>
                     <span class="reel-stat"><strong>${formatNumber(reel.comments || 0)}</strong> comments</span>
                 </div>
-                <div class="reel-caption">${escapeHtml(caption)}</div>
                 <div class="reel-url">
                     <code>${reel.url}</code>
                     <button class="copy-btn" onclick="event.stopPropagation(); copyToClipboard('${reel.url}')">COPY</button>
@@ -310,28 +417,69 @@ function renderResults(result) {
 function showReelDetail(scrapeId, index) {
     // Find the scrape in history or current results
     let scrape = currentResults;
-    if (currentResults?.id !== scrapeId) {
-        scrape = historyData.find(h => h.id === scrapeId);
+    let reel = null;
+
+    // For combined results, find the reel by index from combined list
+    if (currentResults?.platform === 'combined' && currentResults.top_reels[index]) {
+        reel = currentResults.top_reels[index];
+        // Use the original scrape_id stored in the reel
+        scrapeId = reel._scrape_id || scrapeId;
+    } else {
+        // Standard lookup
+        if (currentResults?.id !== scrapeId) {
+            scrape = historyData.find(h => h.id === scrapeId);
+        }
+        if (!scrape || !scrape.top_reels[index]) return;
+        reel = scrape.top_reels[index];
     }
 
-    if (!scrape || !scrape.top_reels[index]) return;
+    if (!reel) return;
 
-    const reel = scrape.top_reels[index];
+    // Store reel data for transcription
+    window.currentReelData = { ...reel, scrape_id: scrapeId };
+
+    // Determine if we can offer transcription (video downloaded, no transcript yet)
+    const canTranscribe = reel.local_video && !reel.transcript;
 
     let html = `
-        <div class="modal-stat-row">
-            <div class="modal-stat">
-                <div class="modal-stat-value">${formatNumber(reel.views)}</div>
-                <div class="modal-stat-label">VIEWS</div>
+        <div class="modal-header-row">
+            <div class="modal-stat-row">
+                <div class="modal-stat">
+                    <div class="modal-stat-value">${formatNumber(reel.views)}</div>
+                    <div class="modal-stat-label">VIEWS</div>
+                </div>
+                <div class="modal-stat">
+                    <div class="modal-stat-value">${formatNumber(reel.likes)}</div>
+                    <div class="modal-stat-label">LIKES</div>
+                </div>
+                <div class="modal-stat">
+                    <div class="modal-stat-value">${formatNumber(reel.comments || 0)}</div>
+                    <div class="modal-stat-label">COMMENTS</div>
+                </div>
             </div>
-            <div class="modal-stat">
-                <div class="modal-stat-value">${formatNumber(reel.likes)}</div>
-                <div class="modal-stat-label">LIKES</div>
-            </div>
-            <div class="modal-stat">
-                <div class="modal-stat-value">${formatNumber(reel.comments || 0)}</div>
-                <div class="modal-stat-label">COMMENTS</div>
-            </div>
+            ${canTranscribe ? `
+                <div class="transcribe-compact" id="transcribeCompact">
+                    <select id="reelTranscribeProvider" class="transcribe-compact-select" onchange="updateWhisperModelVisibility()">
+                        <option value="openai">OpenAI</option>
+                        <option value="local">Local</option>
+                    </select>
+                    <select id="reelWhisperModel" class="transcribe-compact-select whisper-model-select" style="display: none;">
+                        <option value="tiny.en">tiny.en</option>
+                        <option value="base.en">base.en</option>
+                        <option value="small.en" selected>small.en</option>
+                        <option value="medium.en">medium.en</option>
+                    </select>
+                    <button class="transcribe-compact-btn" id="reelGetTranscriptBtn" onclick="transcribeFromReelModal('${scrapeId}', '${reel.shortcode}')" title="Generate transcript">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                            <line x1="12" y1="19" x2="12" y2="23"/>
+                            <line x1="8" y1="23" x2="16" y2="23"/>
+                        </svg>
+                        <span class="transcribe-btn-text">TRANSCRIBE</span>
+                    </button>
+                </div>
+            ` : ''}
         </div>
 
         <div class="modal-section">
@@ -352,7 +500,15 @@ function showReelDetail(scrapeId, index) {
         html += `
             <div class="modal-section">
                 <div class="modal-section-title">TRANSCRIPT</div>
-                <div class="modal-transcript">${escapeHtml(reel.transcript)}</div>
+                <div class="modal-transcript" id="reelTranscriptContent">${escapeHtml(reel.transcript)}</div>
+            </div>
+        `;
+    } else if (reel.local_video) {
+        // Empty transcript section that will be populated after transcription
+        html += `
+            <div class="modal-section" id="reelTranscriptSection" style="display: none;">
+                <div class="modal-section-title">TRANSCRIPT</div>
+                <div class="modal-transcript" id="reelTranscriptContent"></div>
             </div>
         `;
     }
@@ -517,25 +673,285 @@ function renderHistory() {
         return;
     }
 
-    let html = '';
-    historyData.forEach(item => {
-        html += `
-            <div class="history-item" data-id="${item.id}">
-                <div class="history-main">
-                    <span class="history-username">@${item.username}</span>
-                    <span class="history-stats">${item.top_count} reels / ${item.total_reels} total</span>
-                </div>
-                <div class="history-meta">
-                    <span class="history-time">${item.timestamp?.substring(0, 16) || ''}</span>
-                    <div class="history-actions">
-                        <button class="history-btn load" onclick="loadHistoryItem('${item.id}')">LOAD</button>
-                        <button class="history-btn delete" onclick="deleteHistoryItem('${item.id}')">DEL</button>
+    // Group history items by username if enabled
+    if (historyGroupByUsername) {
+        const grouped = {};
+        historyData.forEach(item => {
+            const username = item.username.toLowerCase();
+            if (!grouped[username]) {
+                grouped[username] = {
+                    username: item.username,
+                    platforms: {},
+                    latestTimestamp: item.timestamp
+                };
+            }
+            const platform = item.platform || 'instagram';
+            if (!grouped[username].platforms[platform]) {
+                grouped[username].platforms[platform] = [];
+            }
+            grouped[username].platforms[platform].push(item);
+            // Track latest timestamp for sorting
+            if (item.timestamp > grouped[username].latestTimestamp) {
+                grouped[username].latestTimestamp = item.timestamp;
+            }
+        });
+
+        // Sort by latest timestamp
+        const sortedGroups = Object.values(grouped).sort((a, b) =>
+            (b.latestTimestamp || '').localeCompare(a.latestTimestamp || '')
+        );
+
+        let html = '';
+        sortedGroups.forEach(group => {
+            const hasBoth = group.platforms.instagram && group.platforms.tiktok;
+            const hasIG = !!group.platforms.instagram;
+            const hasTT = !!group.platforms.tiktok;
+
+            // Calculate combined stats
+            let totalReels = 0;
+            let topCount = 0;
+            const allIds = [];
+
+            if (hasIG) {
+                group.platforms.instagram.forEach(item => {
+                    totalReels += item.total_reels || 0;
+                    topCount += item.top_count || 0;
+                    allIds.push(item.id);
+                });
+            }
+            if (hasTT) {
+                group.platforms.tiktok.forEach(item => {
+                    totalReels += item.total_reels || 0;
+                    topCount += item.top_count || 0;
+                    allIds.push(item.id);
+                });
+            }
+
+            // Build platform badges
+            let badges = '';
+            if (hasIG) badges += '<span class="history-platform-badge instagram">IG</span>';
+            if (hasTT) badges += '<span class="history-platform-badge tiktok">TT</span>';
+
+            // Primary ID for loading (most recent from any platform)
+            const primaryId = allIds[0];
+            const idsJson = JSON.stringify(allIds).replace(/"/g, '&quot;');
+
+            html += `
+                <div class="history-item ${hasBoth ? 'combined' : ''}" data-ids="${idsJson}">
+                    <div class="history-main">
+                        ${badges}
+                        <span class="history-username">@${group.username}</span>
+                        <span class="history-stats">${topCount} content / ${totalReels} total</span>
                     </div>
+                    <div class="history-meta">
+                        <span class="history-time">${group.latestTimestamp?.substring(0, 16) || ''}</span>
+                        <div class="history-actions">
+                            <button class="history-btn load" onclick='loadCombinedHistory(${idsJson})'>LOAD</button>
+                            <button class="history-btn delete" onclick='deleteCombinedHistory(${idsJson})'>DEL</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        historyList.innerHTML = html;
+    } else {
+        // Original ungrouped rendering
+        let html = '';
+        historyData.forEach(item => {
+            const platform = item.platform || 'instagram';
+            const platformBadge = platform === 'tiktok'
+                ? '<span class="history-platform-badge tiktok">TT</span>'
+                : '<span class="history-platform-badge instagram">IG</span>';
+            html += `
+                <div class="history-item" data-id="${item.id}">
+                    <div class="history-main">
+                        ${platformBadge}
+                        <span class="history-username">@${item.username}</span>
+                        <span class="history-stats">${item.top_count} reels / ${item.total_reels} total</span>
+                    </div>
+                    <div class="history-meta">
+                        <span class="history-time">${item.timestamp?.substring(0, 16) || ''}</span>
+                        <div class="history-actions">
+                            <button class="history-btn load" onclick="loadHistoryItem('${item.id}')">LOAD</button>
+                            <button class="history-btn delete" onclick="deleteHistoryItem('${item.id}')">DEL</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        historyList.innerHTML = html;
+    }
+}
+
+// Load combined history (multiple scrape IDs for same username)
+function loadCombinedHistory(ids) {
+    if (!ids || ids.length === 0) return;
+
+    // Find all items and combine their results
+    const items = ids.map(id => historyData.find(h => h.id === id)).filter(Boolean);
+    if (items.length === 0) return;
+
+    // If only one item, just load it normally
+    if (items.length === 1) {
+        loadHistoryItem(ids[0]);
+        return;
+    }
+
+    // Combine results from multiple platforms
+    const combined = {
+        id: 'combined_' + items[0].username,
+        username: items[0].username,
+        platform: 'combined',
+        platforms: {},
+        top_reels: [],
+        total_reels: 0,
+        profile: items[0].profile || {}
+    };
+
+    items.forEach(item => {
+        const platform = item.platform || 'instagram';
+        combined.platforms[platform] = item;
+        combined.total_reels += item.total_reels || 0;
+
+        // Add platform tag to each reel and merge
+        if (item.top_reels) {
+            item.top_reels.forEach(reel => {
+                combined.top_reels.push({
+                    ...reel,
+                    _platform: platform,
+                    _scrape_id: item.id
+                });
+            });
+        }
+    });
+
+    // Sort combined reels by views
+    combined.top_reels.sort((a, b) => (b.views || 0) - (a.views || 0));
+
+    currentResults = combined;
+    renderCombinedResults(combined);
+
+    // Switch to list view
+    if (currentView === 'gallery') {
+        switchView('list');
+    }
+}
+
+// Render combined results from multiple platforms
+function renderCombinedResults(result) {
+    if (!result || !result.top_reels || result.top_reels.length === 0) {
+        resultsContent.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <circle cx="12" cy="12" r="10"/>
+                        <path d="M12 8v4M12 16h.01"/>
+                    </svg>
+                </div>
+                <div class="empty-text">NO CONTENT FOUND</div>
+                <div class="empty-subtext">Check username or try again</div>
+            </div>
+        `;
+        return;
+    }
+
+    const profile = result.profile || {};
+
+    // Build platform badges
+    let platformBadges = '';
+    if (result.platforms?.instagram) {
+        platformBadges += '<span class="results-platform instagram">Instagram</span>';
+    }
+    if (result.platforms?.tiktok) {
+        platformBadges += '<span class="results-platform tiktok">TikTok</span>';
+    }
+
+    let html = `
+        <div class="results-header">
+            <div class="results-title-row">
+                ${platformBadges}
+                <div class="results-title">@${result.username}</div>
+            </div>
+            <div class="results-meta">${profile.full_name || ''} ${profile.followers ? '• ' + formatNumber(profile.followers) + ' followers' : ''}</div>
+        </div>
+        <div class="results-summary">
+            <span>${result.total_reels || 0} content analyzed</span> •
+            <span>Top ${result.top_reels.length} shown</span>
+        </div>
+        <div class="results-platform-filter">
+            <button class="platform-filter-btn active" data-platform="all" onclick="filterResultsByPlatform('all')">ALL</button>
+            ${result.platforms?.instagram ? '<button class="platform-filter-btn" data-platform="instagram" onclick="filterResultsByPlatform(\'instagram\')">IG</button>' : ''}
+            ${result.platforms?.tiktok ? '<button class="platform-filter-btn" data-platform="tiktok" onclick="filterResultsByPlatform(\'tiktok\')">TT</button>' : ''}
+        </div>
+        <div id="resultsListContent">
+    `;
+
+    result.top_reels.forEach((reel, index) => {
+        const platform = reel._platform || 'instagram';
+        const platformTag = platform === 'tiktok' ? 'TT' : 'IG';
+        const videoId = reel.shortcode || reel.video_id || 'Unknown';
+        const captionFull = reel.caption || '';
+        const titleText = captionFull ? captionFull.substring(0, 60) + (captionFull.length > 60 ? '...' : '') : videoId;
+        const scrapeId = reel._scrape_id || result.id;
+
+        html += `
+            <div class="reel-item" data-platform="${platform}" onclick="showReelDetail('${scrapeId}', ${index})">
+                <div class="reel-header">
+                    <span class="reel-rank">${index + 1}</span>
+                    <span class="reel-platform-tag ${platform}">${platformTag}</span>
+                    <span class="reel-title">${escapeHtml(titleText)}</span>
+                </div>
+                <div class="reel-meta">
+                    <span class="reel-id">${platformTag}:${videoId}</span>
+                </div>
+                <div class="reel-stats">
+                    <span class="reel-stat"><strong>${formatNumber(reel.views)}</strong> views</span>
+                    <span class="reel-stat"><strong>${formatNumber(reel.likes)}</strong> likes</span>
+                    <span class="reel-stat"><strong>${formatNumber(reel.comments || 0)}</strong> comments</span>
+                </div>
+                <div class="reel-url">
+                    <code>${reel.url}</code>
+                    <button class="copy-btn" onclick="event.stopPropagation(); copyToClipboard('${reel.url}')">COPY</button>
                 </div>
             </div>
         `;
     });
-    historyList.innerHTML = html;
+
+    html += '</div>';
+    resultsContent.innerHTML = html;
+}
+
+// Filter results list by platform
+function filterResultsByPlatform(platform) {
+    // Update button states
+    document.querySelectorAll('.results-platform-filter .platform-filter-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.platform === platform);
+    });
+
+    // Filter items
+    document.querySelectorAll('#resultsListContent .reel-item').forEach(item => {
+        if (platform === 'all') {
+            item.style.display = '';
+        } else {
+            item.style.display = item.dataset.platform === platform ? '' : 'none';
+        }
+    });
+}
+
+// Delete combined history entries
+async function deleteCombinedHistory(ids) {
+    if (!ids || ids.length === 0) return;
+
+    if (!confirm(`Delete ${ids.length} scrape${ids.length > 1 ? 's' : ''} from history?`)) return;
+
+    try {
+        for (const id of ids) {
+            await fetch(`/api/history/${id}`, { method: 'DELETE' });
+        }
+        refreshHistory();
+    } catch (error) {
+        console.error('Delete failed:', error);
+    }
 }
 
 // Utility functions
@@ -560,15 +976,49 @@ function escapeJsonAttr(obj) {
     return json.replace(/\\/g, '\\\\').replace(/'/g, '&#39;');
 }
 
-function showError(message) {
+// Track if we're showing an error (don't auto-hide)
+let isShowingError = false;
+let lastErrorCode = null;
+
+function showError(message, errorCode = null) {
+    isShowingError = true;
+    lastErrorCode = errorCode;
     progressSection.style.display = 'block';
-    progressText.innerHTML = `<span style="cursor: pointer;" onclick="dismissError()">ERROR: ${message} <small style="opacity: 0.6;">(click to dismiss)</small></span>`;
+
+    // Parse error code from message if not provided
+    let displayCode = errorCode;
+    if (!displayCode && message) {
+        const codeMatch = message.match(/\[([A-Z]+-\d{5}-[A-Z0-9]+)\]/);
+        if (codeMatch) {
+            displayCode = codeMatch[1];
+        }
+    }
+
+    const codeDisplay = displayCode ?
+        `<span class="error-code" style="background: rgba(255,0,0,0.2); padding: 2px 6px; border-radius: 4px; font-family: monospace; margin-right: 8px;">${displayCode}</span>` : '';
+
+    progressText.innerHTML = `
+        <div style="display: flex; flex-direction: column; gap: 8px; align-items: center;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                ${codeDisplay}
+                <span style="color: var(--color-danger);">ERROR: ${escapeHtml(message.replace(/\[[A-Z]+-\d{5}-[A-Z0-9]+\]\s*/g, ''))}</span>
+            </div>
+            <button onclick="dismissError()" style="background: transparent; border: 1px solid var(--color-danger); color: var(--color-danger); padding: 4px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">
+                DISMISS
+            </button>
+        </div>
+    `;
     progressText.style.color = 'var(--color-danger)';
     progressFill.style.width = '0%';
     progressFill.style.background = 'var(--color-danger)';
+
+    // Log error to console with full details
+    console.error('[ReelRecon Error]', { code: displayCode, message });
 }
 
 function dismissError() {
+    isShowingError = false;
+    lastErrorCode = null;
     progressSection.style.display = 'none';
     progressText.style.color = '';
     progressText.textContent = '';
@@ -581,12 +1031,17 @@ function resetForm() {
 
     executeBtn.disabled = false;
     executeBtn.querySelector('.btn-text').textContent = 'EXECUTE SCRAPE';
-    setTimeout(() => {
-        progressSection.style.display = 'none';
-        progressFill.style.width = '0%';
-        progressFill.style.background = '';
-        progressText.style.color = '';
-    }, 2000);
+
+    // Only auto-hide if NOT showing an error
+    // Errors must be manually dismissed
+    if (!isShowingError) {
+        setTimeout(() => {
+            progressSection.style.display = 'none';
+            progressFill.style.width = '0%';
+            progressFill.style.background = '';
+            progressText.style.color = '';
+        }, 2000);
+    }
 }
 
 // Initialize
@@ -1380,6 +1835,21 @@ async function copyRewriteResult(event) {
 let currentView = 'list';
 let galleryVideos = [];
 let showAllVideos = false; // false = filter by current profile, true = show all
+let galleryPlatformFilter = 'all'; // 'all', 'instagram', or 'tiktok'
+let historyGroupByUsername = true; // Combine history items with same @ handle
+
+// Filter gallery by platform
+function filterGalleryByPlatform(platform) {
+    galleryPlatformFilter = platform;
+
+    // Update button states
+    document.querySelectorAll('.platform-filter-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.platform === platform);
+    });
+
+    // Refresh gallery with new filter
+    refreshVideoGallery();
+}
 
 // Switch between list and gallery views
 function switchView(view) {
@@ -1419,10 +1889,17 @@ async function refreshVideoGallery() {
     const currentUsername = currentResults?.username || null;
 
     try {
-        // Build URL with optional filter
+        // Build URL with optional filters
         let url = '/api/videos';
+        const params = new URLSearchParams();
         if (!showAllVideos && currentUsername) {
-            url += `?username=${encodeURIComponent(currentUsername)}`;
+            params.set('username', currentUsername);
+        }
+        if (galleryPlatformFilter && galleryPlatformFilter !== 'all') {
+            params.set('platform', galleryPlatformFilter);
+        }
+        if (params.toString()) {
+            url += '?' + params.toString();
         }
 
         const response = await fetch(url);
@@ -1545,10 +2022,13 @@ function playVideoWithTranscript(videoData) {
     const { url, username, views, path, transcript, caption, shortcode, scrape_id, reel_url } = videoData;
     const hasTranscript = transcript && transcript.trim();
 
+    // Store video data globally for transcription
+    window.currentVideoData = videoData;
+
     const modalHtml = `
         <div class="modal active" id="videoPlayerModal">
             <div class="modal-backdrop" onclick="closeVideoPlayer()"></div>
-            <div class="modal-content video-player-modal ${hasTranscript ? 'with-transcript' : ''}">
+            <div class="modal-content video-player-modal with-transcript">
                 <div class="modal-header">
                     <span class="modal-title">VIDEO PLAYER</span>
                     <button class="modal-close" onclick="closeVideoPlayer()">&times;</button>
@@ -1592,7 +2072,7 @@ function playVideoWithTranscript(videoData) {
                         <div class="transcript-content" id="transcriptContent">
                             ${hasTranscript
                                 ? `<p class="transcript-text">${escapeHtml(transcript)}</p>`
-                                : `<div class="transcript-empty">
+                                : `<div class="transcript-empty" id="transcriptEmptyState">
                                         <div class="empty-icon">
                                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="32" height="32">
                                                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
@@ -1603,7 +2083,26 @@ function playVideoWithTranscript(videoData) {
                                             </svg>
                                         </div>
                                         <div class="empty-text">NO TRANSCRIPT</div>
-                                        <div class="empty-subtext">Enable transcription during scrape to generate</div>
+                                        <div class="transcribe-controls">
+                                            <div class="transcribe-provider-row">
+                                                <label class="transcribe-label">PROVIDER</label>
+                                                <select id="modalTranscribeProvider" class="transcribe-select">
+                                                    <option value="openai" selected>OpenAI API</option>
+                                                    <option value="local">Local Whisper</option>
+                                                </select>
+                                            </div>
+                                            <button class="modal-btn primary" id="getTranscriptBtn" onclick="transcribeFromModal()">
+                                                <span class="btn-icon">
+                                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                                                        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                                                        <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                                                        <line x1="12" y1="19" x2="12" y2="23"/>
+                                                        <line x1="8" y1="23" x2="16" y2="23"/>
+                                                    </svg>
+                                                </span>
+                                                <span class="btn-text">GET TRANSCRIPT</span>
+                                            </button>
+                                        </div>
                                     </div>`
                             }
                         </div>
@@ -1649,6 +2148,199 @@ async function copyTranscript() {
         }
     } catch (err) {
         console.error('Failed to copy:', err);
+    }
+}
+
+// Transcribe video from modal on-demand
+async function transcribeFromModal() {
+    if (!window.currentVideoData) {
+        alert('No video data available');
+        return;
+    }
+
+    const { path, shortcode } = window.currentVideoData;
+    const provider = document.getElementById('modalTranscribeProvider')?.value || 'openai';
+    const btn = document.getElementById('getTranscriptBtn');
+    const btnText = btn?.querySelector('.btn-text');
+    const emptyState = document.getElementById('transcriptEmptyState');
+
+    if (!path) {
+        alert('Video path not found');
+        return;
+    }
+
+    // Update button to loading state
+    if (btn) btn.disabled = true;
+    if (btnText) btnText.textContent = 'TRANSCRIBING...';
+
+    try {
+        const response = await fetch('/api/transcribe/video', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                video_path: path,
+                provider: provider,
+                shortcode: shortcode || ''
+            })
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.transcript) {
+            // Update the transcript panel with new transcript
+            window.currentTranscript = data.transcript;
+            window.currentVideoData.transcript = data.transcript;
+
+            const transcriptContent = document.getElementById('transcriptContent');
+            if (transcriptContent) {
+                transcriptContent.innerHTML = `<p class="transcript-text">${escapeHtml(data.transcript)}</p>`;
+            }
+
+            // Add transcript actions to header
+            const transcriptHeader = document.querySelector('.transcript-header');
+            if (transcriptHeader && !transcriptHeader.querySelector('.transcript-actions')) {
+                const actionsHtml = `
+                    <div class="transcript-actions">
+                        <button class="transcript-action-btn" onclick="copyTranscript()" title="Copy to clipboard">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                            </svg>
+                        </button>
+                    </div>
+                `;
+                transcriptHeader.insertAdjacentHTML('beforeend', actionsHtml);
+            }
+
+            // Update video gallery to show transcript badge
+            if (shortcode) {
+                const videoCard = document.querySelector(`[data-shortcode="${shortcode}"]`);
+                if (videoCard && !videoCard.querySelector('.video-transcript-badge')) {
+                    videoCard.insertAdjacentHTML('beforeend', '<span class="video-transcript-badge" title="Has transcript">T</span>');
+                }
+
+                // Also update historyData to persist across modal reopens
+                if (typeof historyData !== 'undefined' && window.currentVideoData?.scrape_id) {
+                    const historyItem = historyData.find(h => h.id === window.currentVideoData.scrape_id);
+                    if (historyItem) {
+                        const reel = historyItem.top_reels?.find(r =>
+                            (r.shortcode === shortcode) || (r.video_id === shortcode)
+                        );
+                        if (reel) {
+                            reel.transcript = data.transcript;
+                            console.log('[Transcribe Gallery] Updated historyData for', shortcode);
+                        }
+                    }
+                }
+            }
+
+            // Log persistence status
+            if (!data.persisted) {
+                console.warn('[Transcribe Gallery] Server could not persist transcript');
+            }
+        } else {
+            alert(data.error || 'Transcription failed');
+            // Reset button
+            if (btn) btn.disabled = false;
+            if (btnText) btnText.textContent = 'GET TRANSCRIPT';
+        }
+    } catch (error) {
+        console.error('Transcription error:', error);
+        alert('Failed to transcribe video: ' + error.message);
+        // Reset button
+        if (btn) btn.disabled = false;
+        if (btnText) btnText.textContent = 'GET TRANSCRIPT';
+    }
+}
+
+// Toggle whisper model visibility based on provider selection
+function updateWhisperModelVisibility() {
+    const provider = document.getElementById('reelTranscribeProvider')?.value;
+    const modelSelect = document.getElementById('reelWhisperModel');
+    if (modelSelect) {
+        modelSelect.style.display = provider === 'local' ? 'block' : 'none';
+    }
+}
+
+// Transcribe video from REEL INTEL modal
+async function transcribeFromReelModal(scrapeId, shortcode) {
+    if (!window.currentReelData) {
+        alert('No reel data available');
+        return;
+    }
+
+    const { local_video } = window.currentReelData;
+    const provider = document.getElementById('reelTranscribeProvider')?.value || 'openai';
+    const whisperModel = document.getElementById('reelWhisperModel')?.value || 'small.en';
+    const btn = document.getElementById('reelGetTranscriptBtn');
+    const btnText = btn?.querySelector('.transcribe-btn-text');
+
+    if (!local_video) {
+        alert('Video must be downloaded first');
+        return;
+    }
+
+    // Update button to loading state
+    if (btn) btn.disabled = true;
+    if (btnText) btnText.textContent = 'TRANSCRIBING...';
+
+    try {
+        const response = await fetch('/api/transcribe/video', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                video_path: local_video,
+                provider: provider,
+                whisper_model: whisperModel,
+                shortcode: shortcode
+            })
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.transcript) {
+            window.currentReelData.transcript = data.transcript;
+
+            // Hide transcribe controls
+            const transcribeCompact = document.getElementById('transcribeCompact');
+            if (transcribeCompact) transcribeCompact.style.display = 'none';
+
+            // Show the transcript section with content
+            const section = document.getElementById('reelTranscriptSection');
+            if (section) {
+                section.style.display = 'block';
+                const content = document.getElementById('reelTranscriptContent');
+                if (content) content.textContent = data.transcript;
+            }
+
+            // Update history data if available (handle both shortcode and video_id for TikTok)
+            const historyItem = historyData.find(h => h.id === scrapeId);
+            if (historyItem) {
+                const reel = historyItem.top_reels.find(r =>
+                    (r.shortcode === shortcode) || (r.video_id === shortcode)
+                );
+                if (reel) {
+                    reel.transcript = data.transcript;
+                    console.log('[Transcribe] Updated history data for', shortcode);
+                } else {
+                    console.warn('[Transcribe] Could not find reel in historyData for', shortcode);
+                }
+            }
+
+            // Log persistence status from server
+            if (!data.persisted) {
+                console.warn('[Transcribe] Server could not persist transcript to history file');
+            }
+        } else {
+            alert(data.error || 'Transcription failed');
+            if (btn) btn.disabled = false;
+            if (btnText) btnText.textContent = 'TRANSCRIBE';
+        }
+    } catch (error) {
+        console.error('Transcription error:', error);
+        alert('Failed to transcribe video: ' + error.message);
+        if (btn) btn.disabled = false;
+        if (btnText) btnText.textContent = 'TRANSCRIBE';
     }
 }
 

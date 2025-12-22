@@ -330,6 +330,48 @@ body {
     color: var(--color-text-muted);
 }
 
+/* Fix browser autofill styling */
+.form-input:-webkit-autofill,
+.form-input:-webkit-autofill:hover,
+.form-input:-webkit-autofill:focus,
+.form-input:-webkit-autofill:active {
+    -webkit-box-shadow: 0 0 0 30px var(--color-bg-input) inset !important;
+    -webkit-text-fill-color: var(--color-text-primary) !important;
+    transition: background-color 5000s ease-in-out 0s;
+}
+
+.form-input.platform-instagram:-webkit-autofill {
+    -webkit-text-fill-color: #059669 !important;
+}
+
+.form-input.platform-tiktok:-webkit-autofill {
+    -webkit-text-fill-color: #D91A4D !important;
+}
+
+/* Platform-specific input styling when has value */
+.form-input.has-value {
+    background: var(--color-bg-input);
+}
+
+.form-input.has-value.platform-instagram {
+    color: #059669;
+    text-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
+}
+
+.form-input.has-value.platform-tiktok {
+    color: #D91A4D;
+    text-shadow: 0 0 8px rgba(217, 26, 77, 0.4);
+}
+
+/* Update prefix color based on platform */
+.input-wrapper.platform-instagram .input-prefix {
+    color: var(--color-accent-primary);
+}
+
+.input-wrapper.platform-tiktok .input-prefix {
+    color: #D91A4D;
+}
+
 select.form-input {
     cursor: pointer;
     appearance: none;
@@ -673,7 +715,9 @@ select.form-input {
 
 .history-main {
     display: flex;
-    flex-direction: column;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px var(--space-sm);
 }
 
 .history-username {
@@ -683,6 +727,7 @@ select.form-input {
 }
 
 .history-stats {
+    flex-basis: 100%;
     font-size: 10px;
     color: var(--color-text-muted);
 }
@@ -1831,6 +1876,149 @@ select.form-input {
 .transcript-empty .empty-subtext {
     font-size: 10px;
     opacity: 0.7;
+    display: none; /* Hide subtext when we have controls */
+}
+
+/* Transcribe controls in empty state */
+.transcribe-controls {
+    margin-top: var(--space-md);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+    width: 100%;
+    max-width: 200px;
+}
+
+.transcribe-provider-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    justify-content: center;
+}
+
+.transcribe-label {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    color: var(--color-text-muted);
+    white-space: nowrap;
+}
+
+.transcribe-select {
+    flex: 1;
+    padding: 6px 8px;
+    font-size: 10px;
+    font-family: var(--font-mono);
+    background: var(--color-bg-input);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    color: var(--color-text-primary);
+    cursor: pointer;
+}
+
+.transcribe-select:hover {
+    border-color: var(--color-accent-primary);
+}
+
+.transcribe-select:focus {
+    outline: none;
+    border-color: var(--color-accent-primary);
+    box-shadow: 0 0 0 2px rgba(0, 255, 136, 0.2);
+}
+
+#getTranscriptBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-xs);
+    width: 100%;
+}
+
+#getTranscriptBtn .btn-icon {
+    display: flex;
+    align-items: center;
+}
+
+#getTranscriptBtn:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+/* Compact transcribe controls in modal header */
+.modal-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: var(--space-md);
+    margin-bottom: var(--space-md);
+}
+
+.transcribe-compact {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.transcribe-compact-select {
+    padding: 5px 8px;
+    font-size: 9px;
+    font-family: var(--font-mono);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    background: var(--color-bg-elevated);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    min-width: 70px;
+}
+
+.transcribe-compact-select:hover {
+    border-color: var(--color-text-muted);
+}
+
+.transcribe-compact-select:focus {
+    outline: none;
+    border-color: var(--color-accent-primary);
+}
+
+.transcribe-compact-btn {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 10px;
+    font-size: 9px;
+    font-family: var(--font-mono);
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    background: var(--color-accent-primary);
+    border: none;
+    border-radius: var(--radius-sm);
+    color: var(--color-bg-deep);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+}
+
+.transcribe-compact-btn:hover {
+    filter: brightness(1.1);
+    transform: translateY(-1px);
+}
+
+.transcribe-compact-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.transcribe-compact-btn svg {
+    flex-shrink: 0;
+}
+
+.transcribe-btn-text {
+    display: inline;
 }
 
 .caption-section {
@@ -1904,4 +2092,261 @@ select.form-input {
         align-items: flex-start;
         gap: var(--space-md);
     }
+}
+
+/* =========================================
+   PLATFORM TOGGLE
+   ========================================= */
+
+.platform-toggle {
+    display: flex;
+    gap: var(--space-sm);
+    background: var(--color-bg-input);
+    padding: var(--space-xs);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--color-border-dim);
+}
+
+.platform-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-sm);
+    padding: var(--space-sm) var(--space-md);
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    color: var(--color-text-muted);
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.platform-btn:hover {
+    color: var(--color-text-secondary);
+    background: var(--color-accent-muted);
+}
+
+.platform-btn.active {
+    background: var(--color-accent-dim);
+    border-color: var(--color-accent-primary);
+    color: var(--color-accent-primary);
+    box-shadow: 0 0 10px var(--color-accent-glow);
+}
+
+.platform-btn.active[data-platform="tiktok"] {
+    --color-accent-primary: #FF0050;
+    --color-accent-glow: rgba(255, 0, 80, 0.3);
+    --color-accent-dim: rgba(255, 0, 80, 0.15);
+}
+
+.platform-btn svg {
+    flex-shrink: 0;
+}
+
+/* Platform badge in history */
+.history-platform-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 18px;
+    border-radius: 3px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    flex-shrink: 0;
+}
+
+.history-platform-badge.instagram {
+    background: linear-gradient(135deg, #833AB4, #FD1D1D, #F77737);
+    color: white;
+}
+
+.history-platform-badge.tiktok {
+    background: #FF0050;
+    color: white;
+}
+
+/* Video gallery platform badges */
+.video-card .platform-badge {
+    position: absolute;
+    top: var(--space-sm);
+    left: var(--space-sm);
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 0.6rem;
+    font-weight: 700;
+    z-index: 5;
+}
+
+.video-card .platform-badge.instagram {
+    background: linear-gradient(135deg, #833AB4, #FD1D1D);
+    color: white;
+}
+
+.video-card .platform-badge.tiktok {
+    background: #FF0050;
+    color: white;
+}
+
+/* =========================================
+   RESULTS PLATFORM STYLING
+   ========================================= */
+
+.results-title-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+}
+
+.results-platform {
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.results-platform.instagram {
+    background: linear-gradient(135deg, #833AB4, #FD1D1D);
+    color: white;
+}
+
+.results-platform.tiktok {
+    background: #FF0050;
+    color: white;
+}
+
+/* Reel item title styling */
+.reel-header {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-sm);
+    margin-bottom: var(--space-xs);
+}
+
+.reel-title {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--color-text-primary);
+    line-height: 1.3;
+}
+
+.reel-meta {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    margin-bottom: var(--space-sm);
+}
+
+.reel-id {
+    font-size: 0.7rem;
+    color: var(--color-text-muted);
+    font-family: var(--font-mono);
+    background: var(--color-bg-input);
+    padding: 2px 6px;
+    border-radius: 3px;
+}
+
+/* =========================================
+   GALLERY PLATFORM FILTER BUTTONS
+   ========================================= */
+
+.gallery-platform-filter {
+    display: flex;
+    gap: 2px;
+    background: var(--color-bg-input);
+    border-radius: var(--radius-sm);
+    padding: 2px;
+    border: 1px solid var(--color-border-dim);
+}
+
+.platform-filter-btn {
+    padding: 4px 10px;
+    font-size: 10px;
+    font-weight: 700;
+    font-family: var(--font-mono);
+    letter-spacing: 0.05em;
+    background: transparent;
+    border: none;
+    border-radius: calc(var(--radius-sm) - 2px);
+    color: var(--color-text-muted);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.platform-filter-btn:hover {
+    color: var(--color-text-primary);
+    background: var(--color-accent-muted);
+}
+
+.platform-filter-btn.active {
+    background: var(--color-accent-primary);
+    color: var(--color-bg-deep);
+}
+
+.platform-filter-btn.active[data-platform="instagram"] {
+    background: linear-gradient(135deg, #833AB4, #FD1D1D);
+}
+
+.platform-filter-btn.active[data-platform="tiktok"] {
+    background: #FF0050;
+}
+
+/* =========================================
+   RESULTS PLATFORM FILTER
+   ========================================= */
+
+.results-platform-filter {
+    display: flex;
+    gap: 2px;
+    background: var(--color-bg-input);
+    border-radius: var(--radius-sm);
+    padding: 2px;
+    border: 1px solid var(--color-border-dim);
+    width: fit-content;
+    margin-bottom: var(--space-md);
+}
+
+/* Reel platform tag in combined results */
+.reel-platform-tag {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    flex-shrink: 0;
+}
+
+.reel-platform-tag.instagram {
+    background: linear-gradient(135deg, #833AB4, #FD1D1D);
+    color: white;
+}
+
+.reel-platform-tag.tiktok {
+    background: #FF0050;
+    color: white;
+}
+
+/* Combined history item styling */
+.history-item.combined {
+    border-left: 2px solid var(--color-accent-primary);
+}
+
+.history-item.combined .history-main {
+    gap: 4px;
+}
+
+/* Multiple badges side by side in history */
+.history-main .history-platform-badge + .history-platform-badge {
+    margin-left: -2px;
 }

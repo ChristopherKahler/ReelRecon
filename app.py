@@ -1,12 +1,16 @@
 """
 ReelRecon - Tactical Content Intelligence
 Instagram reel scraping with AI-powered script rewriting
+
+V2.0 - Robust error handling, persistent state, comprehensive logging
 """
 
 import json
 import os
 import uuid
 import subprocess
+import time
+import atexit
 from datetime import datetime
 from pathlib import Path
 from threading import Thread
@@ -14,11 +18,19 @@ from threading import Thread
 from flask import Flask, render_template, request, jsonify, send_file, Response
 import requests as http_requests
 
-# Import scraper
+# Import scrapers
 from scraper.core import run_scrape, WHISPER_AVAILABLE, download_video, create_session
+from scraper.tiktok import run_tiktok_scrape
+
+# Import utilities for robust error handling
+from utils import get_logger, ScrapeStateManager, ScrapePhase, ScrapeState
 
 # Configuration
 BASE_DIR = Path(__file__).parent.resolve()
+
+# Initialize logger and state manager
+logger = get_logger()
+state_manager = ScrapeStateManager(BASE_DIR / "state")
 
 # Initialize Flask with explicit paths
 app = Flask(__name__,
@@ -26,7 +38,9 @@ app = Flask(__name__,
             template_folder=str(BASE_DIR / 'templates'))
 app.secret_key = os.urandom(24)
 OUTPUT_DIR = BASE_DIR / "output"
+TIKTOK_OUTPUT_DIR = BASE_DIR / "output_tiktok"
 COOKIES_FILE = BASE_DIR / "cookies.txt"
+TIKTOK_COOKIES_FILE = BASE_DIR / "tiktok_cookies.txt"
 HISTORY_FILE = BASE_DIR / "scrape_history.json"
 CONFIG_FILE = BASE_DIR / "config.json"
 
@@ -58,7 +72,18 @@ ORIGINAL ({views:,} views):
 """
 
 # Active scrapes (for progress tracking)
+# Now backed by persistent state_manager for crash recovery
 active_scrapes = {}
+
+# Cleanup handler for graceful shutdown
+def cleanup_on_exit():
+    """Mark any running scrapes as interrupted on server shutdown"""
+    logger.info("SYSTEM", "Server shutting down, cleaning up active scrapes")
+    for scrape_id in list(active_scrapes.keys()):
+        if active_scrapes[scrape_id].get('status') in ('starting', 'running'):
+            state_manager.abort_job(scrape_id, "Server shutdown")
+
+atexit.register(cleanup_on_exit)
 
 
 def load_config():
@@ -82,16 +107,17 @@ def save_config(config):
         json.dump(config, f, indent=2)
 
 
-def get_output_directory():
+def get_output_directory(platform='instagram'):
     """Get the configured output directory, or default if not set"""
     config = load_config()
     custom_dir = config.get('output_directory', '').strip()
     if custom_dir:
         output_path = Path(custom_dir)
-        # Create directory if it doesn't exist
+        if platform == 'tiktok':
+            output_path = output_path / 'tiktok'
         output_path.mkdir(parents=True, exist_ok=True)
         return output_path
-    return OUTPUT_DIR
+    return TIKTOK_OUTPUT_DIR if platform == 'tiktok' else OUTPUT_DIR
 
 
 def get_ollama_models():
@@ -245,24 +271,48 @@ def save_history(history):
         json.dump(history, f, indent=2, ensure_ascii=False)
 
 
-def add_to_history(scrape_result):
-    """Add a scrape result to history"""
+def add_to_history(scrape_result, include_errors: bool = False):
+    """
+    Add a scrape result to history.
+    Now saves ALL results including errors and partial completions.
+    """
     history = load_history()
+    platform = scrape_result.get('platform', 'instagram')
+    top_reels = scrape_result.get('top_reels', []) or scrape_result.get('top_videos', [])
+    status = scrape_result.get('status', 'unknown')
+
+    # Log what we're saving
+    transcripts_count = sum(1 for r in top_reels if r.get('transcript'))
+    logger.info("HISTORY", f"Saving scrape to history: {platform} @{scrape_result.get('username')}", {
+        "reels_count": len(top_reels),
+        "transcripts_count": transcripts_count,
+        "status": status
+    })
+
     # Keep essential data for history
     entry = {
         'id': scrape_result.get('id', str(uuid.uuid4())),
         'username': scrape_result.get('username'),
         'timestamp': scrape_result.get('timestamp'),
         'profile': scrape_result.get('profile'),
-        'total_reels': scrape_result.get('total_reels'),
-        'top_count': len(scrape_result.get('top_reels', [])),
-        'top_reels': scrape_result.get('top_reels', []),
-        'output_dir': scrape_result.get('output_dir')
+        'total_reels': scrape_result.get('total_reels') or scrape_result.get('total_videos'),
+        'top_count': len(top_reels),
+        'top_reels': top_reels,
+        'output_dir': scrape_result.get('output_dir'),
+        'platform': platform,
+        'status': status
     }
+
+    # Include error info if present
+    if scrape_result.get('error_code'):
+        entry['error_code'] = scrape_result.get('error_code')
+        entry['error'] = scrape_result.get('error')
+
     history.insert(0, entry)
     # Keep last 50 scrapes
     history = history[:50]
     save_history(history)
+    logger.info("HISTORY", f"Saved history with {len(history)} entries")
 
 
 @app.route('/')
@@ -270,87 +320,304 @@ def index():
     """Main page"""
     history = load_history()
     cookies_exist = COOKIES_FILE.exists()
+    tiktok_cookies_exist = TIKTOK_COOKIES_FILE.exists()
     return render_template('index.html',
                          history=history,
                          cookies_exist=cookies_exist,
+                         tiktok_cookies_exist=tiktok_cookies_exist,
                          whisper_available=WHISPER_AVAILABLE)
 
 
 @app.route('/api/scrape', methods=['POST'])
 def start_scrape():
-    """Start a new scrape"""
+    """Start a new scrape for Instagram or TikTok"""
     data = request.json
     username = data.get('username', '').strip().lstrip('@')
+    platform = data.get('platform', 'instagram').lower()
 
     if not username:
-        return jsonify({'error': 'Username required'}), 400
+        error_code = logger.error("API", "Scrape request missing username")
+        return jsonify({'error': 'Username required', 'error_code': error_code}), 400
 
-    if not COOKIES_FILE.exists():
-        return jsonify({'error': 'Cookies file not found'}), 400
+    # Check cookies based on platform
+    cookies_file = TIKTOK_COOKIES_FILE if platform == 'tiktok' else COOKIES_FILE
+    if not cookies_file.exists():
+        error_code = logger.error("API", f"Cookies file not found for {platform}", {
+            "cookies_file": str(cookies_file)
+        })
+        return jsonify({
+            'error': f'{platform.title()} cookies file not found ({cookies_file.name})',
+            'error_code': error_code
+        }), 400
 
     # Create scrape ID
     scrape_id = str(uuid.uuid4())
-    print(f"[DEBUG] Created scrape {scrape_id} for @{username}")
+    logger.info("SCRAPE", f"Creating scrape job for @{username} on {platform}", {
+        "scrape_id": scrape_id,
+        "username": username,
+        "platform": platform
+    })
 
-    # Initialize progress tracking
+    # Create persistent job in state manager (survives server restarts)
+    scrape_config = {
+        'username': username,
+        'platform': platform,
+        'max_reels': data.get('max_reels', 100),
+        'top_n': data.get('top_n', 10),
+        'download': data.get('download', False),
+        'transcribe': data.get('transcribe', False),
+        'transcribe_provider': data.get('transcribe_provider', 'local'),
+        'whisper_model': data.get('whisper_model', 'small.en')
+    }
+    state_manager.create_job(scrape_id, username, platform, scrape_config)
+
+    # Also maintain in-memory cache for fast access
     active_scrapes[scrape_id] = {
         'status': 'starting',
-        'progress': 'Initializing...',
-        'result': None
+        'progress': f'Initializing {platform.title()} scrape...',
+        'progress_pct': 0,
+        'phase': 'initializing',
+        'result': None,
+        'platform': platform,
+        'errors': []
     }
-    print(f"[DEBUG] Active scrapes after add: {list(active_scrapes.keys())}")
+    logger.debug("SCRAPE", f"Active scrapes: {list(active_scrapes.keys())}")
 
     # Get transcription settings
     transcribe_provider = data.get('transcribe_provider', 'local')
+    transcribe_requested = data.get('transcribe', False)
     openai_key = None
     if transcribe_provider == 'openai':
         config = load_config()
         openai_key = config.get('openai_key')
 
-    # Run scrape in background thread
+    logger.info("SCRAPE", f"{platform} @{username}", {
+        "transcribe": transcribe_requested,
+        "provider": transcribe_provider,
+        "has_key": bool(openai_key)
+    })
+
+    # Run scrape in background thread with comprehensive error handling
     def run_in_background():
-        def progress_callback(msg):
-            active_scrapes[scrape_id]['progress'] = msg
+        """Background scrape with robust error handling and state persistence"""
+        accumulated_errors = []
 
-        result = run_scrape(
-            username=username,
-            cookies_path=str(COOKIES_FILE),
-            max_reels=data.get('max_reels', 100),
-            top_n=data.get('top_n', 10),
-            download=data.get('download', False),
-            transcribe=data.get('transcribe', False),
-            whisper_model=data.get('whisper_model', 'small.en'),
-            transcribe_provider=transcribe_provider,
-            openai_key=openai_key,
-            output_dir=str(get_output_directory()),
-            progress_callback=progress_callback
-        )
+        def progress_callback(msg, phase=None, progress_pct=None):
+            """Enhanced progress callback with phase and percentage tracking"""
+            try:
+                active_scrapes[scrape_id]['progress'] = msg
+                active_scrapes[scrape_id]['status'] = 'running'
 
-        active_scrapes[scrape_id]['result'] = result
-        active_scrapes[scrape_id]['status'] = result.get('status', 'complete')
+                if phase:
+                    active_scrapes[scrape_id]['phase'] = phase
+                    state_manager.update_progress(
+                        scrape_id,
+                        ScrapePhase(phase) if isinstance(phase, str) else phase,
+                        progress_pct or 0,
+                        msg
+                    )
+                elif progress_pct is not None:
+                    active_scrapes[scrape_id]['progress_pct'] = progress_pct
 
-        if result.get('status') == 'complete':
-            add_to_history(result)
+                logger.progress(scrape_id, active_scrapes[scrape_id].get('phase', 'processing'),
+                              progress_pct or 0, msg)
+            except Exception as e:
+                logger.warning("SCRAPE", f"Progress callback error: {e}")
 
-    thread = Thread(target=run_in_background)
+        def error_callback(error_msg, error_code=None, is_fatal=False):
+            """Track errors during scrape"""
+            code = error_code or logger.error("SCRAPE", error_msg, {"scrape_id": scrape_id})
+            error_entry = {
+                'code': code,
+                'message': error_msg,
+                'timestamp': datetime.now().isoformat(),
+                'fatal': is_fatal
+            }
+            accumulated_errors.append(error_entry)
+            active_scrapes[scrape_id]['errors'] = accumulated_errors
+            state_manager.add_error(scrape_id, code, error_msg, is_fatal)
+
+        try:
+            logger.scrape_event(scrape_id, "Starting scrape", {"platform": platform, "username": username})
+
+            if platform == 'tiktok':
+                # TikTok scrape
+                result = run_tiktok_scrape(
+                    username=username,
+                    cookies_path=str(TIKTOK_COOKIES_FILE),
+                    max_videos=data.get('max_reels', 50),
+                    top_n=data.get('top_n', 10),
+                    download=data.get('download', False),
+                    transcribe=data.get('transcribe', False),
+                    whisper_model=data.get('whisper_model', 'small.en'),
+                    transcribe_provider=transcribe_provider,
+                    openai_key=openai_key,
+                    output_dir=str(get_output_directory('tiktok')),
+                    headless=True,
+                    progress_callback=progress_callback
+                )
+            else:
+                # Instagram scrape
+                result = run_scrape(
+                    username=username,
+                    cookies_path=str(COOKIES_FILE),
+                    max_reels=data.get('max_reels', 100),
+                    top_n=data.get('top_n', 10),
+                    download=data.get('download', False),
+                    transcribe=data.get('transcribe', False),
+                    whisper_model=data.get('whisper_model', 'small.en'),
+                    transcribe_provider=transcribe_provider,
+                    openai_key=openai_key,
+                    output_dir=str(get_output_directory('instagram')),
+                    progress_callback=progress_callback
+                )
+
+            # Add platform and any accumulated errors to result
+            result['platform'] = platform
+            if accumulated_errors:
+                result['errors'] = accumulated_errors
+
+            # Update in-memory state
+            active_scrapes[scrape_id]['result'] = result
+            active_scrapes[scrape_id]['status'] = result.get('status', 'complete')
+            active_scrapes[scrape_id]['progress_pct'] = 100
+
+            # Determine final state
+            had_errors = len(accumulated_errors) > 0
+            if result.get('status') == 'error':
+                state_manager.fail_job(scrape_id, result.get('error_code', 'UNKNOWN'),
+                                      result.get('error', 'Unknown error'))
+            else:
+                state_manager.complete_job(scrape_id, result, had_errors)
+
+            # ALWAYS save to history now (including errors and partial results)
+            add_to_history(result, include_errors=True)
+
+            logger.scrape_event(scrape_id, "Scrape completed", {
+                "status": result.get('status'),
+                "reels_count": len(result.get('top_reels', [])),
+                "errors_count": len(accumulated_errors)
+            })
+
+        except Exception as e:
+            import traceback
+            error_msg = str(e)
+            prefix = "TIK" if platform == 'tiktok' else "IG"
+            error_code = logger.critical(prefix, f"Scrape failed: {error_msg}", {
+                "scrape_id": scrape_id,
+                "username": username
+            }, exception=e)
+
+            # Update in-memory state
+            active_scrapes[scrape_id]['status'] = 'error'
+            active_scrapes[scrape_id]['result'] = {
+                'id': scrape_id,
+                'status': 'error',
+                'error': f'[{error_code}] {error_msg}',
+                'error_code': error_code,
+                'platform': platform,
+                'username': username,
+                'timestamp': datetime.now().isoformat(),
+                'errors': accumulated_errors + [{'code': error_code, 'message': error_msg, 'fatal': True}]
+            }
+            active_scrapes[scrape_id]['progress'] = f'Error [{error_code}]: {error_msg}'
+
+            # Update persistent state
+            state_manager.fail_job(scrape_id, error_code, error_msg)
+
+            # Save error to history so user can see what happened
+            add_to_history(active_scrapes[scrape_id]['result'], include_errors=True)
+
+    thread = Thread(target=run_in_background, daemon=True)
     thread.start()
 
-    return jsonify({'scrape_id': scrape_id})
+    return jsonify({'scrape_id': scrape_id, 'platform': platform})
 
 
 @app.route('/api/scrape/<scrape_id>/status')
 def scrape_status(scrape_id):
-    """Get scrape status"""
-    if scrape_id not in active_scrapes:
-        print(f"[DEBUG] Scrape {scrape_id} not found. Active scrapes: {list(active_scrapes.keys())}")
-        return jsonify({'error': 'Scrape not found'}), 404
+    """Get scrape status - checks memory first, then persistent state"""
+    # First check in-memory active scrapes
+    if scrape_id in active_scrapes:
+        scrape = active_scrapes[scrape_id]
+        return jsonify({
+            'status': scrape['status'],
+            'progress': scrape['progress'],
+            'result': scrape['result'],
+            'error_code': scrape.get('error_code'),
+            'error_message': scrape.get('error_message')
+        })
 
-    scrape = active_scrapes[scrape_id]
-    return jsonify({
-        'status': scrape['status'],
-        'progress': scrape['progress'],
-        'result': scrape['result']
-    })
+    # Fallback to persistent state manager (handles server restarts)
+    job_status = state_manager.get_job_status(scrape_id)
+    if job_status:
+        logger.debug("API", f"Scrape {scrape_id} recovered from persistent state", {
+            "status": job_status.get('status')
+        })
+        return jsonify({
+            'status': job_status['status'],
+            'progress': job_status['progress'],
+            'progress_pct': job_status.get('progress_pct', 0),
+            'phase': job_status.get('phase'),
+            'current_item': job_status.get('current_item', 0),
+            'total_items': job_status.get('total_items', 0),
+            'result': job_status.get('result'),
+            'error_code': job_status.get('error_code'),
+            'error_message': job_status.get('error_message'),
+            'errors': job_status.get('errors', [])
+        })
+
+    logger.warning("API", f"Scrape {scrape_id} not found in memory or persistent state")
+    return jsonify({'error': 'Scrape not found', 'error_code': 'SCRAPE-NOT-FOUND'}), 404
+
+
+@app.route('/api/scrape/<scrape_id>/abort', methods=['POST'])
+def abort_scrape(scrape_id):
+    """Abort a running scrape"""
+    if scrape_id in active_scrapes:
+        active_scrapes[scrape_id]['status'] = 'aborted'
+        state_manager.abort_job(scrape_id, "User cancelled")
+        logger.info("API", f"Scrape {scrape_id} aborted by user")
+        return jsonify({'success': True, 'message': 'Scrape aborted'})
+
+    return jsonify({'error': 'Scrape not found or already completed'}), 404
+
+
+@app.route('/api/errors/<error_code>')
+def get_error_details(error_code):
+    """Get detailed error information by error code"""
+    error_info = logger.get_error_details(error_code)
+    if error_info:
+        return jsonify({
+            'error_code': error_code,
+            'category': error_info.get('category'),
+            'message': error_info.get('message'),
+            'timestamp': error_info.get('timestamp'),
+            'details': error_info.get('data', {})
+        })
+    return jsonify({'error': 'Error code not found'}), 404
+
+
+@app.route('/api/errors/recent')
+def get_recent_errors():
+    """Get recent errors for debugging"""
+    errors = logger.get_recent_errors(limit=20)
+    return jsonify([
+        {
+            'error_code': code,
+            'category': info.get('category'),
+            'message': info.get('message'),
+            'timestamp': info.get('timestamp'),
+            'critical': info.get('critical', False)
+        }
+        for code, info in errors
+    ])
+
+
+@app.route('/api/scrapes/active')
+def get_active_scrapes():
+    """Get all active/running scrapes"""
+    return jsonify(state_manager.get_active_jobs())
 
 
 @app.route('/api/history')
@@ -469,10 +736,108 @@ def download_transcript_file(scrape_id, shortcode):
     return jsonify({'error': 'Transcript not found'}), 404
 
 
+@app.route('/api/transcribe/video', methods=['POST'])
+def transcribe_video_on_demand():
+    """Transcribe a video on-demand from the gallery"""
+    from scraper.core import transcribe_video_openai, transcribe_video, load_whisper_model, WHISPER_AVAILABLE
+
+    data = request.get_json()
+    video_path = data.get('video_path')
+    provider = data.get('provider', 'openai')
+    shortcode = data.get('shortcode', '')
+
+    if not video_path or not os.path.exists(video_path):
+        return jsonify({'error': 'Video file not found', 'path': video_path}), 404
+
+    transcript = None
+
+    if provider == 'openai':
+        config = load_config()
+        openai_key = config.get('openai_key')
+        if not openai_key:
+            return jsonify({'error': 'OpenAI API key not configured'}), 400
+
+        print(f"[TRANSCRIBE] On-demand OpenAI transcription: {video_path}")
+        transcript = transcribe_video_openai(video_path, openai_key)
+
+    elif provider == 'local':
+        if not WHISPER_AVAILABLE:
+            return jsonify({'error': 'Whisper not installed. Install with: pip install openai-whisper'}), 400
+
+        whisper_model = data.get('whisper_model', 'small.en')
+        print(f"[TRANSCRIBE] On-demand local transcription: {video_path} with model={whisper_model}")
+
+        try:
+            print(f"[TRANSCRIBE] Loading Whisper model: {whisper_model}")
+            model = load_whisper_model(whisper_model, max_retries=2)
+            if model:
+                print(f"[TRANSCRIBE] Model loaded successfully, starting transcription...")
+                transcript = transcribe_video(video_path, model)
+                print(f"[TRANSCRIBE] Transcription complete: {len(transcript) if transcript else 0} chars")
+            else:
+                print(f"[TRANSCRIBE] Model returned None - check if model '{whisper_model}' needs to be downloaded")
+                return jsonify({
+                    'error': f'Failed to load Whisper model "{whisper_model}". Model may need to be downloaded first. Try using OpenAI provider or run a scrape with local transcription to download the model.'
+                }), 500
+        except Exception as e:
+            import traceback
+            print(f"[TRANSCRIBE] Exception during local transcription: {e}")
+            traceback.print_exc()
+            return jsonify({'error': f'Local transcription failed: {str(e)}'}), 500
+    else:
+        return jsonify({'error': f'Unknown provider: {provider}'}), 400
+
+    if transcript:
+        # Try to update history with new transcript
+        print(f"[TRANSCRIBE] Got transcript ({len(transcript)} chars), updating history for shortcode={shortcode}")
+        history = load_history()
+        updated = False
+        scrape_id_found = None
+
+        for scrape in history:
+            for reel in scrape.get('top_reels', []):
+                sc = reel.get('shortcode') or reel.get('video_id')
+                print(f"[TRANSCRIBE] Checking reel: sc={sc} vs shortcode={shortcode}")
+                if sc == shortcode:
+                    reel['transcript'] = transcript
+                    updated = True
+                    scrape_id_found = scrape.get('id')
+                    print(f"[TRANSCRIBE] MATCH FOUND! Updated reel in scrape {scrape_id_found}")
+                    break
+            if updated:
+                break
+
+        if updated:
+            save_history(history)
+            print(f"[TRANSCRIBE] History saved successfully for {shortcode} in scrape {scrape_id_found}")
+        else:
+            print(f"[TRANSCRIBE] WARNING: Could not find reel with shortcode={shortcode} in any scrape")
+            # Debug: print all shortcodes in history
+            all_shortcodes = []
+            for scrape in history:
+                for reel in scrape.get('top_reels', []):
+                    all_shortcodes.append(reel.get('shortcode') or reel.get('video_id'))
+            print(f"[TRANSCRIBE] Available shortcodes in history: {all_shortcodes[:20]}")
+
+        return jsonify({
+            'success': True,
+            'transcript': transcript,
+            'provider': provider,
+            'shortcode': shortcode,
+            'persisted': updated
+        })
+    else:
+        return jsonify({'error': 'Transcription failed - no audio detected or API error'}), 500
+
+
 @app.route('/api/cookies/status')
 def cookies_status():
-    """Check cookies file status"""
-    return jsonify({'exists': COOKIES_FILE.exists()})
+    """Check cookies file status for both platforms"""
+    return jsonify({
+        'instagram': COOKIES_FILE.exists(),
+        'tiktok': TIKTOK_COOKIES_FILE.exists(),
+        'exists': COOKIES_FILE.exists()  # Backwards compat
+    })
 
 
 @app.route('/api/settings', methods=['GET'])
@@ -560,9 +925,11 @@ def check_whisper_model(model):
 
     model_file = model_files.get(model, f"{model}.pt")
 
-    # Whisper uses ~/.cache/whisper/ on ALL platforms (including Windows)
-    # This matches the whisper library's default: os.path.join(os.path.expanduser("~"), ".cache", "whisper")
-    cache_dir = Path.home() / '.cache' / 'whisper'
+    # In WSL, use Windows-level whisper cache
+    # Windows path: /mnt/c/Users/Chris/.cache/whisper/
+    windows_cache = Path('/mnt/c/Users/Chris/.cache/whisper')
+    linux_cache = Path.home() / '.cache' / 'whisper'
+    cache_dir = windows_cache if windows_cache.exists() else linux_cache
 
     model_path = cache_dir / model_file
     installed = model_path.exists()
@@ -675,38 +1042,54 @@ def rewrite_script():
 
 @app.route('/api/videos')
 def list_videos():
-    """List downloaded videos, optionally filtered by username"""
+    """List downloaded videos, optionally filtered by username or platform"""
     videos = []
     seen_paths = set()  # Track seen paths to avoid duplicates
     filter_username = request.args.get('username', '').strip()
+    filter_platform = request.args.get('platform', '').strip().lower()
 
-    # Scan both configured output directory and default (if different)
-    output_dirs_to_scan = [get_output_directory()]
-    if get_output_directory() != OUTPUT_DIR and OUTPUT_DIR.exists():
-        output_dirs_to_scan.append(OUTPUT_DIR)
+    # Scan all output directories (IG and TikTok)
+    output_dirs_to_scan = [
+        (get_output_directory('instagram'), 'instagram'),
+        (get_output_directory('tiktok'), 'tiktok'),
+    ]
+    # Also check defaults if different
+    if get_output_directory('instagram') != OUTPUT_DIR and OUTPUT_DIR.exists():
+        output_dirs_to_scan.append((OUTPUT_DIR, 'instagram'))
+    if get_output_directory('tiktok') != TIKTOK_OUTPUT_DIR and TIKTOK_OUTPUT_DIR.exists():
+        output_dirs_to_scan.append((TIKTOK_OUTPUT_DIR, 'tiktok'))
 
-    # Build a lookup map of shortcode -> transcript from history
+    # Build a lookup map of shortcode/video_id -> transcript from history
     transcript_map = {}
     history = load_history()
     for scrape in history:
+        platform = scrape.get('platform', 'instagram')
         for reel in scrape.get('top_reels', []):
-            sc = reel.get('shortcode')
+            sc = reel.get('shortcode') or reel.get('video_id')
             if sc and reel.get('transcript'):
                 transcript_map[sc] = {
                     'transcript': reel.get('transcript'),
                     'caption': reel.get('caption', ''),
                     'scrape_id': scrape.get('id'),
-                    'reel_url': reel.get('url', '')
+                    'reel_url': reel.get('url', ''),
+                    'platform': platform
                 }
 
     # Scan all output directories for videos
-    for output_dir in output_dirs_to_scan:
+    for output_dir, platform in output_dirs_to_scan:
         if not output_dir.exists():
+            continue
+
+        # Skip if filtering by platform and this isn't a match
+        if filter_platform and platform != filter_platform:
             continue
 
         for user_dir in output_dir.iterdir():
             if user_dir.is_dir() and user_dir.name.startswith('output_'):
+                # Extract username, handling both IG (output_user) and TikTok (output_user_tiktok)
                 username = user_dir.name.replace('output_', '')
+                if username.endswith('_tiktok'):
+                    username = username[:-7]  # Remove '_tiktok' suffix
 
                 # Skip if filtering by username and this isn't a match
                 if filter_username and username.lower() != filter_username.lower():
@@ -748,7 +1131,8 @@ def list_videos():
                                 'transcript': transcript_data.get('transcript'),
                                 'caption': transcript_data.get('caption', ''),
                                 'scrape_id': transcript_data.get('scrape_id'),
-                                'reel_url': transcript_data.get('reel_url', '')
+                                'reel_url': transcript_data.get('reel_url', ''),
+                                'platform': platform
                             })
 
     # Sort by creation time (newest first)
@@ -756,9 +1140,9 @@ def list_videos():
 
     return jsonify({
         'videos': videos,
-        'filtered': bool(filter_username),
+        'filtered': bool(filter_username or filter_platform),
         'filter_username': filter_username if filter_username else None,
-        'output_directory': str(output_dir)
+        'filter_platform': filter_platform if filter_platform else None
     })
 
 
@@ -769,25 +1153,37 @@ def stream_video(username, filename):
     safe_username = ''.join(c for c in username if c.isalnum() or c in '._-')
     safe_filename = ''.join(c for c in filename if c.isalnum() or c in '._-')
 
-    # Try configured output dir first, then default
-    output_dirs_to_try = [get_output_directory()]
-    if get_output_directory() != OUTPUT_DIR:
-        output_dirs_to_try.append(OUTPUT_DIR)
+    # Try all output directories (IG and TikTok)
+    output_dirs_to_try = [
+        get_output_directory('instagram'),
+        get_output_directory('tiktok'),
+        OUTPUT_DIR,
+        TIKTOK_OUTPUT_DIR
+    ]
 
     for output_dir in output_dirs_to_try:
-        video_path = output_dir / f'output_{safe_username}' / 'videos' / safe_filename
-
-        try:
-            video_path = video_path.resolve()
-            # Verify the file is within a valid output directory
-            if not (str(video_path).startswith(str(output_dir.resolve())) or
-                    str(video_path).startswith(str(OUTPUT_DIR.resolve()))):
-                continue
-        except:
+        if not output_dir.exists():
             continue
 
-        if video_path.exists():
-            return send_file(video_path, mimetype='video/mp4')
+        # Try both IG format (output_user) and TikTok format (output_user_tiktok)
+        paths_to_try = [
+            output_dir / f'output_{safe_username}' / 'videos' / safe_filename,
+            output_dir / f'output_{safe_username}_tiktok' / 'videos' / safe_filename
+        ]
+
+        for video_path in paths_to_try:
+            try:
+                video_path = video_path.resolve()
+                # Verify the file is within a valid output directory
+                if not (str(video_path).startswith(str(output_dir.resolve())) or
+                        str(video_path).startswith(str(OUTPUT_DIR.resolve())) or
+                        str(video_path).startswith(str(TIKTOK_OUTPUT_DIR.resolve()))):
+                    continue
+            except:
+                continue
+
+            if video_path.exists():
+                return send_file(video_path, mimetype='video/mp4')
 
     return jsonify({'error': 'Video not found'}), 404
 
@@ -806,28 +1202,28 @@ def delete_video():
     # Security: Verify the file is within a valid output directory (configured or default)
     try:
         video_path = video_path.resolve()
-        configured_output = get_output_directory().resolve()
-        default_output = OUTPUT_DIR.resolve()
+        allowed_dirs = [
+            get_output_directory('instagram').resolve(),
+            get_output_directory('tiktok').resolve(),
+            OUTPUT_DIR.resolve(),
+            TIKTOK_OUTPUT_DIR.resolve()
+        ]
 
         # Check if video path is within allowed directories using parent chain
         is_valid = False
         for parent in video_path.parents:
-            if parent == configured_output or parent == default_output:
-                is_valid = True
+            for allowed_dir in allowed_dirs:
+                if parent == allowed_dir:
+                    is_valid = True
+                    break
+                try:
+                    parent.relative_to(allowed_dir)
+                    is_valid = True
+                    break
+                except ValueError:
+                    pass
+            if is_valid:
                 break
-            # Also check if parent starts with output directory (for nested structures)
-            try:
-                parent.relative_to(configured_output)
-                is_valid = True
-                break
-            except ValueError:
-                pass
-            try:
-                parent.relative_to(default_output)
-                is_valid = True
-                break
-            except ValueError:
-                pass
 
         if not is_valid:
             return jsonify({'error': 'Invalid path - outside allowed directory'}), 403
@@ -858,4 +1254,8 @@ def delete_video():
 
 if __name__ == '__main__':
     OUTPUT_DIR.mkdir(exist_ok=True)
-    app.run(debug=True, port=5000)
+    TIKTOK_OUTPUT_DIR.mkdir(exist_ok=True)
+    # IMPORTANT: use_reloader=False prevents Flask from restarting when Whisper
+    # or other libraries touch their own files during import/execution.
+    # The watchdog was incorrectly detecting whisper/transcribe.py access as a change.
+    app.run(debug=True, port=5000, use_reloader=False)

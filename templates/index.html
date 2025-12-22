@@ -50,9 +50,13 @@
                     </div>
                 </div>
                 <div class="status-indicators">
-                    <div class="status-item {% if cookies_exist %}active{% else %}inactive{% endif %}">
+                    <div class="status-item {% if cookies_exist %}active{% else %}inactive{% endif %}" title="Instagram Cookies">
                         <span class="status-dot"></span>
-                        <span class="status-text">COOKIES</span>
+                        <span class="status-text">IG</span>
+                    </div>
+                    <div class="status-item {% if tiktok_cookies_exist %}active{% else %}inactive{% endif %}" title="TikTok Cookies">
+                        <span class="status-dot"></span>
+                        <span class="status-text">TT</span>
                     </div>
                     <div class="status-item {% if whisper_available %}active{% else %}inactive{% endif %}">
                         <span class="status-dot"></span>
@@ -78,6 +82,28 @@
                 </div>
                 <div class="panel-content">
                     <form id="scrapeForm">
+                        <!-- Platform Toggle -->
+                        <div class="form-group">
+                            <label class="form-label">PLATFORM</label>
+                            <div class="platform-toggle">
+                                <button type="button" class="platform-btn active" data-platform="instagram" onclick="selectPlatform('instagram')">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                                        <rect x="2" y="2" width="20" height="20" rx="5"/>
+                                        <circle cx="12" cy="12" r="4"/>
+                                        <circle cx="18" cy="6" r="1.5" fill="currentColor"/>
+                                    </svg>
+                                    INSTAGRAM
+                                </button>
+                                <button type="button" class="platform-btn" data-platform="tiktok" onclick="selectPlatform('tiktok')">
+                                    <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
+                                        <path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-5.2 1.74 2.89 2.89 0 012.31-4.64 2.93 2.93 0 01.88.13V9.4a6.84 6.84 0 00-1-.05A6.33 6.33 0 005 20.1a6.34 6.34 0 0010.86-4.43v-7a8.16 8.16 0 004.77 1.52v-3.4a4.85 4.85 0 01-1-.1z"/>
+                                    </svg>
+                                    TIKTOK
+                                </button>
+                            </div>
+                            <input type="hidden" id="platform" name="platform" value="instagram">
+                        </div>
+
                         <!-- Target Input -->
                         <div class="form-group">
                             <label class="form-label">TARGET USERNAME</label>
@@ -216,6 +242,11 @@
                     <div class="gallery-header">
                         <span class="gallery-count" id="galleryCount">0 videos</span>
                         <div class="gallery-actions">
+                            <div class="gallery-platform-filter" id="galleryPlatformFilter">
+                                <button class="platform-filter-btn active" data-platform="all" onclick="filterGalleryByPlatform('all')">ALL</button>
+                                <button class="platform-filter-btn" data-platform="instagram" onclick="filterGalleryByPlatform('instagram')">IG</button>
+                                <button class="platform-filter-btn" data-platform="tiktok" onclick="filterGalleryByPlatform('tiktok')">TT</button>
+                            </div>
                             <button class="gallery-see-all" id="gallerySeeAllBtn" onclick="toggleShowAllVideos()" title="Toggle between current profile and all videos">SEE ALL</button>
                             <button class="gallery-refresh" onclick="refreshVideoGallery()" title="Refresh">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
@@ -260,10 +291,11 @@
                 <div class="history-list" id="historyList">
                     {% if history %}
                         {% for item in history %}
-                        <div class="history-item" data-id="{{ item.id }}">
+                        <div class="history-item" data-id="{{ item.id }}" data-platform="{{ item.platform or 'instagram' }}">
                             <div class="history-main">
+                                <span class="history-platform-badge {{ item.platform or 'instagram' }}">{{ 'TT' if item.platform == 'tiktok' else 'IG' }}</span>
                                 <span class="history-username">@{{ item.username }}</span>
-                                <span class="history-stats">{{ item.top_count }} reels / {{ item.total_reels }} total</span>
+                                <span class="history-stats">{{ item.top_count }} {{ 'videos' if item.platform == 'tiktok' else 'reels' }} / {{ item.total_reels }} total</span>
                             </div>
                             <div class="history-meta">
                                 <span class="history-time">{{ item.timestamp[:16] }}</span>

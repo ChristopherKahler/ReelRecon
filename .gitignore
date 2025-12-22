@@ -8,7 +8,15 @@ config.json
 
 # Output directories
 output/
+output_*/
 scrape_history.json
+
+# Runtime state and logs (v2)
+logs/
+state/
+
+# Additional cookies
+tiktok_cookies.txt
 
 # Python
 __pycache__/

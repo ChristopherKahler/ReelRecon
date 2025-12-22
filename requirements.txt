@@ -1,7 +1,10 @@
-# ReelRecon - Tactical Content Intelligence
+# ReelRecon V2 - Dual Platform (IG + TikTok)
 # Core dependencies
 flask>=2.0.0
 requests>=2.25.0
+
+# TikTok-specific - Playwright for browser automation
+playwright>=1.40.0
 
 # Optional - for transcription
 openai-whisper>=20231117
