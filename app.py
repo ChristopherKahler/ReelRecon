@@ -26,6 +26,14 @@ from scraper.tiktok import run_tiktok_scrape
 from utils import get_logger, ScrapeStateManager, ScrapePhase, ScrapeState
 from utils import check_for_updates, run_update, get_current_version, get_git_status
 
+# Import skeleton ripper
+from skeleton_ripper import (
+    SkeletonRipperPipeline,
+    create_job_config,
+    JobProgress,
+    get_available_providers
+)
+
 # Configuration
 BASE_DIR = Path(__file__).parent.resolve()
 
@@ -1293,6 +1301,182 @@ def delete_video():
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'error': f'Failed to delete: {str(e)}'}), 500
+
+
+# =====================
+# SKELETON RIPPER ENDPOINTS
+# =====================
+
+# Active skeleton ripper jobs
+active_skeleton_jobs = {}
+
+
+@app.route('/api/skeleton-ripper/providers')
+def get_skeleton_providers():
+    """Get available LLM providers for skeleton ripper"""
+    # Check which providers have API keys configured
+    config = load_config()
+    providers = get_available_providers()
+
+    # Update availability based on configured keys
+    for p in providers:
+        if p['id'] == 'openai':
+            p['available'] = bool(config.get('openai_key'))
+        elif p['id'] == 'anthropic':
+            p['available'] = bool(config.get('anthropic_key'))
+        elif p['id'] == 'google':
+            p['available'] = bool(config.get('google_key'))
+        # Local (Ollama) availability is checked in get_available_providers()
+
+    return jsonify({'providers': providers})
+
+
+@app.route('/api/skeleton-ripper/start', methods=['POST'])
+def start_skeleton_ripper():
+    """Start a new skeleton ripper job"""
+    data = request.json
+
+    usernames = data.get('usernames', [])
+    if not usernames or len(usernames) < 1 or len(usernames) > 5:
+        return jsonify({'error': 'Provide 1-5 usernames'}), 400
+
+    # Validate usernames
+    usernames = [u.strip().lstrip('@') for u in usernames if u.strip()]
+    if not usernames:
+        return jsonify({'error': 'No valid usernames provided'}), 400
+
+    videos_per_creator = min(max(int(data.get('videos_per_creator', 3)), 1), 5)
+    platform = data.get('platform', 'instagram').lower()
+    llm_provider = data.get('llm_provider', 'openai')
+    llm_model = data.get('llm_model', 'gpt-4o-mini')
+
+    # Validate LLM provider has API key
+    config = load_config()
+    if llm_provider == 'openai' and not config.get('openai_key'):
+        return jsonify({'error': 'OpenAI API key not configured'}), 400
+    elif llm_provider == 'anthropic' and not config.get('anthropic_key'):
+        return jsonify({'error': 'Anthropic API key not configured'}), 400
+    elif llm_provider == 'google' and not config.get('google_key'):
+        return jsonify({'error': 'Google API key not configured'}), 400
+
+    # Set API key in environment for LLM client
+    if llm_provider == 'openai':
+        os.environ['OPENAI_API_KEY'] = config.get('openai_key')
+    elif llm_provider == 'anthropic':
+        os.environ['ANTHROPIC_API_KEY'] = config.get('anthropic_key')
+    elif llm_provider == 'google':
+        os.environ['GOOGLE_API_KEY'] = config.get('google_key')
+
+    # Create job config
+    job_config = create_job_config(
+        usernames=usernames,
+        videos_per_creator=videos_per_creator,
+        platform=platform,
+        llm_provider=llm_provider,
+        llm_model=llm_model
+    )
+
+    # Initialize pipeline
+    pipeline = SkeletonRipperPipeline(str(BASE_DIR))
+
+    # Track job
+    job_id = f"sr_{uuid.uuid4().hex[:8]}"
+    active_skeleton_jobs[job_id] = {
+        'status': 'starting',
+        'progress': None,
+        'result': None
+    }
+
+    logger.info("SKELETON", f"Starting skeleton ripper job {job_id}", {
+        "usernames": usernames,
+        "provider": llm_provider,
+        "model": llm_model
+    })
+
+    # Run in background thread
+    def run_skeleton_job():
+        def progress_callback(progress: JobProgress):
+            active_skeleton_jobs[job_id]['progress'] = {
+                'status': progress.status.value,
+                'phase': progress.phase,
+                'message': progress.message,
+                'videos_scraped': progress.videos_scraped,
+                'videos_transcribed': progress.videos_transcribed,
+                'transcripts_from_cache': progress.transcripts_from_cache,
+                'valid_transcripts': progress.valid_transcripts,
+                'skeletons_extracted': progress.skeletons_extracted,
+                'total_target': progress.total_target,
+                'errors': progress.errors
+            }
+            active_skeleton_jobs[job_id]['status'] = progress.status.value
+
+        try:
+            result = pipeline.run(job_config, on_progress=progress_callback)
+
+            active_skeleton_jobs[job_id]['result'] = {
+                'success': result.success,
+                'job_id': result.job_id,
+                'skeletons_count': len(result.skeletons),
+                'report_path': result.report_path,
+                'skeletons_path': result.skeletons_path,
+                'synthesis_path': result.synthesis_path,
+                'synthesis_analysis': result.synthesis.analysis if result.synthesis else None
+            }
+            active_skeleton_jobs[job_id]['status'] = 'complete' if result.success else 'failed'
+
+            logger.info("SKELETON", f"Job {job_id} completed", {
+                "success": result.success,
+                "skeletons": len(result.skeletons)
+            })
+
+        except Exception as e:
+            logger.error("SKELETON", f"Job {job_id} failed: {e}")
+            active_skeleton_jobs[job_id]['status'] = 'failed'
+            active_skeleton_jobs[job_id]['result'] = {
+                'success': False,
+                'error': str(e)
+            }
+
+    thread = Thread(target=run_skeleton_job, daemon=True)
+    thread.start()
+
+    return jsonify({
+        'job_id': job_id,
+        'status': 'pending',
+        'message': 'Skeleton ripper job started'
+    })
+
+
+@app.route('/api/skeleton-ripper/status/<job_id>')
+def skeleton_ripper_status(job_id):
+    """Get skeleton ripper job status"""
+    if job_id not in active_skeleton_jobs:
+        return jsonify({'error': 'Job not found'}), 404
+
+    job = active_skeleton_jobs[job_id]
+    return jsonify({
+        'job_id': job_id,
+        'status': job['status'],
+        'progress': job['progress'],
+        'result': job['result']
+    })
+
+
+@app.route('/api/skeleton-ripper/report/<job_id>')
+def skeleton_ripper_report(job_id):
+    """Get the generated report for a completed job"""
+    if job_id not in active_skeleton_jobs:
+        return jsonify({'error': 'Job not found'}), 404
+
+    job = active_skeleton_jobs[job_id]
+    if not job.get('result') or not job['result'].get('report_path'):
+        return jsonify({'error': 'Report not available'}), 404
+
+    report_path = Path(job['result']['report_path'])
+    if not report_path.exists():
+        return jsonify({'error': 'Report file not found'}), 404
+
+    return send_file(report_path, mimetype='text/markdown')
 
 
 if __name__ == '__main__':
