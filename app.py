@@ -337,6 +337,12 @@ def index():
                          whisper_available=WHISPER_AVAILABLE)
 
 
+@app.route('/skeleton-ripper')
+def skeleton_ripper_page():
+    """Skeleton Ripper analysis page"""
+    return render_template('skeleton_ripper.html')
+
+
 @app.route('/api/scrape', methods=['POST'])
 def start_scrape():
     """Start a new scrape for Instagram or TikTok"""
