@@ -1320,50 +1320,56 @@ active_skeleton_jobs = {}
 @app.route('/api/skeleton-ripper/providers')
 def get_skeleton_providers():
     """Get available LLM providers for skeleton ripper"""
-    from skeleton_ripper.llm_client import PROVIDERS
+    try:
+        from skeleton_ripper.llm_client import PROVIDERS
 
-    # Check which providers have API keys configured
-    config = load_config()
-    providers = get_available_providers()
+        # Check which providers have API keys configured
+        config = load_config()
+        providers = get_available_providers()
 
-    # Update availability based on configured keys AND populate models
-    for p in providers:
-        if p['id'] == 'openai':
-            has_key = bool(config.get('openai_key'))
-            p['available'] = has_key
-            if has_key and not p['models']:
-                # Populate models from PROVIDERS config
-                p['models'] = [
-                    {'id': m.id, 'name': m.name, 'cost_tier': m.cost_tier}
-                    for m in PROVIDERS['openai'].models
-                ]
-        elif p['id'] == 'anthropic':
-            has_key = bool(config.get('anthropic_key'))
-            p['available'] = has_key
-            if has_key and not p['models']:
-                p['models'] = [
-                    {'id': m.id, 'name': m.name, 'cost_tier': m.cost_tier}
-                    for m in PROVIDERS['anthropic'].models
-                ]
-        elif p['id'] == 'google':
-            has_key = bool(config.get('google_key'))
-            p['available'] = has_key
-            if has_key and not p['models']:
-                p['models'] = [
-                    {'id': m.id, 'name': m.name, 'cost_tier': m.cost_tier}
-                    for m in PROVIDERS['google'].models
-                ]
-        elif p['id'] == 'local':
-            # For local, show ALL installed Ollama models (not just predefined ones)
-            ollama_models = get_ollama_models()  # Returns list of strings
-            if ollama_models:
-                p['available'] = True
-                p['models'] = [
-                    {'id': model_name, 'name': model_name, 'cost_tier': 'free'}
-                    for model_name in ollama_models
-                ]
+        # Update availability based on configured keys AND populate models
+        for p in providers:
+            if p['id'] == 'openai':
+                has_key = bool(config.get('openai_key'))
+                p['available'] = has_key
+                if has_key and not p['models']:
+                    # Populate models from PROVIDERS config
+                    p['models'] = [
+                        {'id': m.id, 'name': m.name, 'cost_tier': m.cost_tier}
+                        for m in PROVIDERS['openai'].models
+                    ]
+            elif p['id'] == 'anthropic':
+                has_key = bool(config.get('anthropic_key'))
+                p['available'] = has_key
+                if has_key and not p['models']:
+                    p['models'] = [
+                        {'id': m.id, 'name': m.name, 'cost_tier': m.cost_tier}
+                        for m in PROVIDERS['anthropic'].models
+                    ]
+            elif p['id'] == 'google':
+                has_key = bool(config.get('google_key'))
+                p['available'] = has_key
+                if has_key and not p['models']:
+                    p['models'] = [
+                        {'id': m.id, 'name': m.name, 'cost_tier': m.cost_tier}
+                        for m in PROVIDERS['google'].models
+                    ]
+            elif p['id'] == 'local':
+                # For local, show ALL installed Ollama models (not just predefined ones)
+                ollama_models = get_ollama_models()  # Returns list of strings
+                if ollama_models:
+                    p['available'] = True
+                    p['models'] = [
+                        {'id': model_name, 'name': model_name, 'cost_tier': 'free'}
+                        for model_name in ollama_models
+                    ]
 
-    return jsonify({'providers': providers})
+        return jsonify({'providers': providers})
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e), 'providers': []}), 500
 
 
 @app.route('/api/skeleton-ripper/start', methods=['POST'])
