@@ -2396,5 +2396,310 @@ async function deleteVideo(path, username, filename) {
 document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') {
         closeVideoPlayer();
+        closeTacticalModal();
     }
 });
+
+// =====================
+// TACTICAL MODAL COMPONENT
+// =====================
+
+/**
+ * Reusable Tactical Modal
+ * Usage: showTacticalModal({ title, content, actions, type })
+ */
+function showTacticalModal(options = {}) {
+    const {
+        title = 'SYSTEM MESSAGE',
+        content = '',
+        actions = [],
+        type = 'info', // info, success, warning, danger
+        closeable = true
+    } = options;
+
+    // Remove existing modal if present
+    closeTacticalModal();
+
+    const typeColors = {
+        info: 'var(--color-primary)',
+        success: 'var(--color-success)',
+        warning: 'var(--color-warning)',
+        danger: 'var(--color-danger)'
+    };
+    const borderColor = typeColors[type] || typeColors.info;
+
+    const actionsHtml = actions.map(action => `
+        <button class="tactical-modal-btn ${action.primary ? 'primary' : 'secondary'}"
+                onclick="${action.onclick}"
+                ${action.disabled ? 'disabled' : ''}>
+            ${action.label}
+        </button>
+    `).join('');
+
+    const modalHtml = `
+        <div class="tactical-modal-overlay" onclick="${closeable ? 'closeTacticalModal()' : ''}">
+            <div class="tactical-modal" onclick="event.stopPropagation()" style="border-color: ${borderColor};">
+                <div class="tactical-modal-header" style="border-bottom-color: ${borderColor};">
+                    <span class="tactical-modal-title">${title}</span>
+                    ${closeable ? '<button class="tactical-modal-close" onclick="closeTacticalModal()">&times;</button>' : ''}
+                </div>
+                <div class="tactical-modal-content">
+                    ${content}
+                </div>
+                ${actions.length > 0 ? `<div class="tactical-modal-actions">${actionsHtml}</div>` : ''}
+            </div>
+        </div>
+    `;
+
+    const container = document.createElement('div');
+    container.id = 'tacticalModalContainer';
+    container.innerHTML = modalHtml;
+    document.body.appendChild(container);
+
+    // Animate in
+    requestAnimationFrame(() => {
+        container.querySelector('.tactical-modal-overlay').classList.add('active');
+    });
+}
+
+function closeTacticalModal() {
+    const container = document.getElementById('tacticalModalContainer');
+    if (container) {
+        const overlay = container.querySelector('.tactical-modal-overlay');
+        overlay.classList.remove('active');
+        setTimeout(() => container.remove(), 200);
+    }
+}
+
+// =====================
+// AUTO-UPDATE SYSTEM
+// =====================
+
+let updateInfo = null;
+
+async function checkForUpdates(showNoUpdateMessage = false) {
+    try {
+        const response = await fetch('/api/update/check');
+        const data = await response.json();
+
+        if (data.success && data.update_available) {
+            updateInfo = data;
+            showUpdateBanner(data);
+        } else if (showNoUpdateMessage) {
+            showTacticalModal({
+                title: 'SYSTEM UP TO DATE',
+                content: `
+                    <div style="text-align: center; padding: 20px;">
+                        <div style="font-size: 48px; margin-bottom: 16px;">✓</div>
+                        <div style="font-size: 14px; color: var(--color-success);">
+                            Running version ${data.current_version || 'unknown'}
+                        </div>
+                        <div style="font-size: 12px; color: var(--color-muted); margin-top: 8px;">
+                            No updates available
+                        </div>
+                    </div>
+                `,
+                type: 'success',
+                actions: [
+                    { label: 'CLOSE', onclick: 'closeTacticalModal()', primary: true }
+                ]
+            });
+        }
+    } catch (error) {
+        console.warn('Update check failed:', error);
+        if (showNoUpdateMessage) {
+            showTacticalModal({
+                title: 'UPDATE CHECK FAILED',
+                content: `
+                    <div style="text-align: center; padding: 20px;">
+                        <div style="font-size: 14px; color: var(--color-warning);">
+                            Could not connect to update server.
+                        </div>
+                        <div style="font-size: 12px; color: var(--color-muted); margin-top: 8px;">
+                            Check your internet connection.
+                        </div>
+                    </div>
+                `,
+                type: 'warning',
+                actions: [
+                    { label: 'CLOSE', onclick: 'closeTacticalModal()', primary: true }
+                ]
+            });
+        }
+    }
+}
+
+function showUpdateBanner(data) {
+    // Remove existing banner
+    const existingBanner = document.getElementById('updateBanner');
+    if (existingBanner) existingBanner.remove();
+
+    const banner = document.createElement('div');
+    banner.id = 'updateBanner';
+    banner.className = 'update-banner';
+    banner.innerHTML = `
+        <div class="update-banner-content">
+            <span class="update-banner-icon">⬆</span>
+            <span class="update-banner-text">
+                <strong>Update Available:</strong> ${data.release_name || data.latest_version}
+            </span>
+            <span class="update-banner-version">
+                ${data.current_version} → ${data.latest_version}
+            </span>
+        </div>
+        <div class="update-banner-actions">
+            <button class="update-banner-btn secondary" onclick="showUpdateDetails()">DETAILS</button>
+            <button class="update-banner-btn primary" onclick="installUpdate()">UPDATE NOW</button>
+            <button class="update-banner-dismiss" onclick="dismissUpdateBanner()">&times;</button>
+        </div>
+    `;
+
+    document.body.insertBefore(banner, document.body.firstChild);
+
+    // Animate in
+    requestAnimationFrame(() => banner.classList.add('visible'));
+}
+
+function dismissUpdateBanner() {
+    const banner = document.getElementById('updateBanner');
+    if (banner) {
+        banner.classList.remove('visible');
+        setTimeout(() => banner.remove(), 300);
+    }
+}
+
+function showUpdateDetails() {
+    if (!updateInfo) return;
+
+    const changelog = updateInfo.changelog || 'No changelog available.';
+    const formattedChangelog = changelog
+        .replace(/^### /gm, '<strong>')
+        .replace(/\n### /g, '</strong>\n<strong>')
+        .replace(/^- /gm, '• ')
+        .replace(/\n/g, '<br>');
+
+    showTacticalModal({
+        title: `UPDATE: ${updateInfo.release_name || updateInfo.latest_version}`,
+        content: `
+            <div class="update-details">
+                <div class="update-version-info">
+                    <span class="current-version">${updateInfo.current_version}</span>
+                    <span class="version-arrow">→</span>
+                    <span class="new-version">${updateInfo.latest_version}</span>
+                </div>
+                ${updateInfo.is_prerelease ? '<div class="prerelease-badge">PRE-RELEASE</div>' : ''}
+                <div class="update-changelog">
+                    <div class="changelog-title">CHANGELOG</div>
+                    <div class="changelog-content">${formattedChangelog}</div>
+                </div>
+                ${updateInfo.release_url ? `
+                    <a href="${updateInfo.release_url}" target="_blank" class="update-github-link">
+                        View on GitHub ↗
+                    </a>
+                ` : ''}
+            </div>
+        `,
+        type: 'info',
+        actions: [
+            { label: 'CANCEL', onclick: 'closeTacticalModal()' },
+            { label: 'INSTALL UPDATE', onclick: 'closeTacticalModal(); installUpdate();', primary: true }
+        ]
+    });
+}
+
+async function installUpdate() {
+    showTacticalModal({
+        title: 'INSTALLING UPDATE',
+        content: `
+            <div style="text-align: center; padding: 30px;">
+                <div class="update-spinner"></div>
+                <div style="margin-top: 16px; font-size: 14px;">
+                    Downloading and installing update...
+                </div>
+                <div style="margin-top: 8px; font-size: 12px; color: var(--color-muted);">
+                    Do not close the application
+                </div>
+            </div>
+        `,
+        type: 'info',
+        closeable: false,
+        actions: []
+    });
+
+    try {
+        const response = await fetch('/api/update/install', { method: 'POST' });
+        const data = await response.json();
+
+        closeTacticalModal();
+
+        if (data.success) {
+            if (data.already_current) {
+                showTacticalModal({
+                    title: 'ALREADY UP TO DATE',
+                    content: `
+                        <div style="text-align: center; padding: 20px;">
+                            <div style="font-size: 48px; margin-bottom: 16px;">✓</div>
+                            <div style="font-size: 14px; color: var(--color-success);">
+                                ${data.message}
+                            </div>
+                        </div>
+                    `,
+                    type: 'success',
+                    actions: [
+                        { label: 'CLOSE', onclick: 'closeTacticalModal()', primary: true }
+                    ]
+                });
+            } else {
+                dismissUpdateBanner();
+                showTacticalModal({
+                    title: 'UPDATE COMPLETE',
+                    content: `
+                        <div style="text-align: center; padding: 20px;">
+                            <div style="font-size: 48px; margin-bottom: 16px;">✓</div>
+                            <div style="font-size: 14px; color: var(--color-success);">
+                                ${data.message}
+                            </div>
+                            ${data.new_version ? `
+                                <div style="margin-top: 12px; font-size: 12px; color: var(--color-muted);">
+                                    New version: ${data.new_version}
+                                </div>
+                            ` : ''}
+                            <div style="margin-top: 16px; font-size: 12px; color: var(--color-warning);">
+                                Please restart the application to apply changes.
+                            </div>
+                        </div>
+                    `,
+                    type: 'success',
+                    actions: [
+                        { label: 'OK', onclick: 'closeTacticalModal()', primary: true }
+                    ]
+                });
+            }
+        } else {
+            throw new Error(data.error || 'Update failed');
+        }
+    } catch (error) {
+        closeTacticalModal();
+        showTacticalModal({
+            title: 'UPDATE FAILED',
+            content: `
+                <div style="text-align: center; padding: 20px;">
+                    <div style="font-size: 48px; margin-bottom: 16px; color: var(--color-danger);">✗</div>
+                    <div style="font-size: 14px; color: var(--color-danger);">
+                        ${error.message}
+                    </div>
+                    <div style="margin-top: 12px; font-size: 12px; color: var(--color-muted);">
+                        You can try updating manually using: git pull origin main
+                    </div>
+                </div>
+            `,
+            type: 'danger',
+            actions: [
+                { label: 'CLOSE', onclick: 'closeTacticalModal()', primary: true }
+            ]
+        });
+    }
+}
+
+// Check for updates on page load (after 2 second delay)
+setTimeout(() => checkForUpdates(false), 2000);

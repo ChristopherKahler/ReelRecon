@@ -24,6 +24,7 @@ from scraper.tiktok import run_tiktok_scrape
 
 # Import utilities for robust error handling
 from utils import get_logger, ScrapeStateManager, ScrapePhase, ScrapeState
+from utils import check_for_updates, run_update, get_current_version, get_git_status
 
 # Configuration
 BASE_DIR = Path(__file__).parent.resolve()
@@ -888,6 +889,48 @@ def update_settings():
 
     save_config(config)
     return jsonify({'success': True})
+
+
+# ============================================================================
+# UPDATE ENDPOINTS
+# ============================================================================
+
+@app.route('/api/version')
+def get_version():
+    """Get current application version and git status"""
+    return jsonify({
+        'version': get_current_version(),
+        'git': get_git_status()
+    })
+
+
+@app.route('/api/update/check')
+def check_update():
+    """Check GitHub for available updates"""
+    result = check_for_updates()
+    if result is None:
+        return jsonify({
+            'success': False,
+            'error': 'Could not check for updates. Check your internet connection.'
+        }), 503
+    return jsonify({
+        'success': True,
+        **result
+    })
+
+
+@app.route('/api/update/install', methods=['POST'])
+def install_update():
+    """Run git pull to install updates"""
+    logger.info("UPDATER", "User initiated update installation")
+    result = run_update()
+
+    if result.get('success'):
+        logger.info("UPDATER", f"Update result: {result.get('message')}")
+        return jsonify(result)
+    else:
+        logger.error("UPDATER", f"Update failed: {result.get('error')}")
+        return jsonify(result), 500
 
 
 @app.route('/api/ollama/models')
