@@ -26,6 +26,9 @@ from .aggregator import SkeletonAggregator, AggregatedData
 from .synthesizer import PatternSynthesizer, SynthesisResult, generate_report
 from utils.logger import get_logger
 
+# Import existing scraper infrastructure
+from scraper.core import run_scrape
+
 logger = get_logger()
 
 
@@ -78,6 +81,15 @@ class JobConfig:
     llm_model: str = "gpt-4o-mini"
     min_valid_ratio: float = 0.6  # 60% valid transcripts required
 
+    # Transcription settings
+    transcribe_provider: str = "openai"  # 'openai' or 'local'
+    whisper_model: str = "small.en"  # For local transcription
+    openai_api_key: Optional[str] = None  # For OpenAI transcription
+
+    # Cookies paths (auto-detected if None)
+    cookies_path: Optional[str] = None
+    tiktok_cookies_path: Optional[str] = None
+
 
 @dataclass
 class JobResult:
@@ -128,6 +140,10 @@ class SkeletonRipperPipeline:
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
         self.cache = TranscriptCache(base_dir)
+
+        # Default cookies paths
+        self.default_cookies = self.base_dir / 'cookies.txt'
+        self.default_tiktok_cookies = self.base_dir / 'tiktok_cookies.txt'
 
         logger.info(f"SkeletonRipperPipeline initialized at {base_dir}")
 
@@ -282,90 +298,147 @@ class SkeletonRipperPipeline:
         on_progress: Optional[Callable]
     ) -> list[dict]:
         """
-        Scrape videos and get transcripts (from cache or fresh).
+        Scrape videos and get transcripts using existing ReelRecon infrastructure.
 
-        This integrates with existing ReelRecon scraping infrastructure.
+        Leverages run_scrape() for each creator to:
+        1. Fetch top videos by view count
+        2. Download videos
+        3. Transcribe using OpenAI or local Whisper
         """
         transcripts = []
 
-        for username in config.usernames:
-            logger.info(f"Processing creator: {username}")
+        # Determine cookies path
+        if config.platform == 'tiktok':
+            cookies_path = config.tiktok_cookies_path or str(self.default_tiktok_cookies)
+        else:
+            cookies_path = config.cookies_path or str(self.default_cookies)
 
-            # Get top videos for this creator
-            # TODO: Integrate with existing scraper modules
-            videos = self._get_top_videos(
-                username=username,
-                platform=config.platform,
-                count=config.videos_per_creator
+        # Check cookies exist
+        if not os.path.exists(cookies_path):
+            raise FileNotFoundError(
+                f"Cookies file not found: {cookies_path}. "
+                f"Please export your {config.platform} cookies."
             )
 
-            progress.videos_scraped += len(videos)
+        # Get OpenAI API key for transcription
+        openai_key = config.openai_api_key or os.getenv('OPENAI_API_KEY')
+
+        for idx, username in enumerate(config.usernames):
+            logger.info(f"Processing creator {idx + 1}/{len(config.usernames)}: @{username}")
+            progress.phase = f"Scraping @{username}..."
             self._notify(on_progress, progress)
 
-            for video in videos:
-                video_id = video.get('video_id', 'unknown')
+            # Check cache for this creator first
+            cached_transcripts = self._get_cached_transcripts(
+                config.platform, username, config.videos_per_creator
+            )
 
-                # Check cache first
-                cached = self.cache.get(config.platform, username, video_id)
+            if cached_transcripts and len(cached_transcripts) >= config.videos_per_creator:
+                # Have enough cached - use those
+                logger.info(f"Using {len(cached_transcripts)} cached transcripts for @{username}")
+                progress.transcripts_from_cache += len(cached_transcripts)
+                transcripts.extend(cached_transcripts)
+                progress.videos_scraped += len(cached_transcripts)
+                progress.videos_transcribed += len(cached_transcripts)
+                self._notify(on_progress, progress)
+                continue
 
-                if cached:
-                    progress.transcripts_from_cache += 1
-                    transcript_text = cached
-                    logger.debug(f"Cache hit: {video_id}")
-                else:
-                    # Download and transcribe
-                    # TODO: Integrate with existing transcription
-                    transcript_text = self._transcribe_video(video)
+            # Need to scrape fresh - use existing ReelRecon infrastructure
+            try:
+                def scrape_progress(msg):
+                    progress.message = msg
+                    self._notify(on_progress, progress)
 
-                    # Cache if valid
+                scrape_result = run_scrape(
+                    username=username,
+                    cookies_path=cookies_path,
+                    max_reels=50,  # Fetch more to ensure we get enough with transcripts
+                    top_n=config.videos_per_creator,
+                    download=True,
+                    transcribe=True,
+                    whisper_model=config.whisper_model,
+                    transcribe_provider=config.transcribe_provider,
+                    openai_key=openai_key,
+                    output_dir=str(self.base_dir / 'output' / 'skeleton_temp'),
+                    progress_callback=scrape_progress
+                )
+
+                if scrape_result.get('status') == 'error':
+                    error_msg = scrape_result.get('error', 'Unknown scrape error')
+                    logger.warning(f"Scrape failed for @{username}: {error_msg}")
+                    progress.errors.append(f"@{username}: {error_msg}")
+                    continue
+
+                # Process results
+                reels = scrape_result.get('top_reels', [])
+                progress.videos_scraped += len(reels)
+
+                for reel in reels:
+                    transcript_text = reel.get('transcript', '')
+                    video_id = reel.get('shortcode', 'unknown')
+
+                    # Cache valid transcripts
                     if is_valid_transcript(transcript_text):
                         self.cache.set(config.platform, username, video_id, transcript_text)
+                        progress.videos_transcribed += 1
 
-                progress.videos_transcribed += 1
+                    transcripts.append({
+                        'video_id': video_id,
+                        'username': username,
+                        'platform': config.platform,
+                        'views': reel.get('views', 0),
+                        'likes': reel.get('likes', 0),
+                        'url': reel.get('url', ''),
+                        'transcript': transcript_text,
+                        'from_cache': False
+                    })
+
                 self._notify(on_progress, progress)
 
-                transcripts.append({
-                    'video_id': video_id,
-                    'username': username,
-                    'platform': config.platform,
-                    'views': video.get('views', 0),
-                    'likes': video.get('likes', 0),
-                    'url': video.get('url', ''),
-                    'transcript': transcript_text,
-                    'from_cache': cached is not None
-                })
+            except Exception as e:
+                logger.error(f"Error scraping @{username}: {e}")
+                progress.errors.append(f"@{username}: {str(e)}")
 
         return transcripts
 
-    def _get_top_videos(
+    def _get_cached_transcripts(
         self,
-        username: str,
         platform: str,
+        username: str,
         count: int
     ) -> list[dict]:
         """
-        Get top videos for a creator.
+        Get cached transcripts for a creator.
 
-        TODO: Integrate with existing ReelRecon scraper modules.
-        For now, this is a placeholder that should be connected to:
-        - scraper/instagram.py
-        - scraper/tiktok.py
+        Returns list of transcript dicts if enough are cached.
         """
-        logger.warning(f"_get_top_videos not yet integrated - returning empty for {username}")
-        # Placeholder - needs integration with existing scraper
-        return []
+        cached = []
+        cache_pattern = f"{platform.lower()}_{username.lower()}_*.txt"
+        cache_files = list(self.cache.cache_dir.glob(cache_pattern))
 
-    def _transcribe_video(self, video: dict) -> str:
-        """
-        Transcribe a video.
+        for cache_file in cache_files[:count]:
+            try:
+                transcript_text = cache_file.read_text(encoding='utf-8')
+                if is_valid_transcript(transcript_text):
+                    # Extract video_id from filename
+                    filename = cache_file.stem
+                    parts = filename.split('_')
+                    video_id = parts[-1] if len(parts) >= 3 else filename
 
-        TODO: Integrate with existing transcription.
-        For now, this is a placeholder that should be connected to
-        the existing whisper transcription code.
-        """
-        logger.warning(f"_transcribe_video not yet integrated - returning empty")
-        # Placeholder - needs integration with existing transcription
-        return ""
+                    cached.append({
+                        'video_id': video_id,
+                        'username': username,
+                        'platform': platform,
+                        'views': 0,  # Not available from cache
+                        'likes': 0,
+                        'url': '',
+                        'transcript': transcript_text,
+                        'from_cache': True
+                    })
+            except Exception as e:
+                logger.warning(f"Failed to read cache file {cache_file}: {e}")
+
+        return cached
 
     def _update_extraction_progress(
         self,
@@ -455,7 +528,10 @@ def create_job_config(
     videos_per_creator: int = 3,
     platform: str = "instagram",
     llm_provider: str = "openai",
-    llm_model: str = "gpt-4o-mini"
+    llm_model: str = "gpt-4o-mini",
+    transcribe_provider: str = "openai",
+    whisper_model: str = "small.en",
+    openai_api_key: Optional[str] = None
 ) -> JobConfig:
     """Create a job configuration."""
     return JobConfig(
@@ -463,7 +539,10 @@ def create_job_config(
         videos_per_creator=videos_per_creator,
         platform=platform,
         llm_provider=llm_provider,
-        llm_model=llm_model
+        llm_model=llm_model,
+        transcribe_provider=transcribe_provider,
+        whisper_model=whisper_model,
+        openai_api_key=openai_api_key
     )
 
 
@@ -473,6 +552,9 @@ def run_skeleton_ripper(
     platform: str = "instagram",
     llm_provider: str = "openai",
     llm_model: str = "gpt-4o-mini",
+    transcribe_provider: str = "openai",
+    whisper_model: str = "small.en",
+    openai_api_key: Optional[str] = None,
     on_progress: Optional[Callable] = None
 ) -> JobResult:
     """
@@ -484,6 +566,9 @@ def run_skeleton_ripper(
         platform: 'instagram' or 'tiktok'
         llm_provider: LLM provider ID
         llm_model: Model ID
+        transcribe_provider: 'openai' or 'local'
+        whisper_model: Model for local transcription
+        openai_api_key: OpenAI API key (optional, uses env var if not provided)
         on_progress: Optional progress callback
 
     Returns:
@@ -494,7 +579,10 @@ def run_skeleton_ripper(
         videos_per_creator=videos_per_creator,
         platform=platform,
         llm_provider=llm_provider,
-        llm_model=llm_model
+        llm_model=llm_model,
+        transcribe_provider=transcribe_provider,
+        whisper_model=whisper_model,
+        openai_api_key=openai_api_key
     )
 
     pipeline = SkeletonRipperPipeline()

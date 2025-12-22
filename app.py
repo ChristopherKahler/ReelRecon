@@ -1356,6 +1356,10 @@ def start_skeleton_ripper():
     llm_provider = data.get('llm_provider', 'openai')
     llm_model = data.get('llm_model', 'gpt-4o-mini')
 
+    # Transcription settings
+    transcribe_provider = data.get('transcribe_provider', 'openai')  # 'openai' or 'local'
+    whisper_model = data.get('whisper_model', 'small.en')
+
     # Validate LLM provider has API key
     config = load_config()
     if llm_provider == 'openai' and not config.get('openai_key'):
@@ -1365,6 +1369,11 @@ def start_skeleton_ripper():
     elif llm_provider == 'google' and not config.get('google_key'):
         return jsonify({'error': 'Google API key not configured'}), 400
 
+    # OpenAI key needed for transcription if using OpenAI Whisper
+    openai_api_key = config.get('openai_key') if transcribe_provider == 'openai' else None
+    if transcribe_provider == 'openai' and not openai_api_key:
+        return jsonify({'error': 'OpenAI API key required for Whisper transcription'}), 400
+
     # Set API key in environment for LLM client
     if llm_provider == 'openai':
         os.environ['OPENAI_API_KEY'] = config.get('openai_key')
@@ -1373,13 +1382,16 @@ def start_skeleton_ripper():
     elif llm_provider == 'google':
         os.environ['GOOGLE_API_KEY'] = config.get('google_key')
 
-    # Create job config
+    # Create job config with transcription settings
     job_config = create_job_config(
         usernames=usernames,
         videos_per_creator=videos_per_creator,
         platform=platform,
         llm_provider=llm_provider,
-        llm_model=llm_model
+        llm_model=llm_model,
+        transcribe_provider=transcribe_provider,
+        whisper_model=whisper_model,
+        openai_api_key=openai_api_key
     )
 
     # Initialize pipeline
@@ -1396,7 +1408,9 @@ def start_skeleton_ripper():
     logger.info("SKELETON", f"Starting skeleton ripper job {job_id}", {
         "usernames": usernames,
         "provider": llm_provider,
-        "model": llm_model
+        "model": llm_model,
+        "transcribe_provider": transcribe_provider,
+        "platform": platform
     })
 
     # Run in background thread
