@@ -14,7 +14,8 @@ logger = get_logger()
 # GitHub repo info
 GITHUB_OWNER = "ChristopherKahler"
 GITHUB_REPO = "ReelRecon"
-GITHUB_API_URL = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/releases/latest"
+# Use /releases instead of /releases/latest to include pre-releases
+GITHUB_API_URL = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/releases"
 
 def get_current_version():
     """Read current version from VERSION file."""
@@ -38,7 +39,20 @@ def check_for_updates():
         response = requests.get(GITHUB_API_URL, timeout=10)
 
         if response.status_code == 200:
-            release = response.json()
+            releases = response.json()
+
+            # Handle empty releases list
+            if not releases or len(releases) == 0:
+                logger.debug("UPDATER", "No releases found on GitHub")
+                return {
+                    "update_available": False,
+                    "current_version": current_version,
+                    "latest_version": current_version,
+                    "message": "No releases published yet"
+                }
+
+            # Get the most recent release (first in list - includes pre-releases)
+            release = releases[0]
             latest_version = release.get("tag_name", "").lstrip("v")
             current_clean = current_version.lstrip("v")
 
