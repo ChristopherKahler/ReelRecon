@@ -1355,12 +1355,12 @@ def get_skeleton_providers():
                 ]
         elif p['id'] == 'local':
             # For local, show ALL installed Ollama models (not just predefined ones)
-            ollama_models = get_ollama_models()
+            ollama_models = get_ollama_models()  # Returns list of strings
             if ollama_models:
                 p['available'] = True
                 p['models'] = [
-                    {'id': m['name'], 'name': m['name'], 'cost_tier': 'free'}
-                    for m in ollama_models
+                    {'id': model_name, 'name': model_name, 'cost_tier': 'free'}
+                    for model_name in ollama_models
                 ]
 
     return jsonify({'providers': providers})
