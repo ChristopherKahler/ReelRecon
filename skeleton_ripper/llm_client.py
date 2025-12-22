@@ -81,6 +81,8 @@ PROVIDERS = {
         api_key_env='',  # No API key needed
         base_url='http://localhost:11434/api',
         models=[
+            ModelInfo('qwen3', 'Qwen 3 (Recommended)', 'free'),
+            ModelInfo('qwen3:14b', 'Qwen 3 14B', 'free'),
             ModelInfo('llama3', 'Llama 3', 'free'),
             ModelInfo('llama3.1', 'Llama 3.1', 'free'),
             ModelInfo('mistral', 'Mistral', 'free'),

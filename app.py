@@ -1320,19 +1320,48 @@ active_skeleton_jobs = {}
 @app.route('/api/skeleton-ripper/providers')
 def get_skeleton_providers():
     """Get available LLM providers for skeleton ripper"""
+    from skeleton_ripper.llm_client import PROVIDERS
+
     # Check which providers have API keys configured
     config = load_config()
     providers = get_available_providers()
 
-    # Update availability based on configured keys
+    # Update availability based on configured keys AND populate models
     for p in providers:
         if p['id'] == 'openai':
-            p['available'] = bool(config.get('openai_key'))
+            has_key = bool(config.get('openai_key'))
+            p['available'] = has_key
+            if has_key and not p['models']:
+                # Populate models from PROVIDERS config
+                p['models'] = [
+                    {'id': m.id, 'name': m.name, 'cost_tier': m.cost_tier}
+                    for m in PROVIDERS['openai'].models
+                ]
         elif p['id'] == 'anthropic':
-            p['available'] = bool(config.get('anthropic_key'))
+            has_key = bool(config.get('anthropic_key'))
+            p['available'] = has_key
+            if has_key and not p['models']:
+                p['models'] = [
+                    {'id': m.id, 'name': m.name, 'cost_tier': m.cost_tier}
+                    for m in PROVIDERS['anthropic'].models
+                ]
         elif p['id'] == 'google':
-            p['available'] = bool(config.get('google_key'))
-        # Local (Ollama) availability is checked in get_available_providers()
+            has_key = bool(config.get('google_key'))
+            p['available'] = has_key
+            if has_key and not p['models']:
+                p['models'] = [
+                    {'id': m.id, 'name': m.name, 'cost_tier': m.cost_tier}
+                    for m in PROVIDERS['google'].models
+                ]
+        elif p['id'] == 'local':
+            # For local, show ALL installed Ollama models (not just predefined ones)
+            ollama_models = get_ollama_models()
+            if ollama_models:
+                p['available'] = True
+                p['models'] = [
+                    {'id': m['name'], 'name': m['name'], 'cost_tier': 'free'}
+                    for m in ollama_models
+                ]
 
     return jsonify({'providers': providers})
 
