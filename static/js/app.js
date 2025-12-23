@@ -72,6 +72,23 @@ function updateClock() {
 setInterval(updateClock, 1000);
 updateClock();
 
+// Version Display - fetch from API
+async function updateVersionDisplay() {
+    try {
+        const response = await fetch('/api/version');
+        if (response.ok) {
+            const data = await response.json();
+            const versionEl = document.getElementById('app-version');
+            if (versionEl && data.version) {
+                versionEl.textContent = `v${data.version.replace(/^v/, '')}`;
+            }
+        }
+    } catch (e) {
+        console.log('Could not fetch version:', e);
+    }
+}
+updateVersionDisplay();
+
 // Username input styling - update on input and initialize on load
 (function() {
     const input = document.getElementById('username');
