@@ -34,6 +34,9 @@ from skeleton_ripper import (
     get_available_providers
 )
 
+# Import storage module for Asset Management (P0)
+from storage import init_db, Asset, Collection, AssetCollection
+
 # Configuration
 BASE_DIR = Path(__file__).parent.resolve()
 
@@ -1735,9 +1738,222 @@ def skeleton_ripper_video_status(report_id, video_id):
     })
 
 
+# ============================================================================
+# ASSET MANAGEMENT API (P0)
+# ============================================================================
+
+@app.route('/api/assets', methods=['POST'])
+def create_asset():
+    """Create a new asset"""
+    data = request.get_json()
+
+    required = ['type', 'title']
+    if not all(k in data for k in required):
+        return jsonify({'error': 'Missing required fields: type, title'}), 400
+
+    try:
+        asset = Asset.create(
+            type=data['type'],
+            title=data['title'],
+            content_path=data.get('content_path'),
+            preview=data.get('preview'),
+            metadata=data.get('metadata')
+        )
+        return jsonify(asset.to_dict()), 201
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/assets', methods=['GET'])
+def list_assets():
+    """List assets with optional filters"""
+    asset_type = request.args.get('type')
+    starred = request.args.get('starred')
+    collection_id = request.args.get('collection_id')
+    limit = int(request.args.get('limit', 50))
+    offset = int(request.args.get('offset', 0))
+
+    if starred is not None:
+        starred = starred.lower() == 'true'
+
+    assets = Asset.list(
+        type=asset_type,
+        starred=starred,
+        collection_id=collection_id,
+        limit=limit,
+        offset=offset
+    )
+
+    return jsonify([a.to_dict() for a in assets])
+
+
+@app.route('/api/assets/search', methods=['GET'])
+def search_assets():
+    """Full-text search across assets"""
+    query = request.args.get('q', '')
+    limit = int(request.args.get('limit', 20))
+
+    if not query:
+        return jsonify([])
+
+    assets = Asset.search(query, limit=limit)
+    return jsonify([a.to_dict() for a in assets])
+
+
+@app.route('/api/assets/<asset_id>', methods=['GET'])
+def get_asset(asset_id):
+    """Get a single asset by ID"""
+    asset = Asset.get(asset_id)
+    if not asset:
+        return jsonify({'error': 'Asset not found'}), 404
+
+    result = asset.to_dict()
+    result['collections'] = [c.to_dict() for c in asset.get_collections()]
+    return jsonify(result)
+
+
+@app.route('/api/assets/<asset_id>', methods=['PUT'])
+def update_asset(asset_id):
+    """Update an asset"""
+    asset = Asset.get(asset_id)
+    if not asset:
+        return jsonify({'error': 'Asset not found'}), 404
+
+    data = request.get_json()
+    allowed = {'title', 'content_path', 'preview', 'metadata', 'starred'}
+    updates = {k: v for k, v in data.items() if k in allowed}
+
+    if updates:
+        asset.update(**updates)
+
+    return jsonify(asset.to_dict())
+
+
+@app.route('/api/assets/<asset_id>', methods=['DELETE'])
+def delete_asset(asset_id):
+    """Delete an asset"""
+    asset = Asset.get(asset_id)
+    if not asset:
+        return jsonify({'error': 'Asset not found'}), 404
+
+    asset.delete()
+    return jsonify({'success': True})
+
+
+@app.route('/api/assets/<asset_id>/collections', methods=['POST'])
+def add_asset_to_collection(asset_id):
+    """Add an asset to a collection"""
+    asset = Asset.get(asset_id)
+    if not asset:
+        return jsonify({'error': 'Asset not found'}), 404
+
+    data = request.get_json()
+    collection_id = data.get('collection_id')
+
+    if not collection_id:
+        return jsonify({'error': 'collection_id is required'}), 400
+
+    collection = Collection.get(collection_id)
+    if not collection:
+        return jsonify({'error': 'Collection not found'}), 404
+
+    asset.add_to_collection(collection_id)
+    return jsonify({'success': True})
+
+
+@app.route('/api/assets/<asset_id>/collections/<collection_id>', methods=['DELETE'])
+def remove_asset_from_collection(asset_id, collection_id):
+    """Remove an asset from a collection"""
+    asset = Asset.get(asset_id)
+    if not asset:
+        return jsonify({'error': 'Asset not found'}), 404
+
+    asset.remove_from_collection(collection_id)
+    return jsonify({'success': True})
+
+
+# ============================================================================
+# COLLECTION MANAGEMENT API (P0)
+# ============================================================================
+
+@app.route('/api/collections', methods=['POST'])
+def create_collection():
+    """Create a new collection"""
+    data = request.get_json()
+
+    if 'name' not in data:
+        return jsonify({'error': 'name is required'}), 400
+
+    try:
+        collection = Collection.create(
+            name=data['name'],
+            description=data.get('description'),
+            color=data.get('color', '#6366f1'),
+            icon=data.get('icon')
+        )
+        return jsonify(collection.to_dict()), 201
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/collections', methods=['GET'])
+def list_collections():
+    """List all collections"""
+    collections = Collection.list()
+    return jsonify([c.to_dict() for c in collections])
+
+
+@app.route('/api/collections/<collection_id>', methods=['GET'])
+def get_collection(collection_id):
+    """Get a collection with its assets"""
+    collection = Collection.get(collection_id)
+    if not collection:
+        return jsonify({'error': 'Collection not found'}), 404
+
+    limit = int(request.args.get('limit', 50))
+    offset = int(request.args.get('offset', 0))
+
+    result = collection.to_dict()
+    result['assets'] = [a.to_dict() for a in collection.get_assets(limit=limit, offset=offset)]
+    return jsonify(result)
+
+
+@app.route('/api/collections/<collection_id>', methods=['PUT'])
+def update_collection(collection_id):
+    """Update a collection"""
+    collection = Collection.get(collection_id)
+    if not collection:
+        return jsonify({'error': 'Collection not found'}), 404
+
+    data = request.get_json()
+    allowed = {'name', 'description', 'color', 'icon'}
+    updates = {k: v for k, v in data.items() if k in allowed}
+
+    if updates:
+        collection.update(**updates)
+
+    return jsonify(collection.to_dict())
+
+
+@app.route('/api/collections/<collection_id>', methods=['DELETE'])
+def delete_collection(collection_id):
+    """Delete a collection (assets are preserved)"""
+    collection = Collection.get(collection_id)
+    if not collection:
+        return jsonify({'error': 'Collection not found'}), 404
+
+    collection.delete()
+    return jsonify({'success': True})
+
+
 if __name__ == '__main__':
     OUTPUT_DIR.mkdir(exist_ok=True)
     TIKTOK_OUTPUT_DIR.mkdir(exist_ok=True)
+
+    # Initialize asset database (P0)
+    init_db()
+    logger.info("SYSTEM", "Asset database initialized")
+
     # IMPORTANT: use_reloader=False prevents Flask from restarting when Whisper
     # or other libraries touch their own files during import/execution.
     # The watchdog was incorrectly detecting whisper/transcribe.py access as a change.
