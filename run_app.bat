@@ -42,6 +42,12 @@ echo [4/4] Checking yt-dlp (fallback)...
 C:\Python312\python.exe -m pip install yt-dlp --quiet 2>nul
 
 echo.
+echo [MIGRATE] Running asset library migrations...
+C:\Python312\python.exe -m storage.migrate 2>nul
+echo [MIGRATE] Updating asset metadata...
+C:\Python312\python.exe -m storage.update_metadata 2>nul
+
+echo.
 echo ========================================
 echo  Starting server at http://localhost:5000
 echo  Press Ctrl+C to stop

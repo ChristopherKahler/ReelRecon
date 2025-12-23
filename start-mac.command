@@ -67,6 +67,13 @@ python3 -m pip install yt-dlp --quiet 2>/dev/null || echo "[SKIP] yt-dlp install
 # Create output directory
 mkdir -p output
 
+# Run database migrations (safe to run multiple times)
+echo ""
+echo "[MIGRATE] Running asset library migrations..."
+python3 -m storage.migrate 2>/dev/null || echo "[SKIP] Migration skipped"
+echo "[MIGRATE] Updating asset metadata..."
+python3 -m storage.update_metadata 2>/dev/null || echo "[SKIP] Metadata update skipped"
+
 echo ""
 echo "[READY] Starting server..."
 echo ""

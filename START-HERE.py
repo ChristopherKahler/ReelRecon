@@ -107,6 +107,28 @@ else:
 # Create output directory
 os.makedirs("output", exist_ok=True)
 
+# Run database migrations (safe to run multiple times)
+print()
+print("[MIGRATE] Running asset library migrations...")
+try:
+    result = subprocess.run([sys.executable, "-m", "storage.migrate"], capture_output=True, text=True)
+    if result.returncode == 0:
+        print("[OK] Migration complete")
+    else:
+        print("[SKIP] Migration skipped (may already be done)")
+except Exception as e:
+    print(f"[SKIP] Migration skipped: {e}")
+
+print("[MIGRATE] Updating asset metadata...")
+try:
+    result = subprocess.run([sys.executable, "-m", "storage.update_metadata"], capture_output=True, text=True)
+    if result.returncode == 0:
+        print("[OK] Metadata updated")
+    else:
+        print("[SKIP] Metadata update skipped")
+except Exception as e:
+    print(f"[SKIP] Metadata update skipped: {e}")
+
 print()
 print("[READY] Starting server...")
 print()
