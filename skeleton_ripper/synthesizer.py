@@ -6,6 +6,7 @@ patterns across all extracted skeletons and generate actionable templates.
 """
 
 import json
+import traceback
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Optional
@@ -114,6 +115,7 @@ class PatternSynthesizer:
 
         except Exception as e:
             logger.error("SYNTH", f"Synthesis failed: {e}")
+            logger.debug("SYNTH", f"Stack trace:\n{traceback.format_exc()}")
 
             if retry_on_failure:
                 logger.info("SYNTH", "Retrying synthesis...")
@@ -140,6 +142,7 @@ class PatternSynthesizer:
 
                 except Exception as retry_error:
                     logger.error("SYNTH", f"Synthesis retry failed: {retry_error}")
+                    logger.debug("SYNTH", f"Retry stack trace:\n{traceback.format_exc()}")
 
             return SynthesisResult(
                 success=False,

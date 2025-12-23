@@ -1,0 +1,10 @@
+{
+  "ai_provider": "local",
+  "local_model": "qwen3:8B",
+  "openai_model": "gpt-4o-mini",
+  "anthropic_model": "claude-3-5-haiku-20241022",
+  "google_model": "gemini-1.5-flash",
+  "openai_key": "",
+  "anthropic_key": "",
+  "google_key": ""
+}

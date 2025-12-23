@@ -69,3 +69,6 @@ ehthumbs.db
 # Temporary files
 *.tmp
 *.temp
+
+# Cache directory
+cache/

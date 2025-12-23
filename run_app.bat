@@ -2,10 +2,35 @@
 cd /d %~dp0
 
 echo ========================================
-echo  IG REEL SCRAPER // TACTICAL
+echo  REELRECON // TACTICAL
 echo  Flask Application
 echo ========================================
 echo.
+
+REM Create config.json from template if it doesn't exist
+if not exist "config.json" (
+    if exist "config.template.json" (
+        copy "config.template.json" "config.json" >nul
+        echo [CONFIG] Created config.json from template
+        echo          Add your API keys to config.json for cloud AI features
+        echo.
+    ) else (
+        echo [CONFIG] Creating default config.json...
+        echo { > config.json
+        echo   "ai_provider": "local", >> config.json
+        echo   "local_model": "qwen3:8B", >> config.json
+        echo   "openai_model": "gpt-4o-mini", >> config.json
+        echo   "anthropic_model": "claude-3-5-haiku-20241022", >> config.json
+        echo   "google_model": "gemini-1.5-flash", >> config.json
+        echo   "openai_key": "", >> config.json
+        echo   "anthropic_key": "", >> config.json
+        echo   "google_key": "" >> config.json
+        echo } >> config.json
+        echo [CONFIG] Created default config.json
+        echo          Add your API keys for cloud AI features
+        echo.
+    )
+)
 
 echo [1/4] Checking Flask...
 C:\Python312\python.exe -m pip install flask --quiet

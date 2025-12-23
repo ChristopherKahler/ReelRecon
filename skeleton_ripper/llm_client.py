@@ -12,6 +12,8 @@ Uses requests for API calls to minimize dependencies.
 
 import os
 import json
+import time
+import traceback
 import requests
 from dataclasses import dataclass
 from typing import Optional
@@ -107,7 +109,21 @@ class LLMClient:
         response = client.chat(system_prompt, user_prompt)
     """
 
-    def __init__(self, provider: str, model: str, timeout: int = 120):
+    # Retry configuration
+    DEFAULT_MAX_RETRIES = 3
+    DEFAULT_BASE_DELAY = 1.0  # seconds
+    DEFAULT_MAX_DELAY = 30.0  # seconds
+    RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
+
+    def __init__(
+        self,
+        provider: str,
+        model: str,
+        timeout: int = 120,
+        max_retries: int = DEFAULT_MAX_RETRIES,
+        base_delay: float = DEFAULT_BASE_DELAY,
+        max_delay: float = DEFAULT_MAX_DELAY
+    ):
         """
         Initialize LLM client.
 
@@ -115,6 +131,9 @@ class LLMClient:
             provider: Provider ID ('openai', 'anthropic', 'google', 'local')
             model: Model ID (e.g., 'gpt-4o-mini', 'claude-3-haiku-20240307')
             timeout: Request timeout in seconds
+            max_retries: Maximum retry attempts on transient failures
+            base_delay: Base delay for exponential backoff (seconds)
+            max_delay: Maximum delay between retries (seconds)
         """
         if provider not in PROVIDERS:
             raise ValueError(f"Unknown provider: {provider}. Valid: {list(PROVIDERS.keys())}")
@@ -122,6 +141,9 @@ class LLMClient:
         self.provider = provider
         self.model = model
         self.timeout = timeout
+        self.max_retries = max_retries
+        self.base_delay = base_delay
+        self.max_delay = max_delay
         self.config = PROVIDERS[provider]
 
         # Get API key (except for local)
@@ -134,7 +156,7 @@ class LLMClient:
                     f"Set {self.config.api_key_env} environment variable."
                 )
 
-        logger.info("LLM", f"LLM client initialized: {provider}/{model}")
+        logger.info("LLM", f"LLM client initialized: {provider}/{model} (retries={max_retries})")
 
     def complete(self, prompt: str, temperature: float = 0.7) -> str:
         """
@@ -156,7 +178,7 @@ class LLMClient:
         temperature: float = 0.7
     ) -> str:
         """
-        Chat completion with optional system prompt.
+        Chat completion with optional system prompt and retry logic.
 
         Args:
             user_prompt: User message
@@ -165,17 +187,82 @@ class LLMClient:
 
         Returns:
             Generated text response
+
+        Raises:
+            Exception: If all retries fail
         """
-        if self.provider == 'openai':
-            return self._call_openai(system_prompt, user_prompt, temperature)
-        elif self.provider == 'anthropic':
-            return self._call_anthropic(system_prompt, user_prompt, temperature)
-        elif self.provider == 'google':
-            return self._call_google(system_prompt, user_prompt, temperature)
-        elif self.provider == 'local':
-            return self._call_ollama(system_prompt, user_prompt, temperature)
-        else:
-            raise ValueError(f"Provider not implemented: {self.provider}")
+        start_time = time.time()
+        prompt_preview = user_prompt[:100] + "..." if len(user_prompt) > 100 else user_prompt
+        logger.debug("LLM", f"Request to {self.provider}/{self.model}: {prompt_preview}")
+
+        last_exception = None
+
+        for attempt in range(self.max_retries + 1):
+            try:
+                if self.provider == 'openai':
+                    response = self._call_openai(system_prompt, user_prompt, temperature)
+                elif self.provider == 'anthropic':
+                    response = self._call_anthropic(system_prompt, user_prompt, temperature)
+                elif self.provider == 'google':
+                    response = self._call_google(system_prompt, user_prompt, temperature)
+                elif self.provider == 'local':
+                    response = self._call_ollama(system_prompt, user_prompt, temperature)
+                else:
+                    raise ValueError(f"Provider not implemented: {self.provider}")
+
+                # Success - log timing and response preview
+                elapsed = time.time() - start_time
+                response_preview = response[:100] + "..." if len(response) > 100 else response
+                logger.debug("LLM", f"Response ({elapsed:.2f}s): {response_preview}")
+                logger.info("LLM", f"LLM call complete: {self.provider}/{self.model} in {elapsed:.2f}s")
+
+                return response
+
+            except requests.exceptions.HTTPError as e:
+                last_exception = e
+                status_code = e.response.status_code if e.response is not None else 0
+
+                # Check if retryable
+                if status_code in self.RETRYABLE_STATUS_CODES and attempt < self.max_retries:
+                    delay = min(self.base_delay * (2 ** attempt), self.max_delay)
+                    logger.warning(
+                        "LLM",
+                        f"HTTP {status_code} error (attempt {attempt + 1}/{self.max_retries + 1}), "
+                        f"retrying in {delay:.1f}s: {e}"
+                    )
+                    time.sleep(delay)
+                    continue
+                else:
+                    # Non-retryable or max retries reached
+                    logger.error("LLM", f"HTTP error (non-retryable or max retries): {e}")
+                    logger.debug("LLM", f"Stack trace:\n{traceback.format_exc()}")
+                    raise
+
+            except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
+                last_exception = e
+
+                if attempt < self.max_retries:
+                    delay = min(self.base_delay * (2 ** attempt), self.max_delay)
+                    logger.warning(
+                        "LLM",
+                        f"Connection error (attempt {attempt + 1}/{self.max_retries + 1}), "
+                        f"retrying in {delay:.1f}s: {e}"
+                    )
+                    time.sleep(delay)
+                    continue
+                else:
+                    logger.error("LLM", f"Connection error after {self.max_retries + 1} attempts: {e}")
+                    logger.debug("LLM", f"Stack trace:\n{traceback.format_exc()}")
+                    raise
+
+            except Exception as e:
+                # Unexpected error - log stack trace and don't retry
+                logger.error("LLM", f"Unexpected error: {e}")
+                logger.debug("LLM", f"Stack trace:\n{traceback.format_exc()}")
+                raise
+
+        # Should not reach here, but just in case
+        raise last_exception or Exception("Max retries exceeded")
 
     def _call_openai(
         self,

@@ -2102,6 +2102,21 @@
             document.getElementById('progressBar').style.width = '100%';
 
             try {
+                // First get the status to extract the actual report directory name
+                const statusResponse = await fetch(`/api/skeleton-ripper/status/${currentJobId}`);
+                let actualReportId = currentJobId;
+
+                if (statusResponse.ok) {
+                    const statusData = await statusResponse.json();
+                    // Extract report_id from the report_path (e.g., "output/skeleton_reports/20251223_085943_sr_xxx/report.md")
+                    if (statusData.result?.report_path) {
+                        const pathParts = statusData.result.report_path.split('/');
+                        // The report_id is the directory name (second to last part before report.md)
+                        actualReportId = pathParts[pathParts.length - 2] || currentJobId;
+                        console.log('Extracted report_id from path:', actualReportId);
+                    }
+                }
+
                 // Fetch both markdown and JSON in parallel
                 const [mdResponse, jsonResponse] = await Promise.all([
                     fetch(`/api/skeleton-ripper/report/${currentJobId}`),
@@ -2118,8 +2133,8 @@
                     jsonData = await jsonResponse.json();
                 }
 
-                // Store report data
-                currentReportData = { markdown, json: jsonData, reportId: currentJobId };
+                // Store report data with the actual report_id (directory name)
+                currentReportData = { markdown, json: jsonData, reportId: actualReportId };
 
                 // Hide progress, show tabbed interface
                 document.getElementById('progressSection').style.display = 'none';

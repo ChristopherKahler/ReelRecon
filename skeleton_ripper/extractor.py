@@ -6,6 +6,7 @@ Batches 3-5 transcripts per call for efficiency.
 """
 
 import json
+import traceback
 from typing import Optional
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -199,6 +200,7 @@ class BatchedExtractor:
 
         except Exception as e:
             logger.error("EXTRACT", f"Batch extraction error: {e}")
+            logger.debug("EXTRACT", f"Stack trace:\n{traceback.format_exc()}")
             # Mark all as failed
             result.failed_video_ids = [t.get('video_id', 'unknown') for t in batch]
             return result

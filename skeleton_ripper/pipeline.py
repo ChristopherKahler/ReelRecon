@@ -13,6 +13,8 @@ Coordinates all stages:
 import os
 import json
 import uuid
+import time
+import traceback
 from pathlib import Path
 from datetime import datetime
 from dataclasses import dataclass, field, asdict
@@ -197,6 +199,9 @@ class SkeletonRipperPipeline:
 
         logger.info("SKELETON", f"Starting job {job_id}: {len(config.usernames)} creators, {config.videos_per_creator} videos each")
 
+        # Stage timing metrics
+        stage_times = {}
+
         try:
             # Initialize LLM client
             llm_client = LLMClient(
@@ -205,6 +210,7 @@ class SkeletonRipperPipeline:
             )
 
             # Stage 0 & 1: Scrape and transcribe
+            stage_start = time.time()
             progress.status = JobStatus.SCRAPING
             progress.phase = "Scraping videos..."
             self._notify(on_progress, progress)
@@ -214,6 +220,8 @@ class SkeletonRipperPipeline:
                 progress=progress,
                 on_progress=on_progress
             )
+            stage_times['scrape_transcribe'] = time.time() - stage_start
+            logger.info("SKELETON", f"Stage 1 (Scrape/Transcribe) complete: {stage_times['scrape_transcribe']:.2f}s")
 
             # Check validity threshold
             valid_count = sum(1 for t in transcripts if is_valid_transcript(t.get('transcript', '')))
@@ -241,6 +249,7 @@ class SkeletonRipperPipeline:
             ]
 
             # Stage 2: Extraction
+            stage_start = time.time()
             progress.status = JobStatus.EXTRACTING
             progress.phase = "Extracting content skeletons..."
             self._notify(on_progress, progress)
@@ -255,6 +264,8 @@ class SkeletonRipperPipeline:
 
             result.skeletons = extraction_result.successful
             progress.skeletons_extracted = len(extraction_result.successful)
+            stage_times['extraction'] = time.time() - stage_start
+            logger.info("SKELETON", f"Stage 2 (Extraction) complete: {stage_times['extraction']:.2f}s, {len(result.skeletons)} skeletons")
 
             if extraction_result.failed_video_ids:
                 progress.errors.append(
@@ -265,6 +276,7 @@ class SkeletonRipperPipeline:
                 raise ValueError("No skeletons extracted successfully")
 
             # Stage 3: Aggregation
+            stage_start = time.time()
             progress.status = JobStatus.AGGREGATING
             progress.phase = "Aggregating patterns..."
             progress.message = f"Analyzing {len(result.skeletons)} skeletons..."
@@ -272,10 +284,13 @@ class SkeletonRipperPipeline:
 
             aggregator = SkeletonAggregator()
             result.aggregated = aggregator.aggregate(result.skeletons)
+            stage_times['aggregation'] = time.time() - stage_start
+            logger.info("SKELETON", f"Stage 3 (Aggregation) complete: {stage_times['aggregation']:.2f}s")
             progress.message = "Patterns aggregated"
             self._notify(on_progress, progress)
 
             # Stage 4: Synthesis
+            stage_start = time.time()
             progress.status = JobStatus.SYNTHESIZING
             progress.phase = "Synthesizing content strategy..."
             progress.message = "Calling LLM for synthesis..."
@@ -283,12 +298,15 @@ class SkeletonRipperPipeline:
 
             synthesizer = PatternSynthesizer(llm_client)
             result.synthesis = synthesizer.synthesize(result.aggregated)
+            stage_times['synthesis'] = time.time() - stage_start
+            logger.info("SKELETON", f"Stage 4 (Synthesis) complete: {stage_times['synthesis']:.2f}s")
 
             if not result.synthesis.success:
                 progress.errors.append(f"Synthesis failed: {result.synthesis.error}")
                 logger.error("SKELETON", f"Synthesis failed: {result.synthesis.error}")
 
             # Stage 5: Output
+            stage_start = time.time()
             progress.phase = "Generating report..."
             progress.message = "Saving outputs..."
             self._notify(on_progress, progress)
@@ -297,8 +315,11 @@ class SkeletonRipperPipeline:
             result.report_path = output_paths.get('report')
             result.skeletons_path = output_paths.get('skeletons')
             result.synthesis_path = output_paths.get('synthesis')
+            stage_times['output'] = time.time() - stage_start
+            logger.info("SKELETON", f"Stage 5 (Output) complete: {stage_times['output']:.2f}s")
 
-            # Complete
+            # Complete - log total timing
+            total_time = sum(stage_times.values())
             progress.status = JobStatus.COMPLETE
             progress.phase = "Analysis Complete"
             progress.message = f"✓ {len(result.skeletons)} skeletons extracted from {len(config.usernames)} creator(s)"
@@ -306,9 +327,11 @@ class SkeletonRipperPipeline:
             result.success = True
 
             logger.info("SKELETON", f"Job {job_id} complete: {len(result.skeletons)} skeletons extracted")
+            logger.info("SKELETON", f"Total time: {total_time:.2f}s | Scrape: {stage_times.get('scrape_transcribe', 0):.1f}s | Extract: {stage_times.get('extraction', 0):.1f}s | Aggregate: {stage_times.get('aggregation', 0):.1f}s | Synthesize: {stage_times.get('synthesis', 0):.1f}s | Output: {stage_times.get('output', 0):.1f}s")
 
         except Exception as e:
             logger.error("SKELETON", f"Pipeline failed: {e}")
+            logger.debug("SKELETON", f"Stack trace:\n{traceback.format_exc()}")
             progress.status = JobStatus.FAILED
             progress.phase = "Failed"
             progress.errors.append(str(e))
@@ -423,6 +446,7 @@ class SkeletonRipperPipeline:
 
             except Exception as e:
                 logger.error("SKELETON", f"Error fetching reels for @{username}: {e}")
+                logger.debug("SKELETON", f"Stack trace:\n{traceback.format_exc()}")
                 progress.errors.append(f"@{username}: {str(e)}")
                 continue
 
@@ -522,8 +546,8 @@ class SkeletonRipperPipeline:
                 try:
                     if video_path.exists():
                         video_path.unlink()
-                except:
-                    pass
+                except OSError as cleanup_err:
+                    logger.debug("SKELETON", f"Failed to cleanup temp file {video_path}: {cleanup_err}")
 
                 # Validate transcript
                 if transcript_text and is_valid_transcript(transcript_text):

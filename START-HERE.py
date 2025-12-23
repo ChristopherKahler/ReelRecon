@@ -19,6 +19,35 @@ print("  REELRECON // TACTICAL")
 print("=" * 40)
 print()
 
+# Create config.json from template if it doesn't exist
+config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
+template_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.template.json")
+
+if not os.path.exists(config_path):
+    if os.path.exists(template_path):
+        shutil.copy(template_path, config_path)
+        print("[CONFIG] Created config.json from template")
+        print("         Add your API keys to config.json for cloud AI features")
+        print()
+    else:
+        # Create minimal config if template missing
+        import json
+        default_config = {
+            "ai_provider": "local",
+            "local_model": "qwen3:8B",
+            "openai_model": "gpt-4o-mini",
+            "anthropic_model": "claude-3-5-haiku-20241022",
+            "google_model": "gemini-1.5-flash",
+            "openai_key": "",
+            "anthropic_key": "",
+            "google_key": ""
+        }
+        with open(config_path, "w") as f:
+            json.dump(default_config, f, indent=2)
+        print("[CONFIG] Created default config.json")
+        print("         Add your API keys for cloud AI features")
+        print()
+
 # Check for ffmpeg
 ffmpeg_available = shutil.which("ffmpeg") is not None
 
