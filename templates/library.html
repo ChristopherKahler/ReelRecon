@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ReelRecon // LIBRARY</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/tactical.css') }}">
+    <style>
+        /* Library Page Styles - Using tactical.css variables */
+        .lib-page {
+            min-height: 100vh;
+            padding: var(--space-lg);
+        }
+
+        .lib-container {
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        /* Header */
+        .lib-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: var(--space-xl);
+            padding-bottom: var(--space-md);
+            border-bottom: 1px solid var(--color-border);
+        }
+
+        .lib-title {
+            display: flex;
+            align-items: baseline;
+            gap: var(--space-md);
+        }
+
+        .lib-title h1 {
+            font-family: var(--font-mono);
+            font-size: 1.5rem;
+            color: var(--color-accent-primary);
+            margin: 0;
+            text-shadow: 0 0 20px var(--color-accent-glow);
+        }
+
+        .lib-title .subtitle {
+            font-family: var(--font-mono);
+            font-size: 0.7rem;
+            color: var(--color-text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+        }
+
+        .back-link {
+            display: flex;
+            align-items: center;
+            gap: var(--space-xs);
+            color: var(--color-text-muted);
+            text-decoration: none;
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            padding: var(--space-sm) var(--space-md);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-sm);
+            transition: all 0.2s;
+        }
+
+        .back-link:hover {
+            color: var(--color-accent-primary);
+            border-color: var(--color-accent-primary);
+            background: var(--color-accent-muted);
+        }
+
+        /* Main Grid - Sidebar + Content */
+        .lib-grid {
+            display: grid;
+            grid-template-columns: 280px 1fr;
+            gap: var(--space-lg);
+            align-items: start;
+        }
+
+        /* Sidebar */
+        .lib-sidebar {
+            background: var(--color-bg-panel);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: var(--space-md);
+            position: sticky;
+            top: var(--space-lg);
+        }
+
+        .sidebar-section {
+            margin-bottom: var(--space-lg);
+        }
+
+        .sidebar-section:last-child {
+            margin-bottom: 0;
+        }
+
+        .sidebar-title {
+            font-family: var(--font-mono);
+            font-size: 0.7rem;
+            color: var(--color-text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: var(--space-sm);
+            padding-bottom: var(--space-xs);
+            border-bottom: 1px solid var(--color-border-dim);
+        }
+
+        /* Collection List */
+        .collection-list {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-xs);
+        }
+
+        .collection-item {
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+            padding: var(--space-sm);
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 1px solid transparent;
+        }
+
+        .collection-item:hover {
+            background: var(--color-accent-muted);
+            border-color: var(--color-border-dim);
+        }
+
+        .collection-item.active {
+            background: var(--color-accent-dim);
+            border-color: var(--color-accent-primary);
+        }
+
+        .collection-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 3px;
+            flex-shrink: 0;
+        }
+
+        .collection-name {
+            font-size: 13px;
+            color: var(--color-text-primary);
+            flex: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .collection-count {
+            font-family: var(--font-mono);
+            font-size: 11px;
+            color: var(--color-text-muted);
+            background: var(--color-bg-elevated);
+            padding: 2px 6px;
+            border-radius: 10px;
+        }
+
+        /* All Items special item */
+        .collection-item.all-items {
+            border-bottom: 1px solid var(--color-border-dim);
+            padding-bottom: var(--space-md);
+            margin-bottom: var(--space-sm);
+        }
+
+        .collection-item.all-items .collection-color {
+            background: linear-gradient(135deg, var(--color-accent-primary), #6366f1);
+        }
+
+        /* New Collection Button */
+        .new-collection-btn {
+            display: flex;
+            align-items: center;
+            gap: var(--space-xs);
+            width: 100%;
+            padding: var(--space-sm);
+            margin-top: var(--space-sm);
+            font-family: var(--font-mono);
+            font-size: 11px;
+            color: var(--color-text-muted);
+            background: transparent;
+            border: 1px dashed var(--color-border);
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .new-collection-btn:hover {
+            color: var(--color-accent-primary);
+            border-color: var(--color-accent-primary);
+            background: var(--color-accent-muted);
+        }
+
+        /* Content Area */
+        .lib-content {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-lg);
+        }
+
+        /* Toolbar */
+        .lib-toolbar {
+            display: flex;
+            align-items: center;
+            gap: var(--space-md);
+            padding: var(--space-md);
+            background: var(--color-bg-panel);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+        }
+
+        .search-wrapper {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+            background: var(--color-bg-input);
+            border: 1px solid var(--color-border-dim);
+            border-radius: var(--radius-sm);
+            padding: 0 var(--space-sm);
+        }
+
+        .search-wrapper:focus-within {
+            border-color: var(--color-accent-primary);
+        }
+
+        .search-icon {
+            color: var(--color-text-muted);
+        }
+
+        .search-input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: var(--color-text-primary);
+            font-family: var(--font-mono);
+            font-size: 13px;
+            padding: var(--space-sm) 0;
+            outline: none;
+        }
+
+        .search-input::placeholder {
+            color: var(--color-text-muted);
+        }
+
+        .filter-select {
+            background: var(--color-bg-input);
+            border: 1px solid var(--color-border-dim);
+            border-radius: var(--radius-sm);
+            color: var(--color-text-primary);
+            font-family: var(--font-mono);
+            font-size: 12px;
+            padding: var(--space-sm) var(--space-md);
+            cursor: pointer;
+        }
+
+        .filter-select:focus {
+            border-color: var(--color-accent-primary);
+            outline: none;
+        }
+
+        .sort-select {
+            background: var(--color-bg-input);
+            border: 1px solid var(--color-border-dim);
+            border-radius: var(--radius-sm);
+            color: var(--color-text-primary);
+            font-family: var(--font-mono);
+            font-size: 12px;
+            padding: var(--space-sm) var(--space-md);
+            cursor: pointer;
+        }
+
+        /* Asset Grid */
+        .asset-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: var(--space-md);
+        }
+
+        /* Asset Card */
+        .asset-card {
+            background: var(--color-bg-panel);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+
+        .asset-card:hover {
+            border-color: var(--color-accent-primary);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(16, 185, 129, 0.1);
+        }
+
+        .asset-card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: var(--space-sm) var(--space-md);
+            background: var(--color-bg-elevated);
+            border-bottom: 1px solid var(--color-border-dim);
+        }
+
+        .asset-type-badge {
+            display: flex;
+            align-items: center;
+            gap: var(--space-xs);
+            font-family: var(--font-mono);
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            padding: 3px 8px;
+            border-radius: 4px;
+        }
+
+        .asset-type-badge.skeleton {
+            background: rgba(99, 102, 241, 0.2);
+            color: #818cf8;
+        }
+
+        .asset-type-badge.scrape {
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--color-accent-primary);
+        }
+
+        .asset-type-badge.transcript {
+            background: rgba(245, 158, 11, 0.2);
+            color: #fbbf24;
+        }
+
+        .asset-starred {
+            color: var(--color-text-muted);
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+
+        .asset-starred:hover,
+        .asset-starred.active {
+            color: #fbbf24;
+        }
+
+        .asset-card-body {
+            padding: var(--space-md);
+        }
+
+        .asset-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--color-text-primary);
+            margin-bottom: var(--space-xs);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .asset-preview {
+            font-size: 12px;
+            color: var(--color-text-secondary);
+            line-height: 1.4;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            margin-bottom: var(--space-sm);
+        }
+
+        .asset-meta {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding-top: var(--space-sm);
+            border-top: 1px solid var(--color-border-dim);
+        }
+
+        .asset-date {
+            font-family: var(--font-mono);
+            font-size: 11px;
+            color: var(--color-text-muted);
+        }
+
+        .asset-collections {
+            display: flex;
+            gap: 4px;
+        }
+
+        .asset-collection-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+        /* Empty State */
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: var(--space-2xl);
+            text-align: center;
+            color: var(--color-text-muted);
+        }
+
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: var(--space-md);
+            opacity: 0.5;
+        }
+
+        .empty-state-title {
+            font-family: var(--font-mono);
+            font-size: 14px;
+            color: var(--color-text-secondary);
+            margin-bottom: var(--space-xs);
+        }
+
+        .empty-state-text {
+            font-size: 13px;
+            max-width: 300px;
+        }
+
+        /* Loading State */
+        .loading-spinner {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: var(--space-2xl);
+        }
+
+        .spinner {
+            width: 32px;
+            height: 32px;
+            border: 2px solid var(--color-border);
+            border-top-color: var(--color-accent-primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        /* Toast notifications */
+        .toast-container {
+            position: fixed;
+            bottom: var(--space-lg);
+            right: var(--space-lg);
+            z-index: 1000;
+        }
+
+        .toast {
+            background: var(--color-bg-panel);
+            border: 1px solid var(--color-accent-primary);
+            border-radius: var(--radius-sm);
+            padding: var(--space-sm) var(--space-md);
+            margin-top: var(--space-sm);
+            font-family: var(--font-mono);
+            font-size: 12px;
+            color: var(--color-text-primary);
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Scan Lines Overlay -->
+    <div class="scan-lines"></div>
+
+    <div class="lib-page">
+        <div class="lib-container">
+            <!-- Header -->
+            <header class="lib-header">
+                <div class="lib-title">
+                    <h1>// LIBRARY</h1>
+                    <span class="subtitle">ASSET MANAGEMENT</span>
+                </div>
+                <a href="/" class="back-link">
+                    <span>&larr;</span> BACK TO DASHBOARD
+                </a>
+            </header>
+
+            <!-- Main Grid -->
+            <div class="lib-grid">
+                <!-- Sidebar -->
+                <aside class="lib-sidebar">
+                    <div class="sidebar-section">
+                        <div class="sidebar-title">COLLECTIONS</div>
+                        <div class="collection-list" id="collectionList">
+                            <div class="collection-item all-items active" data-collection="all" onclick="filterByCollection('all')">
+                                <div class="collection-color"></div>
+                                <span class="collection-name">All Items</span>
+                                <span class="collection-count" id="totalCount">0</span>
+                            </div>
+                            <!-- Collections loaded dynamically -->
+                        </div>
+                        <button class="new-collection-btn" onclick="showNewCollectionModal()">
+                            <span>+</span> NEW COLLECTION
+                        </button>
+                    </div>
+
+                    <div class="sidebar-section">
+                        <div class="sidebar-title">FILTER BY TYPE</div>
+                        <div class="collection-list">
+                            <div class="collection-item" data-type="skeleton" onclick="filterByType('skeleton')">
+                                <div class="collection-color" style="background: #818cf8;"></div>
+                                <span class="collection-name">Skeleton Reports</span>
+                                <span class="collection-count" id="skeletonCount">0</span>
+                            </div>
+                            <div class="collection-item" data-type="scrape" onclick="filterByType('scrape')">
+                                <div class="collection-color" style="background: var(--color-accent-primary);"></div>
+                                <span class="collection-name">Scrapes</span>
+                                <span class="collection-count" id="scrapeCount">0</span>
+                            </div>
+                            <div class="collection-item" data-type="transcript" onclick="filterByType('transcript')">
+                                <div class="collection-color" style="background: #fbbf24;"></div>
+                                <span class="collection-name">Transcripts</span>
+                                <span class="collection-count" id="transcriptCount">0</span>
+                            </div>
+                        </div>
+                    </div>
+                </aside>
+
+                <!-- Content Area -->
+                <div class="lib-content">
+                    <!-- Toolbar -->
+                    <div class="lib-toolbar">
+                        <div class="search-wrapper">
+                            <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                                <circle cx="11" cy="11" r="8"/>
+                                <path d="M21 21l-4.35-4.35"/>
+                            </svg>
+                            <input type="text" class="search-input" id="searchInput" placeholder="Search assets..." oninput="debounceSearch()">
+                        </div>
+                        <select class="sort-select" id="sortSelect" onchange="loadAssets()">
+                            <option value="created_at:desc">Newest First</option>
+                            <option value="created_at:asc">Oldest First</option>
+                            <option value="title:asc">Title A-Z</option>
+                            <option value="title:desc">Title Z-A</option>
+                        </select>
+                    </div>
+
+                    <!-- Asset Grid -->
+                    <div class="asset-grid" id="assetGrid">
+                        <div class="loading-spinner">
+                            <div class="spinner"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- Save/Collect Modal Component -->
+    {% include 'components/save_collect_modal.html' %}
+    <script src="{{ url_for('static', filename='js/save_collect.js') }}"></script>
+
+    <script>
+        // State
+        let currentAssets = [];
+        let currentFilter = { type: null, collection: null, search: '' };
+        let searchTimeout = null;
+
+        // Load assets on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            loadCollections();
+            loadAssets();
+        });
+
+        // Load collections into sidebar
+        async function loadCollections() {
+            try {
+                const response = await fetch('/api/collections');
+                const collections = await response.json();
+
+                const listEl = document.getElementById('collectionList');
+                // Keep the "All Items" item
+                const allItemsEl = listEl.querySelector('.all-items');
+                listEl.innerHTML = '';
+                listEl.appendChild(allItemsEl);
+
+                collections.forEach(c => {
+                    const item = document.createElement('div');
+                    item.className = 'collection-item';
+                    item.dataset.collection = c.id;
+                    item.onclick = () => filterByCollection(c.id);
+                    item.innerHTML = `
+                        <div class="collection-color" style="background: ${c.color || '#6366f1'};"></div>
+                        <span class="collection-name">${escapeHtml(c.name)}</span>
+                        <span class="collection-count">${c.asset_count || 0}</span>
+                    `;
+                    listEl.appendChild(item);
+                });
+            } catch (error) {
+                console.error('Failed to load collections:', error);
+            }
+        }
+
+        // Load assets
+        async function loadAssets() {
+            const grid = document.getElementById('assetGrid');
+            grid.innerHTML = '<div class="loading-spinner"><div class="spinner"></div></div>';
+
+            try {
+                // Build query params
+                const params = new URLSearchParams();
+                if (currentFilter.type) params.set('type', currentFilter.type);
+                if (currentFilter.collection && currentFilter.collection !== 'all') {
+                    params.set('collection_id', currentFilter.collection);
+                }
+
+                // Get sort
+                const sortValue = document.getElementById('sortSelect').value;
+                const [sortField, sortOrder] = sortValue.split(':');
+                params.set('sort_by', sortField);
+                params.set('sort_order', sortOrder);
+
+                // Search or list
+                let url = '/api/assets';
+                if (currentFilter.search) {
+                    url = '/api/assets/search';
+                    params.set('q', currentFilter.search);
+                }
+
+                const response = await fetch(`${url}?${params}`);
+                const assets = await response.json();
+                currentAssets = assets;
+
+                // Update counts
+                updateCounts(assets);
+
+                // Render grid
+                renderAssetGrid(assets);
+            } catch (error) {
+                console.error('Failed to load assets:', error);
+                grid.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">&#9888;</div>
+                        <div class="empty-state-title">Failed to load assets</div>
+                        <div class="empty-state-text">${error.message}</div>
+                    </div>
+                `;
+            }
+        }
+
+        // Render asset grid
+        function renderAssetGrid(assets) {
+            const grid = document.getElementById('assetGrid');
+
+            if (!assets || assets.length === 0) {
+                grid.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">&#128218;</div>
+                        <div class="empty-state-title">No assets found</div>
+                        <div class="empty-state-text">Run a Skeleton analysis or scrape to start building your library.</div>
+                    </div>
+                `;
+                return;
+            }
+
+            grid.innerHTML = assets.map(asset => `
+                <div class="asset-card" onclick="openAsset('${asset.id}')">
+                    <div class="asset-card-header">
+                        <span class="asset-type-badge ${asset.type}">${getTypeIcon(asset.type)} ${asset.type}</span>
+                        <span class="asset-starred ${asset.starred ? 'active' : ''}" onclick="event.stopPropagation(); toggleStar('${asset.id}')">
+                            ${asset.starred ? '&#9733;' : '&#9734;'}
+                        </span>
+                    </div>
+                    <div class="asset-card-body">
+                        <div class="asset-title">${escapeHtml(asset.title)}</div>
+                        <div class="asset-preview">${escapeHtml(asset.preview || 'No preview available')}</div>
+                        <div class="asset-meta">
+                            <span class="asset-date">${formatDate(asset.created_at)}</span>
+                            <div class="asset-collections">
+                                ${(asset.collections || []).map(c =>
+                                    `<div class="asset-collection-dot" style="background: ${c.color || '#6366f1'};" title="${escapeHtml(c.name)}"></div>`
+                                ).join('')}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Update sidebar counts
+        function updateCounts(assets) {
+            const total = assets.length;
+            const skeleton = assets.filter(a => a.type === 'skeleton').length;
+            const scrape = assets.filter(a => a.type === 'scrape').length;
+            const transcript = assets.filter(a => a.type === 'transcript').length;
+
+            document.getElementById('totalCount').textContent = total;
+            document.getElementById('skeletonCount').textContent = skeleton;
+            document.getElementById('scrapeCount').textContent = scrape;
+            document.getElementById('transcriptCount').textContent = transcript;
+        }
+
+        // Filter functions
+        function filterByCollection(collectionId) {
+            currentFilter.collection = collectionId;
+            currentFilter.type = null;
+
+            // Update UI
+            document.querySelectorAll('.collection-item').forEach(item => {
+                item.classList.toggle('active', item.dataset.collection === collectionId);
+            });
+            document.querySelectorAll('.collection-item[data-type]').forEach(item => {
+                item.classList.remove('active');
+            });
+
+            loadAssets();
+        }
+
+        function filterByType(type) {
+            if (currentFilter.type === type) {
+                currentFilter.type = null;
+            } else {
+                currentFilter.type = type;
+            }
+            currentFilter.collection = 'all';
+
+            // Update UI
+            document.querySelectorAll('.collection-item[data-type]').forEach(item => {
+                item.classList.toggle('active', item.dataset.type === currentFilter.type);
+            });
+            document.querySelectorAll('.collection-item[data-collection]').forEach(item => {
+                item.classList.toggle('active', item.dataset.collection === 'all');
+            });
+
+            loadAssets();
+        }
+
+        // Search
+        function debounceSearch() {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                currentFilter.search = document.getElementById('searchInput').value.trim();
+                loadAssets();
+            }, 300);
+        }
+
+        // Star toggle
+        async function toggleStar(assetId) {
+            try {
+                const asset = currentAssets.find(a => a.id === assetId);
+                if (!asset) return;
+
+                const response = await fetch(`/api/assets/${assetId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ starred: !asset.starred })
+                });
+
+                if (response.ok) {
+                    asset.starred = !asset.starred;
+                    renderAssetGrid(currentAssets);
+                }
+            } catch (error) {
+                console.error('Failed to toggle star:', error);
+            }
+        }
+
+        // Open asset detail (placeholder for now)
+        function openAsset(assetId) {
+            const asset = currentAssets.find(a => a.id === assetId);
+            if (!asset) return;
+
+            // For now, if it's a skeleton report, open the report
+            if (asset.type === 'skeleton' && asset.content_path) {
+                const reportDir = asset.content_path.split('/').pop();
+                // Navigate to skeleton ripper with this report loaded
+                showToast(`Opening ${asset.title}...`);
+                // TODO: Implement asset detail view
+            } else {
+                showToast(`Asset detail view coming soon`);
+            }
+        }
+
+        // New collection modal
+        function showNewCollectionModal() {
+            // Use the SaveCollectModal for consistency
+            const name = prompt('Enter collection name:');
+            if (name && name.trim()) {
+                createCollection(name.trim());
+            }
+        }
+
+        async function createCollection(name) {
+            try {
+                const response = await fetch('/api/collections', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, color: '#6366f1' })
+                });
+
+                if (response.ok) {
+                    showToast(`Collection "${name}" created`);
+                    loadCollections();
+                }
+            } catch (error) {
+                console.error('Failed to create collection:', error);
+            }
+        }
+
+        // Utilities
+        function getTypeIcon(type) {
+            switch (type) {
+                case 'skeleton': return '&#128200;';
+                case 'scrape': return '&#128206;';
+                case 'transcript': return '&#128221;';
+                default: return '&#128196;';
+            }
+        }
+
+        function formatDate(dateStr) {
+            if (!dateStr) return '';
+            const date = new Date(dateStr);
+            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function showToast(message) {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.textContent = message;
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.remove();
+            }, 3000);
+        }
+    </script>
+</body>
+</html>

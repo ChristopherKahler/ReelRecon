@@ -346,6 +346,12 @@ def skeleton_ripper_page():
     return render_template('skeleton_ripper.html')
 
 
+@app.route('/library')
+def library_page():
+    """Asset Library page"""
+    return render_template('library.html')
+
+
 @app.route('/api/scrape', methods=['POST'])
 def start_scrape():
     """Start a new scrape for Instagram or TikTok"""
