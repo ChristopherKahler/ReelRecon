@@ -134,7 +134,7 @@ class LLMClient:
                     f"Set {self.config.api_key_env} environment variable."
                 )
 
-        logger.info(f"LLM client initialized: {provider}/{model}")
+        logger.info("LLM", f"LLM client initialized: {provider}/{model}")
 
     def complete(self, prompt: str, temperature: float = 0.7) -> str:
         """

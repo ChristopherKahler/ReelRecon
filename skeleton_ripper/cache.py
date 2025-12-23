@@ -53,7 +53,7 @@ class TranscriptCache:
         self.cache_dir = Path(base_dir) / 'cache' / 'transcripts'
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
-        logger.info(f"Transcript cache initialized at: {self.cache_dir}")
+        logger.info("CACHE", f"Transcript cache initialized at: {self.cache_dir}")
 
     def _get_cache_path(self, platform: str, username: str, video_id: str) -> Path:
         """
@@ -93,12 +93,12 @@ class TranscriptCache:
             try:
                 transcript = cache_path.read_text(encoding='utf-8')
                 if transcript.strip():  # Don't return empty transcripts
-                    logger.debug(f"Cache HIT: {platform}/{username}/{video_id}")
+                    logger.debug("CACHE", f"Cache HIT: {platform}/{username}/{video_id}")
                     return transcript
             except Exception as e:
-                logger.warning(f"Cache read error for {video_id}: {e}")
+                logger.warning("CACHE", f"Cache read error for {video_id}: {e}")
 
-        logger.debug(f"Cache MISS: {platform}/{username}/{video_id}")
+        logger.debug("CACHE", f"Cache MISS: {platform}/{username}/{video_id}")
         return None
 
     def set(
@@ -124,17 +124,17 @@ class TranscriptCache:
         """
         # Validate before caching
         if validate and not self._is_valid_transcript(transcript):
-            logger.debug(f"Not caching invalid transcript: {video_id}")
+            logger.debug("CACHE", f"Not caching invalid transcript: {video_id}")
             return False
 
         cache_path = self._get_cache_path(platform, username, video_id)
 
         try:
             cache_path.write_text(transcript, encoding='utf-8')
-            logger.debug(f"Cached transcript: {platform}/{username}/{video_id}")
+            logger.debug("CACHE", f"Cached transcript: {platform}/{username}/{video_id}")
             return True
         except Exception as e:
-            logger.warning(f"Cache write error for {video_id}: {e}")
+            logger.warning("CACHE", f"Cache write error for {video_id}: {e}")
             return False
 
     def exists(self, platform: str, username: str, video_id: str) -> bool:
@@ -168,7 +168,7 @@ class TranscriptCache:
 
         if cache_path.exists():
             cache_path.unlink()
-            logger.debug(f"Deleted cached transcript: {video_id}")
+            logger.debug("CACHE", f"Deleted cached transcript: {video_id}")
             return True
         return False
 
@@ -238,7 +238,7 @@ class TranscriptCache:
         for f in files:
             f.unlink()
 
-        logger.info(f"Cleared {len(files)} cached transcripts")
+        logger.info("CACHE", f"Cleared {len(files)} cached transcripts")
         return len(files)
 
     def clear_for_username(self, platform: str, username: str) -> int:
@@ -258,7 +258,7 @@ class TranscriptCache:
         for f in files:
             f.unlink()
 
-        logger.info(f"Cleared {len(files)} cached transcripts for {username}")
+        logger.info("CACHE", f"Cleared {len(files)} cached transcripts for {username}")
         return len(files)
 
 

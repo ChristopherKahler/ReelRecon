@@ -698,7 +698,7 @@ select.form-input {
 }
 
 .history-list {
-    max-height: 200px;
+    max-height: calc(100vh - 250px);
     overflow-y: auto;
 }
 
@@ -2167,6 +2167,30 @@ select.form-input {
 
 .platform-btn svg {
     flex-shrink: 0;
+}
+
+.platform-btn.disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    position: relative;
+}
+
+.platform-btn.disabled:hover {
+    background: transparent;
+    color: var(--color-text-muted);
+}
+
+.coming-soon-badge {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    background: var(--color-warning);
+    color: var(--color-bg-deep);
+    font-size: 0.5rem;
+    font-weight: 700;
+    padding: 2px 4px;
+    border-radius: 3px;
+    letter-spacing: 0.05em;
 }
 
 /* Platform badge in history */

@@ -87,7 +87,7 @@ class SkeletonAggregator:
             AggregatedData ready for synthesis stage
         """
         if not skeletons:
-            logger.warning("No skeletons to aggregate")
+            logger.warning("AGGREGATE", "No skeletons to aggregate")
             return AggregatedData(
                 skeletons=[],
                 creator_stats=[],
@@ -132,6 +132,7 @@ class SkeletonAggregator:
         )
 
         logger.info(
+            "AGGREGATE",
             f"Aggregated {len(skeletons)} skeletons from {len(creator_stats)} creators"
         )
 

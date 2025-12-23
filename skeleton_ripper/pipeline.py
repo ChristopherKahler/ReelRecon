@@ -64,12 +64,22 @@ class JobProgress:
     message: str = ""
 
     # Counts
-    videos_scraped: int = 0
-    videos_transcribed: int = 0
+    videos_scraped: int = 0  # Reels fetched from API (metadata)
+    videos_downloaded: int = 0  # Videos actually downloaded
+    videos_transcribed: int = 0  # Videos transcribed
     transcripts_from_cache: int = 0
     valid_transcripts: int = 0
     skeletons_extracted: int = 0
     total_target: int = 0
+
+    # Granular progress
+    current_creator: str = ""
+    current_creator_index: int = 0
+    total_creators: int = 0
+    reels_fetched: int = 0  # Reels fetched for current creator
+    current_video_index: int = 0  # Which video we're on (out of videos_per_creator)
+    extraction_batch: int = 0
+    extraction_total_batches: int = 0
 
     # Timing
     started_at: Optional[str] = None
@@ -153,7 +163,7 @@ class SkeletonRipperPipeline:
         self.default_cookies = self.base_dir / 'cookies.txt'
         self.default_tiktok_cookies = self.base_dir / 'tiktok_cookies.txt'
 
-        logger.info(f"SkeletonRipperPipeline initialized at {base_dir}")
+        logger.info("PIPELINE", f"SkeletonRipperPipeline initialized at {base_dir}")
 
     def run(
         self,
@@ -174,7 +184,8 @@ class SkeletonRipperPipeline:
         progress = JobProgress(
             status=JobStatus.PENDING,
             started_at=datetime.utcnow().isoformat(),
-            total_target=len(config.usernames) * config.videos_per_creator
+            total_target=len(config.usernames) * config.videos_per_creator,
+            total_creators=len(config.usernames)
         )
 
         result = JobResult(
@@ -184,7 +195,7 @@ class SkeletonRipperPipeline:
             progress=progress
         )
 
-        logger.info(f"Starting job {job_id}: {len(config.usernames)} creators, {config.videos_per_creator} videos each")
+        logger.info("SKELETON", f"Starting job {job_id}: {len(config.usernames)} creators, {config.videos_per_creator} videos each")
 
         try:
             # Initialize LLM client
@@ -212,6 +223,7 @@ class SkeletonRipperPipeline:
             valid_ratio = valid_count / len(transcripts) if transcripts else 0
             if valid_ratio < config.min_valid_ratio:
                 logger.warning(
+                    "SKELETON",
                     f"Only {valid_count}/{len(transcripts)} valid transcripts "
                     f"({valid_ratio:.0%} < {config.min_valid_ratio:.0%} threshold)"
                 )
@@ -236,8 +248,8 @@ class SkeletonRipperPipeline:
             extractor = BatchedExtractor(llm_client)
             extraction_result = extractor.extract_all(
                 valid_transcripts,
-                on_progress=lambda done, total: self._update_extraction_progress(
-                    progress, done, on_progress
+                on_progress=lambda done, total, batch, total_batches: self._update_extraction_progress(
+                    progress, done, total, batch, total_batches, on_progress
                 )
             )
 
@@ -255,14 +267,18 @@ class SkeletonRipperPipeline:
             # Stage 3: Aggregation
             progress.status = JobStatus.AGGREGATING
             progress.phase = "Aggregating patterns..."
+            progress.message = f"Analyzing {len(result.skeletons)} skeletons..."
             self._notify(on_progress, progress)
 
             aggregator = SkeletonAggregator()
             result.aggregated = aggregator.aggregate(result.skeletons)
+            progress.message = "Patterns aggregated"
+            self._notify(on_progress, progress)
 
             # Stage 4: Synthesis
             progress.status = JobStatus.SYNTHESIZING
             progress.phase = "Synthesizing content strategy..."
+            progress.message = "Calling LLM for synthesis..."
             self._notify(on_progress, progress)
 
             synthesizer = PatternSynthesizer(llm_client)
@@ -270,10 +286,11 @@ class SkeletonRipperPipeline:
 
             if not result.synthesis.success:
                 progress.errors.append(f"Synthesis failed: {result.synthesis.error}")
-                logger.error(f"Synthesis failed: {result.synthesis.error}")
+                logger.error("SKELETON", f"Synthesis failed: {result.synthesis.error}")
 
             # Stage 5: Output
             progress.phase = "Generating report..."
+            progress.message = "Saving outputs..."
             self._notify(on_progress, progress)
 
             output_paths = self._save_outputs(job_id, config, result)
@@ -283,14 +300,15 @@ class SkeletonRipperPipeline:
 
             # Complete
             progress.status = JobStatus.COMPLETE
-            progress.phase = "Complete"
+            progress.phase = "Analysis Complete"
+            progress.message = f"✓ {len(result.skeletons)} skeletons extracted from {len(config.usernames)} creator(s)"
             progress.completed_at = datetime.utcnow().isoformat()
             result.success = True
 
-            logger.info(f"Job {job_id} complete: {len(result.skeletons)} skeletons extracted")
+            logger.info("SKELETON", f"Job {job_id} complete: {len(result.skeletons)} skeletons extracted")
 
         except Exception as e:
-            logger.error(f"Pipeline failed: {e}")
+            logger.error("SKELETON", f"Pipeline failed: {e}")
             progress.status = JobStatus.FAILED
             progress.phase = "Failed"
             progress.errors.append(str(e))
@@ -340,7 +358,7 @@ class SkeletonRipperPipeline:
             self._notify(on_progress, progress)
             whisper_model = load_whisper_model(config.whisper_model)
             if not whisper_model:
-                logger.warning("Failed to load Whisper model, falling back to OpenAI")
+                logger.warning("SKELETON", "Failed to load Whisper model, falling back to OpenAI")
                 config.transcribe_provider = 'openai'
 
         # Create authenticated session
@@ -354,8 +372,13 @@ class SkeletonRipperPipeline:
         temp_dir.mkdir(parents=True, exist_ok=True)
 
         for idx, username in enumerate(config.usernames):
-            logger.info(f"Processing creator {idx + 1}/{len(config.usernames)}: @{username}")
-            progress.phase = f"Scraping @{username}..."
+            logger.info("SKELETON", f"Processing creator {idx + 1}/{len(config.usernames)}: @{username}")
+            progress.current_creator = username
+            progress.current_creator_index = idx + 1
+            progress.current_video_index = 0
+            progress.reels_fetched = 0
+            progress.phase = f"Processing @{username} ({idx + 1}/{len(config.usernames)})"
+            progress.message = "Checking cache..."
             self._notify(on_progress, progress)
 
             # Check cache for this creator first
@@ -365,11 +388,13 @@ class SkeletonRipperPipeline:
 
             if cached_transcripts and len(cached_transcripts) >= config.videos_per_creator:
                 # Have enough cached - use those
-                logger.info(f"Using {len(cached_transcripts)} cached transcripts for @{username}")
+                logger.info("SKELETON", f"Using {len(cached_transcripts)} cached transcripts for @{username}")
+                progress.message = f"Using {len(cached_transcripts)} cached transcripts"
                 progress.transcripts_from_cache += len(cached_transcripts)
                 transcripts.extend(cached_transcripts[:config.videos_per_creator])
                 progress.videos_scraped += len(cached_transcripts[:config.videos_per_creator])
                 progress.videos_transcribed += len(cached_transcripts[:config.videos_per_creator])
+                progress.videos_downloaded += len(cached_transcripts[:config.videos_per_creator])
                 self._notify(on_progress, progress)
                 continue
 
@@ -381,20 +406,23 @@ class SkeletonRipperPipeline:
                 reels, profile, error = get_user_reels(session, username, max_reels=100)
 
                 if error:
-                    logger.warning(f"Failed to fetch reels for @{username}: {error}")
+                    logger.warning("SKELETON", f"Failed to fetch reels for @{username}: {error}")
                     progress.errors.append(f"@{username}: {error}")
                     continue
 
                 if not reels:
-                    logger.warning(f"No reels found for @{username}")
+                    logger.warning("SKELETON", f"No reels found for @{username}")
                     progress.errors.append(f"@{username}: No reels found")
                     continue
 
                 progress.videos_scraped += len(reels)
-                logger.info(f"Found {len(reels)} reels for @{username}, sorting by views...")
+                progress.reels_fetched = len(reels)
+                progress.message = f"Found {len(reels)} reels, sorting by views..."
+                self._notify(on_progress, progress)
+                logger.info("SKELETON", f"Found {len(reels)} reels for @{username}, sorting by views...")
 
             except Exception as e:
-                logger.error(f"Error fetching reels for @{username}: {e}")
+                logger.error("SKELETON", f"Error fetching reels for @{username}: {e}")
                 progress.errors.append(f"@{username}: {str(e)}")
                 continue
 
@@ -411,11 +439,15 @@ class SkeletonRipperPipeline:
 
                 video_id = reel.get('shortcode', 'unknown')
                 attempted += 1
+                views_display = f"{reel.get('views', 0):,}"
 
                 # Check if already cached
                 cached = self.cache.get(config.platform, username, video_id)
                 if cached and is_valid_transcript(cached):
-                    logger.debug(f"Cache hit for {video_id}")
+                    logger.debug("SKELETON", f"Cache hit for {video_id}")
+                    valid_count += 1
+                    progress.current_video_index = valid_count
+                    progress.message = f"Video {valid_count}/{config.videos_per_creator}: Using cached transcript ({views_display} views)"
                     transcripts.append({
                         'video_id': video_id,
                         'username': username,
@@ -423,17 +455,19 @@ class SkeletonRipperPipeline:
                         'views': reel.get('views', 0),
                         'likes': reel.get('likes', 0),
                         'url': reel.get('url', ''),
+                        'video_url': reel.get('video_url', ''),
                         'transcript': cached,
                         'from_cache': True
                     })
-                    valid_count += 1
                     progress.transcripts_from_cache += 1
                     progress.videos_transcribed += 1
+                    progress.videos_downloaded += 1
                     self._notify(on_progress, progress)
                     continue
 
                 # Need to download and transcribe
-                progress.message = f"Processing video {valid_count + 1}/{config.videos_per_creator} for @{username} (#{attempted} by views)..."
+                progress.current_video_index = valid_count + 1
+                progress.message = f"Video {valid_count + 1}/{config.videos_per_creator}: Downloading... ({views_display} views, attempt #{attempted})"
                 self._notify(on_progress, progress)
 
                 # Download video
@@ -447,12 +481,21 @@ class SkeletonRipperPipeline:
                     )
 
                     if not download_success or not video_path.exists():
-                        logger.warning(f"Download failed for {video_id}, trying next...")
+                        logger.warning("SKELETON", f"Download failed for {video_id}, trying next...")
+                        progress.message = f"Video {valid_count + 1}/{config.videos_per_creator}: Download failed, trying next..."
+                        self._notify(on_progress, progress)
                         continue
 
                 except Exception as e:
-                    logger.warning(f"Download error for {video_id}: {e}")
+                    logger.warning("SKELETON", f"Download error for {video_id}: {e}")
+                    progress.message = f"Video {valid_count + 1}/{config.videos_per_creator}: Download error, trying next..."
+                    self._notify(on_progress, progress)
                     continue
+
+                # Downloaded successfully - update count and show transcription status
+                progress.videos_downloaded += 1
+                progress.message = f"Video {valid_count + 1}/{config.videos_per_creator}: Transcribing... ({views_display} views)"
+                self._notify(on_progress, progress)
 
                 # Transcribe video
                 transcript_text = None
@@ -468,11 +511,11 @@ class SkeletonRipperPipeline:
                             model=whisper_model
                         )
                     else:
-                        logger.warning(f"No transcription method available for {video_id}")
+                        logger.warning("SKELETON", f"No transcription method available for {video_id}")
                         continue
 
                 except Exception as e:
-                    logger.warning(f"Transcription error for {video_id}: {e}")
+                    logger.warning("SKELETON", f"Transcription error for {video_id}: {e}")
                     transcript_text = None
 
                 # Clean up video file
@@ -494,18 +537,24 @@ class SkeletonRipperPipeline:
                         'views': reel.get('views', 0),
                         'likes': reel.get('likes', 0),
                         'url': reel.get('url', ''),
+                        'video_url': reel.get('video_url', ''),
                         'transcript': transcript_text,
                         'from_cache': False
                     })
                     valid_count += 1
                     progress.videos_transcribed += 1
-                    logger.info(f"Valid transcript #{valid_count} for @{username}: {video_id} ({reel.get('views', 0):,} views)")
+                    progress.current_video_index = valid_count
+                    progress.message = f"Video {valid_count}/{config.videos_per_creator}: ✓ Transcribed ({views_display} views)"
+                    logger.info("SKELETON", f"Valid transcript #{valid_count} for @{username}: {video_id} ({reel.get('views', 0):,} views)")
                     self._notify(on_progress, progress)
                 else:
-                    logger.debug(f"Invalid/empty transcript for {video_id}, trying next...")
+                    progress.message = f"Video {valid_count + 1}/{config.videos_per_creator}: Invalid transcript, trying next..."
+                    self._notify(on_progress, progress)
+                    logger.debug("SKELETON", f"Invalid/empty transcript for {video_id}, trying next...")
 
             if valid_count < config.videos_per_creator:
                 logger.warning(
+                    "SKELETON",
                     f"Only got {valid_count}/{config.videos_per_creator} valid transcripts "
                     f"for @{username} after trying {attempted} videos"
                 )
@@ -550,7 +599,7 @@ class SkeletonRipperPipeline:
                         'from_cache': True
                     })
             except Exception as e:
-                logger.warning(f"Failed to read cache file {cache_file}: {e}")
+                logger.warning("SKELETON", f"Failed to read cache file {cache_file}: {e}")
 
         return cached
 
@@ -558,10 +607,16 @@ class SkeletonRipperPipeline:
         self,
         progress: JobProgress,
         done: int,
+        total: int,
+        batch: int,
+        total_batches: int,
         on_progress: Optional[Callable]
     ):
-        """Update extraction progress count."""
+        """Update extraction progress count with batch info."""
         progress.skeletons_extracted = done
+        progress.extraction_batch = batch
+        progress.extraction_total_batches = total_batches
+        progress.message = f"Extracting skeletons: batch {batch}/{total_batches} ({done}/{total} done)"
         self._notify(on_progress, progress)
 
     def _notify(
@@ -574,7 +629,7 @@ class SkeletonRipperPipeline:
             try:
                 callback(progress)
             except Exception as e:
-                logger.warning(f"Progress callback error: {e}")
+                logger.warning("SKELETON", f"Progress callback error: {e}")
 
     def _save_outputs(
         self,
@@ -629,7 +684,7 @@ class SkeletonRipperPipeline:
                 f.write(report_content)
             paths['report'] = str(report_path)
 
-        logger.info(f"Saved outputs to {job_dir}")
+        logger.info("SKELETON", f"Saved outputs to {job_dir}")
         return paths
 
 

@@ -1455,12 +1455,23 @@ def start_skeleton_ripper():
                 'status': progress.status.value,
                 'phase': progress.phase,
                 'message': progress.message,
+                # Core counts
                 'videos_scraped': progress.videos_scraped,
+                'videos_downloaded': progress.videos_downloaded,
                 'videos_transcribed': progress.videos_transcribed,
                 'transcripts_from_cache': progress.transcripts_from_cache,
                 'valid_transcripts': progress.valid_transcripts,
                 'skeletons_extracted': progress.skeletons_extracted,
                 'total_target': progress.total_target,
+                # Granular progress
+                'current_creator': progress.current_creator,
+                'current_creator_index': progress.current_creator_index,
+                'total_creators': progress.total_creators,
+                'reels_fetched': progress.reels_fetched,
+                'current_video_index': progress.current_video_index,
+                'extraction_batch': progress.extraction_batch,
+                'extraction_total_batches': progress.extraction_total_batches,
+                # Errors
                 'errors': progress.errors
             }
             active_skeleton_jobs[job_id]['status'] = progress.status.value
@@ -1496,6 +1507,7 @@ def start_skeleton_ripper():
     thread.start()
 
     return jsonify({
+        'success': True,
         'job_id': job_id,
         'status': 'pending',
         'message': 'Skeleton ripper job started'
@@ -1506,10 +1518,11 @@ def start_skeleton_ripper():
 def skeleton_ripper_status(job_id):
     """Get skeleton ripper job status"""
     if job_id not in active_skeleton_jobs:
-        return jsonify({'error': 'Job not found'}), 404
+        return jsonify({'success': False, 'error': 'Job not found'}), 404
 
     job = active_skeleton_jobs[job_id]
     return jsonify({
+        'success': True,
         'job_id': job_id,
         'status': job['status'],
         'progress': job['progress'],
@@ -1532,6 +1545,194 @@ def skeleton_ripper_report(job_id):
         return jsonify({'error': 'Report file not found'}), 404
 
     return send_file(report_path, mimetype='text/markdown')
+
+
+@app.route('/api/skeleton-ripper/report/<job_id>/json')
+def skeleton_ripper_report_json(job_id):
+    """Get the skeletons JSON for a completed job"""
+    if job_id not in active_skeleton_jobs:
+        return jsonify({'error': 'Job not found'}), 404
+
+    job = active_skeleton_jobs[job_id]
+    if not job.get('result') or not job['result'].get('report_path'):
+        return jsonify({'error': 'Report not available'}), 404
+
+    # The report_path points to report.md, we need skeletons.json in the same dir
+    report_path = Path(job['result']['report_path'])
+    skeletons_path = report_path.parent / 'skeletons.json'
+
+    if not skeletons_path.exists():
+        return jsonify([])  # Return empty array if no skeletons
+
+    return send_file(skeletons_path, mimetype='application/json')
+
+
+@app.route('/api/skeleton-ripper/history')
+def skeleton_ripper_history():
+    """Get list of past skeleton ripper reports"""
+    import json
+    from datetime import datetime
+
+    history = []
+    reports_dir = Path('output/skeleton_reports')
+
+    if not reports_dir.exists():
+        return jsonify({'success': True, 'history': []})
+
+    # Get all report directories, sorted by newest first
+    report_dirs = sorted(reports_dir.iterdir(), key=lambda x: x.stat().st_mtime, reverse=True)
+
+    for report_dir in report_dirs[:20]:  # Limit to 20 most recent
+        if not report_dir.is_dir():
+            continue
+
+        report_path = report_dir / 'report.md'
+        skeletons_path = report_dir / 'skeletons.json'
+
+        if not report_path.exists():
+            continue
+
+        # Parse directory name for timestamp and job_id
+        dir_name = report_dir.name
+        parts = dir_name.split('_')
+        if len(parts) >= 3:
+            timestamp_str = f"{parts[0]}_{parts[1]}"
+            job_id = parts[2]
+        else:
+            timestamp_str = dir_name
+            job_id = dir_name
+
+        # Try to get more info from skeletons.json
+        creators = []
+        skeleton_count = 0
+        platform = 'unknown'
+        if skeletons_path.exists():
+            try:
+                with open(skeletons_path, 'r') as f:
+                    skeletons = json.load(f)
+                    skeleton_count = len(skeletons)
+                    creators = list(set(s.get('creator_username', 'unknown') for s in skeletons))
+                    platform = skeletons[0].get('platform', 'unknown') if skeletons else 'unknown'
+            except:
+                pass
+
+        # Parse timestamp
+        try:
+            dt = datetime.strptime(timestamp_str, '%Y%m%d_%H%M%S')
+            formatted_date = dt.strftime('%b %d, %Y %H:%M')
+        except:
+            formatted_date = timestamp_str
+
+        history.append({
+            'id': dir_name,
+            'job_id': job_id,
+            'date': formatted_date,
+            'creators': creators,
+            'skeleton_count': skeleton_count,
+            'platform': platform,
+            'report_path': str(report_path)
+        })
+
+    return jsonify({'success': True, 'history': history})
+
+
+@app.route('/api/skeleton-ripper/history/<report_id>')
+def skeleton_ripper_history_report(report_id):
+    """Get a specific historical report"""
+    report_path = Path('output/skeleton_reports') / report_id / 'report.md'
+
+    if not report_path.exists():
+        return jsonify({'error': 'Report not found'}), 404
+
+    return send_file(report_path, mimetype='text/markdown')
+
+
+@app.route('/api/skeleton-ripper/history/<report_id>/json')
+def skeleton_ripper_history_report_json(report_id):
+    """Get the skeletons JSON for a historical report"""
+    skeletons_path = Path('output/skeleton_reports') / report_id / 'skeletons.json'
+
+    if not skeletons_path.exists():
+        return jsonify([])  # Return empty array if no skeletons
+
+    return send_file(skeletons_path, mimetype='application/json')
+
+
+# =============================================================================
+# SKELETON RIPPER - VIDEO ENDPOINTS
+# =============================================================================
+
+@app.route('/api/skeleton-ripper/video/<report_id>/<video_id>/download', methods=['POST'])
+def skeleton_ripper_download_video(report_id, video_id):
+    """Download a video on-demand for a skeleton report"""
+    skeletons_path = Path('output/skeleton_reports') / report_id / 'skeletons.json'
+
+    if not skeletons_path.exists():
+        return jsonify({'success': False, 'error': 'Report not found'}), 404
+
+    try:
+        skeletons = json.loads(skeletons_path.read_text())
+        skeleton = next((s for s in skeletons if s.get('video_id') == video_id), None)
+
+        if not skeleton:
+            return jsonify({'success': False, 'error': 'Skeleton not found'}), 404
+
+        video_url = skeleton.get('video_url', '')
+        reel_url = skeleton.get('url', '')
+
+        if not video_url and not reel_url:
+            return jsonify({'success': False, 'error': 'No video URL available'}), 400
+
+        # Create videos directory for this report
+        videos_dir = Path('output/skeleton_reports') / report_id / 'videos'
+        videos_dir.mkdir(exist_ok=True)
+
+        output_path = videos_dir / f"{video_id}.mp4"
+
+        success = download_video(
+            reel_url=reel_url,
+            output_path=str(output_path),
+            cookies_file=str(COOKIES_FILE),
+            video_url=video_url
+        )
+
+        if success and output_path.exists():
+            skeleton['local_video'] = str(output_path)
+            skeletons_path.write_text(json.dumps(skeletons, indent=2))
+
+            return jsonify({
+                'success': True,
+                'video_path': str(output_path),
+                'message': 'Video downloaded successfully'
+            })
+        else:
+            return jsonify({'success': False, 'error': 'Download failed'}), 500
+
+    except Exception as e:
+        print(f"[SKELETON] Video download error: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/skeleton-ripper/video/<report_id>/<video_id>')
+def skeleton_ripper_serve_video(report_id, video_id):
+    """Serve a downloaded skeleton video"""
+    video_path = Path('output/skeleton_reports') / report_id / 'videos' / f"{video_id}.mp4"
+
+    if not video_path.exists():
+        return jsonify({'error': 'Video not found'}), 404
+
+    return send_file(video_path, mimetype='video/mp4')
+
+
+@app.route('/api/skeleton-ripper/video/<report_id>/<video_id>/status')
+def skeleton_ripper_video_status(report_id, video_id):
+    """Check if a video is downloaded"""
+    video_path = Path('output/skeleton_reports') / report_id / 'videos' / f"{video_id}.mp4"
+
+    return jsonify({
+        'downloaded': video_path.exists(),
+        'path': str(video_path) if video_path.exists() else None
+    })
 
 
 if __name__ == '__main__':

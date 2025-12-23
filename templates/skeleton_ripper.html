@@ -72,11 +72,144 @@
             background: var(--color-accent-muted);
         }
 
-        /* Main Grid */
+        /* Main Grid - 3 columns: Config | Results | History */
         .sr-grid {
             display: grid;
-            grid-template-columns: 380px 1fr;
+            grid-template-columns: 320px 1fr 300px;
             gap: var(--space-lg);
+            align-items: start;
+        }
+
+        .sr-grid > .sr-panel {
+            margin-top: 0 !important;
+            margin-bottom: 0;
+            align-self: start;
+        }
+
+        /* Mission History Styles */
+        .history-panel {
+            max-height: calc(100vh - 150px);
+            display: flex;
+            flex-direction: column;
+            margin: 0;  /* Reset any margins */
+        }
+
+        .history-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: var(--space-sm);
+        }
+
+        .history-item {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 10px;
+            background: var(--color-bg-elevated);
+            border: 1px solid var(--color-border-dim);
+            border-radius: 4px;
+            margin-bottom: 4px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .history-item:hover {
+            border-color: var(--color-accent-primary);
+            background: var(--color-accent-dim);
+        }
+
+        .history-item.active {
+            border-color: var(--color-accent-primary);
+            background: var(--color-accent-muted);
+        }
+
+        .history-info {
+            display: flex;
+            flex-direction: column;
+            gap: 1px;
+            min-width: 0;
+        }
+
+        .history-meta {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-family: var(--font-mono);
+            font-size: 0.6rem;
+            color: var(--color-text-muted);
+        }
+
+        .history-meta .platform {
+            color: var(--color-accent-secondary);
+            text-transform: uppercase;
+        }
+
+        .history-creator {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            color: var(--color-accent-primary);
+            cursor: help;
+            position: relative;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .history-creator:hover .creator-tooltip {
+            display: block;
+        }
+
+        .creator-tooltip {
+            display: none;
+            position: absolute;
+            left: 0;
+            top: 100%;
+            background: var(--color-bg-panel);
+            border: 1px solid var(--color-border);
+            border-radius: 4px;
+            padding: 6px 8px;
+            font-size: 0.65rem;
+            color: var(--color-text-secondary);
+            white-space: nowrap;
+            z-index: 100;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+
+        .creator-tooltip div {
+            margin-bottom: 1px;
+        }
+
+        .history-stat {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 4px 8px;
+            background: var(--color-bg-input);
+            border-radius: 4px;
+            min-width: 40px;
+        }
+
+        .history-stat .count {
+            font-family: var(--font-mono);
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--color-accent-primary);
+            line-height: 1;
+        }
+
+        .history-stat .label {
+            font-family: var(--font-mono);
+            font-size: 0.5rem;
+            color: var(--color-text-muted);
+            text-transform: uppercase;
+        }
+
+        .history-empty {
+            text-align: center;
+            padding: var(--space-lg);
+            color: var(--color-text-muted);
+            font-size: 0.8rem;
         }
 
         /* Panels */
@@ -349,61 +482,249 @@
             margin-top: 2px;
         }
 
-        /* Report Content */
+        /* Results Body - Scrollable Container */
+        .results-body {
+            max-height: calc(100vh - 200px);
+            overflow-y: auto;
+            padding: var(--space-md);
+        }
+
+        /* Report Content - Tactical & Professional */
         .report-content {
             font-family: var(--font-sans);
-            line-height: 1.7;
-            color: var(--color-text-primary);
+            line-height: 1.6;
+            color: var(--color-text-secondary);
+            font-size: 0.9rem;
         }
 
         .report-content h1 {
-            font-size: 1.3rem;
+            font-size: 1.4rem;
             color: var(--color-accent-primary);
-            margin-bottom: var(--space-md);
+            margin: 0 0 var(--space-lg) 0;
+            padding-bottom: var(--space-sm);
             font-family: var(--font-mono);
+            font-weight: 600;
+            letter-spacing: 0.02em;
+            border-bottom: 2px solid var(--color-accent-primary);
         }
 
         .report-content h2 {
             font-size: 1rem;
-            color: var(--color-text-primary);
-            margin-top: var(--space-lg);
-            margin-bottom: var(--space-sm);
+            color: var(--color-accent-primary);
+            margin: var(--space-xl) 0 var(--space-md) 0;
+            padding: var(--space-sm) var(--space-md);
             font-family: var(--font-mono);
-            border-bottom: 1px solid var(--color-border);
-            padding-bottom: var(--space-xs);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            background: linear-gradient(90deg, var(--color-accent-dim) 0%, transparent 100%);
+            border-left: 3px solid var(--color-accent-primary);
         }
 
         .report-content h3 {
-            font-size: 0.9rem;
+            font-size: 0.95rem;
+            color: var(--color-text-primary);
+            margin: var(--space-lg) 0 var(--space-sm) 0;
+            font-family: var(--font-mono);
+            font-weight: 600;
+        }
+
+        .report-content h4 {
+            font-size: 0.85rem;
             color: var(--color-accent-primary);
-            margin-top: var(--space-md);
-            margin-bottom: var(--space-xs);
+            margin: var(--space-md) 0 var(--space-xs) 0;
+            font-family: var(--font-mono);
+            font-weight: 500;
+        }
+
+        .report-content p {
+            margin: 0 0 var(--space-md) 0;
+            color: var(--color-text-secondary);
         }
 
         .report-content ul, .report-content ol {
-            margin-left: var(--space-lg);
-            margin-bottom: var(--space-md);
+            margin: 0 0 var(--space-md) var(--space-lg);
+            padding: 0;
         }
 
         .report-content li {
-            margin-bottom: var(--space-xs);
+            margin-bottom: var(--space-sm);
+            color: var(--color-text-secondary);
+            position: relative;
+        }
+
+        .report-content li::marker {
+            color: var(--color-accent-primary);
+        }
+
+        .report-content strong {
+            color: var(--color-text-primary);
+            font-weight: 600;
+            display: inline;
+        }
+
+        /* Bold section headers in markdown - standalone lines */
+        .report-content p > strong:only-child {
+            display: block;
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            color: var(--color-accent-primary);
+            margin: var(--space-md) 0 var(--space-xs) 0;
+            padding: var(--space-xs) var(--space-sm);
+            background: var(--color-bg-input);
+            border-left: 2px solid var(--color-accent-primary);
+        }
+
+        .report-content em {
+            color: var(--color-accent-secondary);
+            font-style: normal;
         }
 
         .report-content code {
             background: var(--color-bg-input);
-            padding: 2px 6px;
-            border-radius: 3px;
+            padding: 3px 8px;
+            border-radius: 4px;
             font-family: var(--font-mono);
             font-size: 0.85em;
+            color: var(--color-accent-primary);
+            border: 1px solid var(--color-border-dim);
+        }
+
+        .report-content pre {
+            background: var(--color-bg-input);
+            padding: var(--space-md);
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--color-border);
+            border-left: 3px solid var(--color-accent-primary);
+            overflow-x: auto;
+            margin: var(--space-md) 0;
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .report-content pre code {
+            background: none;
+            border: none;
+            padding: 0;
+            color: var(--color-text-secondary);
+            font-size: inherit;
+        }
+
+        .report-content hr {
+            border: none;
+            border-top: 1px solid var(--color-border);
+            margin: var(--space-xl) 0;
+        }
+
+        /* Skeleton Template Cards */
+        .report-content .skeleton-card {
+            background: var(--color-bg-elevated);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: var(--space-md);
+            margin: var(--space-md) 0;
+        }
+
+        /* Toast Notification System */
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 10000;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            pointer-events: none;
+        }
+
+        .toast {
+            padding: 12px 20px;
+            background: var(--color-bg-elevated);
+            border: 1px solid var(--color-accent-primary);
+            border-radius: 6px;
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            color: var(--color-text-primary);
+            box-shadow: 0 4px 20px rgba(0, 255, 157, 0.2);
+            transform: translateX(120%);
+            transition: transform 0.3s ease;
+            pointer-events: auto;
+        }
+
+        .toast.show {
+            transform: translateX(0);
+        }
+
+        .toast.success {
+            border-color: var(--color-status-success);
+            box-shadow: 0 4px 20px rgba(16, 185, 129, 0.2);
+        }
+
+        .toast.error {
+            border-color: var(--color-status-error);
+            box-shadow: 0 4px 20px rgba(239, 68, 68, 0.2);
+        }
+
+        /* Tab Toolbar (sticky at top of content) */
+        .tab-toolbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 12px;
+            background: var(--color-bg-elevated);
+            border: 1px solid var(--color-border);
+            border-radius: 4px;
+            margin-bottom: 12px;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .tab-toolbar-left {
+            display: flex;
+            gap: 8px;
+        }
+
+        .tab-toolbar-right {
+            display: flex;
+            gap: 8px;
+        }
+
+        .toolbar-btn {
+            padding: 6px 12px;
+            background: transparent;
+            border: 1px solid var(--color-border);
+            color: var(--color-text-muted);
+            border-radius: 4px;
+            font-family: var(--font-mono);
+            font-size: 0.7rem;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .toolbar-btn:hover {
+            border-color: var(--color-accent-primary);
+            color: var(--color-accent-primary);
+            background: var(--color-accent-dim);
+        }
+
+        .toolbar-btn.active {
+            background: var(--color-accent-dim);
+            border-color: var(--color-accent-primary);
+            color: var(--color-accent-primary);
+        }
+
+        .toolbar-btn.primary {
+            background: var(--color-accent-dim);
+            border-color: var(--color-accent-primary);
             color: var(--color-accent-primary);
         }
 
         .report-actions {
-            display: flex;
-            gap: var(--space-sm);
-            margin-top: var(--space-lg);
-            padding-top: var(--space-md);
-            border-top: 1px solid var(--color-border);
+            display: none; /* Hidden - moved to toolbar */
         }
 
         .action-btn {
@@ -433,6 +754,455 @@
             background: #0ea271;
         }
 
+        /* Report Tabs */
+        .report-tabs-container {
+            display: none;
+            flex-direction: column;
+            height: 100%;
+        }
+
+        .report-tabs-container.active {
+            display: flex;
+        }
+
+        .report-tabs-nav {
+            display: flex;
+            gap: 2px;
+            padding: 0 var(--space-md);
+            background: var(--color-bg-elevated);
+            border-bottom: 1px solid var(--color-border);
+        }
+
+        .tab-btn {
+            padding: 10px 16px;
+            background: transparent;
+            border: none;
+            border-bottom: 2px solid transparent;
+            color: var(--color-text-muted);
+            font-family: var(--font-mono);
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .tab-btn:hover {
+            color: var(--color-text-secondary);
+            background: var(--color-bg-input);
+        }
+
+        .tab-btn.active {
+            color: var(--color-accent-primary);
+            border-bottom-color: var(--color-accent-primary);
+        }
+
+        .tab-content {
+            display: none;
+            flex: 1;
+            overflow-y: auto;
+            padding: var(--space-md);
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* Tab 1: Visual Skeletons */
+        .skeleton-grid {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-md);
+        }
+
+        .skeleton-card {
+            background: var(--color-bg-elevated);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            overflow: hidden;
+        }
+
+        .skeleton-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: var(--space-sm) var(--space-md);
+            background: var(--color-bg-input);
+            border-bottom: 1px solid var(--color-border-dim);
+        }
+
+        .skeleton-creator {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            color: var(--color-accent-primary);
+        }
+
+        .skeleton-meta {
+            display: flex;
+            gap: var(--space-md);
+            font-family: var(--font-mono);
+            font-size: 0.65rem;
+            color: var(--color-text-muted);
+        }
+
+        .skeleton-card-body {
+            padding: var(--space-md);
+        }
+
+        .skeleton-section {
+            margin-bottom: var(--space-md);
+        }
+
+        .skeleton-section:last-child {
+            margin-bottom: 0;
+        }
+
+        .skeleton-label {
+            font-family: var(--font-mono);
+            font-size: 0.6rem;
+            color: var(--color-accent-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 4px;
+        }
+
+        .skeleton-hook {
+            font-size: 0.95rem;
+            color: var(--color-text-primary);
+            font-weight: 500;
+            line-height: 1.4;
+            padding: var(--space-sm);
+            background: var(--color-accent-dim);
+            border-left: 3px solid var(--color-accent-primary);
+            border-radius: 0 4px 4px 0;
+        }
+
+        .skeleton-value {
+            font-size: 0.85rem;
+            color: var(--color-text-secondary);
+            line-height: 1.5;
+        }
+
+        .skeleton-points {
+            margin-top: var(--space-xs);
+            padding-left: var(--space-md);
+        }
+
+        .skeleton-points li {
+            font-size: 0.8rem;
+            color: var(--color-text-secondary);
+            margin-bottom: 4px;
+        }
+
+        .skeleton-points li::marker {
+            color: var(--color-accent-primary);
+        }
+
+        .skeleton-cta {
+            font-size: 0.85rem;
+            color: var(--color-text-secondary);
+            font-style: italic;
+        }
+
+        .skeleton-tags {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            margin-top: var(--space-sm);
+        }
+
+        .skeleton-tag {
+            font-family: var(--font-mono);
+            font-size: 0.6rem;
+            padding: 2px 8px;
+            background: var(--color-bg-input);
+            border: 1px solid var(--color-border-dim);
+            border-radius: 3px;
+            color: var(--color-text-muted);
+        }
+
+        .skeleton-tag.technique {
+            border-color: var(--color-accent-primary);
+            color: var(--color-accent-primary);
+        }
+
+        .skeleton-tag.structure {
+            border-color: var(--color-accent-secondary);
+            color: var(--color-accent-secondary);
+        }
+
+        /* Skeleton Card Actions - Compact inline style */
+        .skeleton-card-actions {
+            display: flex;
+            gap: 12px;
+            padding: 6px var(--space-md) 8px;
+            border-top: 1px solid var(--color-border-dim);
+        }
+
+        .skeleton-action-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 0;
+            background: transparent;
+            border: none;
+            color: var(--color-text-muted);
+            font-family: var(--font-mono);
+            font-size: 0.6rem;
+            letter-spacing: 0.03em;
+            cursor: pointer;
+            transition: color 0.15s;
+            text-transform: uppercase;
+        }
+
+        .skeleton-action-btn:hover {
+            color: var(--color-accent-primary);
+        }
+
+        .skeleton-action-btn.video-btn.downloaded {
+            color: var(--color-success);
+        }
+
+        .skeleton-action-btn.video-btn.downloading {
+            color: var(--color-warning);
+            cursor: wait;
+        }
+
+        .skeleton-action-btn svg {
+            flex-shrink: 0;
+            width: 12px;
+            height: 12px;
+        }
+
+        /* REEL INTEL Modal Styles */
+        .reel-intel-stats {
+            display: flex;
+            gap: var(--space-xl);
+            margin-bottom: var(--space-lg);
+            padding-bottom: var(--space-md);
+            border-bottom: 1px solid var(--color-border-dim);
+        }
+
+        .reel-stat {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .reel-stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--color-accent-primary);
+            line-height: 1;
+        }
+
+        .reel-stat-label {
+            font-size: 0.6rem;
+            color: var(--color-text-muted);
+            letter-spacing: 0.1em;
+            margin-top: 4px;
+        }
+
+        .reel-intel-section {
+            margin-bottom: var(--space-md);
+        }
+
+        .reel-intel-label {
+            font-size: 0.65rem;
+            color: var(--color-text-muted);
+            letter-spacing: 0.1em;
+            margin-bottom: 6px;
+        }
+
+        .reel-intel-url-row {
+            display: flex;
+            gap: var(--space-sm);
+        }
+
+        .reel-intel-url {
+            flex: 1;
+            background: var(--color-bg-input);
+            border: 1px solid var(--color-border);
+            color: var(--color-text-muted);
+            padding: 8px 12px;
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            border-radius: 4px;
+        }
+
+        .reel-intel-copy-btn {
+            padding: 8px 16px;
+            background: transparent;
+            border: 1px solid var(--color-border);
+            color: var(--color-text-secondary);
+            font-family: var(--font-mono);
+            font-size: 0.65rem;
+            letter-spacing: 0.05em;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .reel-intel-copy-btn:hover {
+            border-color: var(--color-accent-primary);
+            color: var(--color-accent-primary);
+        }
+
+        .reel-intel-hook {
+            font-size: 0.85rem;
+            color: var(--color-text-secondary);
+            line-height: 1.5;
+        }
+
+        .reel-intel-transcript {
+            background: var(--color-bg-input);
+            border: 1px solid var(--color-border);
+            border-radius: 4px;
+            padding: var(--space-md);
+            font-size: 0.8rem;
+            color: var(--color-text-secondary);
+            line-height: 1.6;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .reel-intel-actions {
+            display: flex;
+            gap: var(--space-sm);
+            margin-top: var(--space-lg);
+        }
+
+        .reel-intel-btn {
+            flex: 1;
+            padding: 12px 16px;
+            background: transparent;
+            border: 1px solid var(--color-border);
+            color: var(--color-text-secondary);
+            font-family: var(--font-mono);
+            font-size: 0.7rem;
+            letter-spacing: 0.05em;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.15s;
+            text-align: center;
+            text-decoration: none;
+        }
+
+        .reel-intel-btn:hover {
+            border-color: var(--color-accent-primary);
+            color: var(--color-accent-primary);
+        }
+
+        .reel-intel-btn.primary {
+            background: var(--color-accent-primary);
+            border-color: var(--color-accent-primary);
+            color: var(--color-bg-deep);
+        }
+
+        .reel-intel-btn.primary:hover {
+            background: #059669;
+        }
+
+        .reel-intel-btn.downloaded {
+            background: transparent;
+            border-color: var(--color-success);
+            color: var(--color-success);
+        }
+
+        .reel-intel-btn.downloading {
+            border-color: var(--color-warning);
+            color: var(--color-warning);
+            cursor: wait;
+        }
+
+        /* Tab 2: Markdown View */
+        .markdown-toggle {
+            display: flex;
+            gap: var(--space-sm);
+            margin-bottom: var(--space-md);
+        }
+
+        .markdown-toggle .tab-btn {
+            padding: 6px 12px;
+            border: 1px solid var(--color-border);
+            border-radius: 4px;
+        }
+
+        .markdown-toggle .tab-btn.active {
+            background: var(--color-accent-dim);
+            border-color: var(--color-accent-primary);
+        }
+
+        .markdown-raw {
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            background: var(--color-bg-input);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-sm);
+            padding: var(--space-md);
+            white-space: pre-wrap;
+            word-break: break-word;
+            color: var(--color-text-secondary);
+            max-height: calc(100vh - 350px);
+            overflow-y: auto;
+        }
+
+        /* Tab 3: JSON View */
+        .json-view {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            background: var(--color-bg-input);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-sm);
+            padding: var(--space-md);
+            white-space: pre-wrap;
+            word-break: break-word;
+            color: var(--color-text-secondary);
+            max-height: calc(100vh - 300px);
+            overflow-y: auto;
+        }
+
+        .json-view .key { color: var(--color-accent-secondary); }
+        .json-view .string { color: var(--color-success); }
+        .json-view .number { color: var(--color-accent-primary); }
+        .json-view .boolean { color: #f59e0b; }
+        .json-view .null { color: var(--color-text-muted); }
+
+        /* Tab 4: AI Prompt */
+        .ai-prompt-section {
+            margin-bottom: var(--space-lg);
+        }
+
+        .ai-prompt-section h3 {
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            color: var(--color-accent-primary);
+            margin-bottom: var(--space-sm);
+        }
+
+        .ai-prompt-section p {
+            font-size: 0.85rem;
+            color: var(--color-text-secondary);
+            margin-bottom: var(--space-md);
+        }
+
+        .ai-prompt-box {
+            background: var(--color-bg-input);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-sm);
+            padding: var(--space-md);
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            color: var(--color-text-secondary);
+            line-height: 1.6;
+            white-space: pre-wrap;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .copy-prompt-btn {
+            margin-top: var(--space-md);
+        }
+
         /* Error Display */
         .error-box {
             margin-top: var(--space-md);
@@ -459,6 +1229,15 @@
             font-size: 0.8rem;
             color: var(--color-danger);
             padding: var(--space-xs) 0;
+        }
+
+        @media (max-width: 1400px) {
+            .sr-grid {
+                grid-template-columns: 350px 1fr;
+            }
+            .history-panel {
+                display: none;
+            }
         }
 
         @media (max-width: 1024px) {
@@ -546,11 +1325,12 @@
                                     </svg>
                                     INSTAGRAM
                                 </button>
-                                <button type="button" class="platform-btn" data-platform="tiktok" onclick="selectPlatform('tiktok')">
+                                <button type="button" class="platform-btn disabled" data-platform="tiktok" title="Coming Soon" disabled>
                                     <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14">
                                         <path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-5.2 1.74 2.89 2.89 0 012.31-4.64 2.93 2.93 0 01.88.13V9.4a6.84 6.84 0 00-1-.05A6.33 6.33 0 005 20.1a6.34 6.34 0 0010.86-4.43v-7a8.16 8.16 0 004.77 1.52v-3.4a4.85 4.85 0 01-1-.1z"/>
                                     </svg>
                                     TIKTOK
+                                    <span class="coming-soon-badge">SOON</span>
                                 </button>
                             </div>
                         </div>
@@ -641,7 +1421,7 @@
                             <div class="progress-stats">
                                 <div class="stat-box">
                                     <div class="stat-value" id="statScraped">0</div>
-                                    <div class="stat-label">Scraped</div>
+                                    <div class="stat-label">Downloaded</div>
                                 </div>
                                 <div class="stat-box">
                                     <div class="stat-value" id="statTranscribed">0</div>
@@ -649,16 +1429,99 @@
                                 </div>
                                 <div class="stat-box">
                                     <div class="stat-value" id="statExtracted">0</div>
-                                    <div class="stat-label">Extracted</div>
+                                    <div class="stat-label">Skeletons</div>
                                 </div>
                                 <div class="stat-box">
                                     <div class="stat-value" id="statCached">0</div>
-                                    <div class="stat-label">Cached</div>
+                                    <div class="stat-label">From Cache</div>
                                 </div>
                             </div>
                         </div>
 
                         <div class="report-content" id="reportContent" style="display: none;"></div>
+
+                        <!-- Tabbed Report Interface -->
+                        <div class="report-tabs-container" id="reportTabs">
+                            <div class="report-tabs-nav">
+                                <button class="tab-btn active" onclick="switchTab('visual')">Skeletons</button>
+                                <button class="tab-btn" onclick="switchTab('markdown')">Markdown</button>
+                                <button class="tab-btn" onclick="switchTab('json')">JSON</button>
+                                <button class="tab-btn" onclick="switchTab('prompt')">AI Prompt</button>
+                            </div>
+
+                            <!-- Tab 1: Visual Skeletons -->
+                            <div class="tab-content active" id="tab-visual">
+                                <div class="tab-toolbar">
+                                    <div class="tab-toolbar-left">
+                                        <span style="font-size: 0.7rem; color: var(--color-text-muted);">Visual skeleton cards</span>
+                                    </div>
+                                    <div class="tab-toolbar-right">
+                                        <button class="toolbar-btn" onclick="downloadReport()">Download Report</button>
+                                        <button class="toolbar-btn" onclick="newAnalysis()">New Analysis</button>
+                                    </div>
+                                </div>
+                                <div class="skeleton-grid" id="skeletonGrid"></div>
+                            </div>
+
+                            <!-- Tab 2: Markdown -->
+                            <div class="tab-content" id="tab-markdown">
+                                <div class="tab-toolbar">
+                                    <div class="tab-toolbar-left">
+                                        <button class="toolbar-btn active" id="mdPreviewBtn" onclick="toggleMarkdownView('preview')">Preview</button>
+                                        <button class="toolbar-btn" id="mdRawBtn" onclick="toggleMarkdownView('raw')">Raw</button>
+                                    </div>
+                                    <div class="tab-toolbar-right">
+                                        <button class="toolbar-btn primary" onclick="copyMarkdown()">Copy</button>
+                                        <button class="toolbar-btn" onclick="downloadMarkdown()">Download</button>
+                                    </div>
+                                </div>
+                                <div id="markdownPreview" class="report-content"></div>
+                                <div id="markdownRaw" class="markdown-raw" style="display: none;"></div>
+                            </div>
+
+                            <!-- Tab 3: JSON -->
+                            <div class="tab-content" id="tab-json">
+                                <div class="tab-toolbar">
+                                    <div class="tab-toolbar-left">
+                                        <span style="font-size: 0.7rem; color: var(--color-text-muted);">Raw JSON data</span>
+                                    </div>
+                                    <div class="tab-toolbar-right">
+                                        <button class="toolbar-btn primary" onclick="copyJson()">Copy</button>
+                                        <button class="toolbar-btn" onclick="downloadJson()">Download</button>
+                                    </div>
+                                </div>
+                                <div class="json-view" id="jsonView"></div>
+                            </div>
+
+                            <!-- Tab 4: AI Prompt -->
+                            <div class="tab-content" id="tab-prompt">
+                                <div class="tab-toolbar">
+                                    <div class="tab-toolbar-left">
+                                        <span style="font-size: 0.7rem; color: var(--color-text-muted);">Script generation prompt</span>
+                                    </div>
+                                    <div class="tab-toolbar-right">
+                                        <button class="toolbar-btn primary" onclick="copyAiPrompt()">Copy Prompt</button>
+                                    </div>
+                                </div>
+                                <div class="ai-prompt-section">
+                                    <p>Copy this prompt into ChatGPT, Claude, or your preferred AI to collaboratively create scripts based on these proven skeleton patterns.</p>
+                                    <div class="ai-prompt-box" id="aiPromptBox"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Mission History Panel -->
+                <div class="sr-panel history-panel">
+                    <div class="panel-header">
+                        <span class="panel-title">// Mission History</span>
+                        <button class="action-btn" onclick="loadHistory()" style="padding: 2px 8px; font-size: 0.65rem;">
+                            ↻ REFRESH
+                        </button>
+                    </div>
+                    <div class="history-list" id="historyList">
+                        <div class="history-empty">Loading...</div>
                     </div>
                 </div>
             </div>
@@ -711,6 +1574,107 @@
         </div>
     </div>
 
+    <!-- Skeleton Detail Modal - REEL INTEL Style -->
+    <div class="modal" id="skeletonDetailModal">
+        <div class="modal-backdrop" onclick="closeSkeletonDetailModal()"></div>
+        <div class="modal-content" style="max-width: 580px;">
+            <div class="modal-header">
+                <span class="modal-title">REEL INTEL</span>
+                <button class="modal-close" onclick="closeSkeletonDetailModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- Stats Row -->
+                <div class="reel-intel-stats" id="skeletonDetailStats">
+                    <div class="reel-stat">
+                        <span class="reel-stat-value" id="statViews">0</span>
+                        <span class="reel-stat-label">VIEWS</span>
+                    </div>
+                    <div class="reel-stat">
+                        <span class="reel-stat-value" id="statLikes">0</span>
+                        <span class="reel-stat-label">LIKES</span>
+                    </div>
+                    <div class="reel-stat">
+                        <span class="reel-stat-value" id="statDuration">0s</span>
+                        <span class="reel-stat-label">DURATION</span>
+                    </div>
+                </div>
+
+                <!-- URL Section -->
+                <div class="reel-intel-section">
+                    <div class="reel-intel-label">URL</div>
+                    <div class="reel-intel-url-row">
+                        <input type="text" id="skeletonDetailUrl" class="reel-intel-url" readonly>
+                        <button class="reel-intel-copy-btn" onclick="copySkeletonUrl()">COPY</button>
+                    </div>
+                </div>
+
+                <!-- Hook Section -->
+                <div class="reel-intel-section">
+                    <div class="reel-intel-label">HOOK</div>
+                    <div id="skeletonDetailHook" class="reel-intel-hook"></div>
+                </div>
+
+                <!-- Transcript Section -->
+                <div class="reel-intel-section">
+                    <div class="reel-intel-label">TRANSCRIPT</div>
+                    <div id="skeletonDetailTranscript" class="reel-intel-transcript"></div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="reel-intel-actions">
+                    <a id="skeletonDetailLink" href="#" target="_blank" class="reel-intel-btn">OPEN IN IG</a>
+                    <button class="reel-intel-btn primary" id="skeletonDetailDownloadBtn" onclick="handleDetailDownload()">DOWNLOAD</button>
+                    <button class="reel-intel-btn" onclick="copySkeletonDetailTranscript()">DOWNLOAD TRANSCRIPT</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Skeleton Video Player Modal -->
+    <div class="modal" id="skeletonVideoModal">
+        <div class="modal-backdrop" onclick="closeSkeletonVideoModal()"></div>
+        <div class="modal-content video-player-modal with-transcript" style="max-width: 850px;">
+            <div class="modal-header">
+                <span class="modal-title">VIDEO PLAYER</span>
+                <button class="modal-close" onclick="closeSkeletonVideoModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="video-player-layout">
+                    <div class="video-player-main">
+                        <div class="video-player-container">
+                            <video id="skeletonVideoPlayer" controls>
+                                <source id="skeletonVideoSource" src="" type="video/mp4">
+                            </video>
+                        </div>
+                        <div class="video-player-info">
+                            <div class="video-player-username" id="skeletonVideoUsername">@username</div>
+                            <div class="video-player-stats" id="skeletonVideoStats">0 views • 0 likes</div>
+                        </div>
+                    </div>
+                    <div class="video-transcript-panel">
+                        <div class="transcript-header">
+                            <span class="transcript-title">TRANSCRIPT</span>
+                            <div class="transcript-actions">
+                                <button class="transcript-action-btn" onclick="copySkeletonTranscript()" title="Copy transcript">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                        <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="transcript-content" id="skeletonVideoTranscript" style="padding: var(--space-md); overflow-y: auto; flex: 1; font-size: 12px; line-height: 1.6; color: var(--color-text-secondary);">
+                            Transcript will appear here...
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification Container -->
+    <div class="toast-container" id="toastContainer"></div>
+
     <script>
         // State
         let currentPlatform = 'instagram';
@@ -718,6 +1682,28 @@
         let pollInterval = null;
         let providersData = [];  // Array of provider objects
         let pendingAnalysis = null;  // For download modal flow
+        let currentReportData = { markdown: '', json: [], reportId: null };  // Store report data
+        let currentHistoryId = null;
+
+        // Toast Notification System
+        function showToast(message, type = 'success', duration = 2500) {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.textContent = message;
+            container.appendChild(toast);
+
+            // Trigger animation
+            requestAnimationFrame(() => {
+                toast.classList.add('show');
+            });
+
+            // Remove after duration
+            setTimeout(() => {
+                toast.classList.remove('show');
+                setTimeout(() => toast.remove(), 300);
+            }, duration);
+        }
 
         // Whisper model info for download modal
         const whisperModelInfo = {
@@ -917,7 +1903,7 @@
             const usernames = getSelectedUsernames();
 
             if (usernames.length === 0) {
-                alert('Please enter at least one creator username');
+                showToast('Please enter at least one creator username', 'error');
                 return;
             }
 
@@ -925,7 +1911,7 @@
             const provider = providersData.find(p => p.id === providerId);
 
             if (!provider || !provider.available) {
-                alert('Please select an available LLM provider');
+                showToast('Please select an available LLM provider', 'error');
                 return;
             }
 
@@ -1001,7 +1987,7 @@
                 }
             } catch (error) {
                 console.error('Failed to start analysis:', error);
-                alert('Failed to start analysis: ' + error.message);
+                showToast('Failed to start analysis: ' + error.message, 'error');
                 resetUI();
             }
         }
@@ -1019,16 +2005,31 @@
             try {
                 const response = await fetch(`/api/skeleton-ripper/status/${currentJobId}`);
                 const data = await response.json();
+                console.log('Poll response:', data.status, data.progress?.status, data.progress?.phase);
 
                 if (data.success) {
-                    updateProgress(data.progress);
+                    // Update progress if available
+                    if (data.progress) {
+                        updateProgress(data.progress);
+                    } else {
+                        // Show initializing state
+                        document.getElementById('progressPhase').textContent = 'Initializing pipeline...';
+                    }
 
-                    if (data.progress.status === 'complete') {
+                    // Check job status (top-level, not progress.status)
+                    // Also check progress.status for 'complete' as backup
+                    const jobComplete = data.status === 'complete' || data.progress?.status === 'complete';
+                    const jobFailed = data.status === 'failed' || data.progress?.status === 'failed';
+
+                    if (jobComplete) {
+                        console.log('Job complete! Loading report...');
                         stopPolling();
                         loadReport();
-                    } else if (data.progress.status === 'failed') {
+                    } else if (jobFailed) {
+                        console.log('Job failed!');
                         stopPolling();
-                        showError(data.progress.errors);
+                        const errors = data.progress?.errors || data.result?.error || ['Unknown error'];
+                        showError(Array.isArray(errors) ? errors : [errors]);
                     }
                 }
             } catch (error) {
@@ -1044,52 +2045,804 @@
         }
 
         function updateProgress(progress) {
-            document.getElementById('progressPhase').textContent = progress.phase || 'Processing...';
-            document.getElementById('statScraped').textContent = progress.videos_scraped || 0;
-            document.getElementById('statTranscribed').textContent = progress.videos_transcribed || 0;
+            // Show phase with optional detailed message
+            const phase = progress.phase || 'Processing...';
+            const message = progress.message || '';
+
+            // Build display text with phase and message
+            let displayText = phase;
+            if (message && message !== phase) {
+                // Filter out stale Whisper messages during non-scraping phases
+                const isStaleMessage = message.includes('Whisper') && !progress.status?.includes('scrap');
+                if (!isStaleMessage) {
+                    displayText = `${phase} — ${message}`;
+                }
+            }
+            document.getElementById('progressPhase').textContent = displayText;
+
+            // Update stats - show downloaded separately from transcribed
+            const downloaded = progress.videos_downloaded || 0;
+            const transcribed = progress.videos_transcribed || 0;
+            document.getElementById('statScraped').textContent = downloaded;
+            document.getElementById('statTranscribed').textContent = transcribed;
             document.getElementById('statExtracted').textContent = progress.skeletons_extracted || 0;
             document.getElementById('statCached').textContent = progress.transcripts_from_cache || 0;
 
+            // Progress bar - show overall progress
             const total = progress.total_target || 1;
-            const current = progress.skeletons_extracted || 0;
-            const percent = Math.min((current / total) * 100, 100);
-            document.getElementById('progressBar').style.width = percent + '%';
+            const extracted = progress.skeletons_extracted || 0;
+
+            // Weight: scraping/transcribing = 60%, extraction = 30%, synthesis = 10%
+            let percent = 0;
+            const status = progress.status || '';
+            if (status === 'scraping' || status === 'transcribing') {
+                percent = (transcribed / total) * 60;
+            } else if (status === 'extracting') {
+                // Show batch-based progress during extraction
+                const batchProgress = progress.extraction_batch && progress.extraction_total_batches
+                    ? (progress.extraction_batch / progress.extraction_total_batches)
+                    : (extracted / total);
+                percent = 60 + (batchProgress * 30);
+            } else if (status === 'aggregating') {
+                percent = 92;
+            } else if (status === 'synthesizing') {
+                percent = 95;
+            } else if (status === 'complete') {
+                percent = 100;
+            }
+
+            document.getElementById('progressBar').style.width = Math.min(percent, 100) + '%';
         }
 
         async function loadReport() {
-            try {
-                const response = await fetch(`/api/skeleton-ripper/report/${currentJobId}`);
-                const data = await response.json();
+            console.log('Loading report for job:', currentJobId);
 
-                if (data.success && data.report) {
-                    document.getElementById('progressSection').style.display = 'none';
-                    document.getElementById('reportContent').style.display = 'block';
-                    document.getElementById('reportContent').innerHTML = formatReport(data.report);
-                    document.getElementById('resultsStatus').textContent = 'Complete';
-                    document.getElementById('statusLabel').textContent = 'COMPLETE';
+            // Update UI to show loading state
+            document.getElementById('progressPhase').textContent = 'Loading report...';
+            document.getElementById('progressBar').style.width = '100%';
+
+            try {
+                // Fetch both markdown and JSON in parallel
+                const [mdResponse, jsonResponse] = await Promise.all([
+                    fetch(`/api/skeleton-ripper/report/${currentJobId}`),
+                    fetch(`/api/skeleton-ripper/report/${currentJobId}/json`)
+                ]);
+
+                if (!mdResponse.ok) {
+                    throw new Error(`Failed to fetch report: ${mdResponse.status}`);
                 }
+
+                const markdown = await mdResponse.text();
+                let jsonData = [];
+                if (jsonResponse.ok) {
+                    jsonData = await jsonResponse.json();
+                }
+
+                // Store report data
+                currentReportData = { markdown, json: jsonData, reportId: currentJobId };
+
+                // Hide progress, show tabbed interface
+                document.getElementById('progressSection').style.display = 'none';
+                document.getElementById('reportContent').style.display = 'none';
+                document.getElementById('reportTabs').classList.add('active');
+
+                // Render all tabs
+                renderVisualSkeletons(jsonData);
+                renderMarkdownTab(markdown);
+                renderJsonTab(jsonData);
+                renderAiPromptTab(jsonData);
+
+                // Update all status indicators
+                document.getElementById('resultsStatus').textContent = 'Complete';
+                document.getElementById('statusLabel').textContent = 'COMPLETE';
+                document.getElementById('statusLabel').style.color = 'var(--color-success)';
+
+                // Refresh history
+                loadHistory();
+
+                console.log('Report displayed successfully');
             } catch (error) {
                 console.error('Failed to load report:', error);
+                document.getElementById('progressPhase').textContent = 'Report generated but failed to display. Check output folder.';
+                document.getElementById('resultsStatus').textContent = 'Error loading';
+                document.getElementById('statusLabel').textContent = 'ERROR';
             } finally {
                 resetStartButton();
             }
         }
 
-        function formatReport(markdown) {
-            let html = markdown
-                .replace(/^### (.*$)/gim, '<h3>$1</h3>')
-                .replace(/^## (.*$)/gim, '<h2>$1</h2>')
-                .replace(/^# (.*$)/gim, '<h1>$1</h1>')
-                .replace(/^\* (.*$)/gim, '<li>$1</li>')
-                .replace(/^- (.*$)/gim, '<li>$1</li>')
-                .replace(/\*\*(.*?)\*\*/gim, '<strong>$1</strong>')
-                .replace(/\*(.*?)\*/gim, '<em>$1</em>')
-                .replace(/`([^`]+)`/g, '<code>$1</code>')
-                .replace(/\n/g, '<br>');
-
-            html = html.replace(/(<li>.*<\/li>(<br>)?)+/g, match => {
-                return '<ul>' + match.replace(/<br>/g, '') + '</ul>';
+        // Tab switching
+        function switchTab(tabName) {
+            // Update nav buttons
+            document.querySelectorAll('.report-tabs-nav .tab-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.textContent.toLowerCase().includes(tabName));
             });
+
+            // Update tab content
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            document.getElementById(`tab-${tabName}`).classList.add('active');
+        }
+
+        function toggleMarkdownView(view) {
+            const previewEl = document.getElementById('markdownPreview');
+            const rawEl = document.getElementById('markdownRaw');
+            const previewBtn = document.getElementById('mdPreviewBtn');
+            const rawBtn = document.getElementById('mdRawBtn');
+
+            if (view === 'preview') {
+                previewEl.style.display = 'block';
+                rawEl.style.display = 'none';
+                previewBtn.classList.add('active');
+                rawBtn.classList.remove('active');
+            } else {
+                previewEl.style.display = 'none';
+                rawEl.style.display = 'block';
+                previewBtn.classList.remove('active');
+                rawBtn.classList.add('active');
+            }
+        }
+
+        // Render visual skeleton cards
+        // Store skeleton data for modal access
+        let currentSkeletons = [];
+        let skeletonVideoStatus = {};  // Track download status per video_id
+
+        function renderVisualSkeletons(skeletons) {
+            const grid = document.getElementById('skeletonGrid');
+            currentSkeletons = skeletons || [];
+            skeletonVideoStatus = {};  // Reset status tracking
+
+            if (!skeletons || skeletons.length === 0) {
+                grid.innerHTML = '<p style="color: var(--color-text-muted);">No skeleton data available.</p>';
+                return;
+            }
+
+            grid.innerHTML = skeletons.map((s, index) => `
+                <div class="skeleton-card" data-index="${index}">
+                    <div class="skeleton-card-header">
+                        <span class="skeleton-creator">@${s.creator_username || 'unknown'}</span>
+                        <div class="skeleton-meta">
+                            <span>${s.platform || 'unknown'}</span>
+                            <span>${s.views ? s.views.toLocaleString() + ' views' : ''}</span>
+                            <span>~${s.estimated_duration_seconds || 0}s</span>
+                        </div>
+                    </div>
+                    <div class="skeleton-card-body">
+                        <div class="skeleton-section">
+                            <div class="skeleton-label">Hook</div>
+                            <div class="skeleton-hook">"${escapeHtml(s.hook || '')}"</div>
+                        </div>
+                        <div class="skeleton-section">
+                            <div class="skeleton-label">Value</div>
+                            <div class="skeleton-value">${escapeHtml(s.value || '')}</div>
+                            ${s.value_points && s.value_points.length > 0 ? `
+                                <ul class="skeleton-points">
+                                    ${s.value_points.map(p => `<li>${escapeHtml(p)}</li>`).join('')}
+                                </ul>
+                            ` : ''}
+                        </div>
+                        <div class="skeleton-section">
+                            <div class="skeleton-label">CTA</div>
+                            <div class="skeleton-cta">${escapeHtml(s.cta || 'None')}</div>
+                        </div>
+                        <div class="skeleton-tags">
+                            <span class="skeleton-tag technique">${s.hook_technique || 'unknown'}</span>
+                            <span class="skeleton-tag structure">${s.value_structure || 'unknown'}</span>
+                            <span class="skeleton-tag">${s.cta_type || 'none'} CTA</span>
+                            <span class="skeleton-tag">${s.hook_word_count || 0} word hook</span>
+                        </div>
+                    </div>
+                    <div class="skeleton-card-actions">
+                        <button class="skeleton-action-btn" onclick="openSkeletonDetail(${index})">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <line x1="12" y1="16" x2="12" y2="12"></line>
+                                <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                            </svg>
+                            Details
+                        </button>
+                        <button class="skeleton-action-btn video-btn" id="videoBtn-${s.video_id}" onclick="handleSkeletonVideo(${index})" data-video-id="${s.video_id}">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="download-icon">
+                                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"></path>
+                                <polyline points="7 10 12 15 17 10"></polyline>
+                                <line x1="12" y1="15" x2="12" y2="3"></line>
+                            </svg>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="play-icon" style="display:none;">
+                                <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                            </svg>
+                            <span class="btn-text">Download</span>
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+
+            // Check video status for each skeleton
+            checkAllVideoStatus();
+        }
+
+        // =========================================================
+        // SKELETON MODAL FUNCTIONS
+        // =========================================================
+
+        // Check all video download status
+        async function checkAllVideoStatus() {
+            if (!currentReportData.reportId || !currentSkeletons.length) return;
+
+            for (const skeleton of currentSkeletons) {
+                if (!skeleton.video_id) continue;
+
+                try {
+                    const response = await fetch(`/api/skeleton-ripper/video/${currentReportData.reportId}/${skeleton.video_id}/status`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        skeletonVideoStatus[skeleton.video_id] = data.downloaded;
+                        if (data.downloaded) {
+                            updateVideoButton(skeleton.video_id, true);
+                        }
+                    }
+                } catch (e) {
+                    console.debug('Video status check failed for', skeleton.video_id);
+                }
+            }
+        }
+
+        // Update video button appearance
+        function updateVideoButton(videoId, isDownloaded) {
+            const btn = document.getElementById(`videoBtn-${videoId}`);
+            if (!btn) return;
+
+            const downloadIcon = btn.querySelector('.download-icon');
+            const playIcon = btn.querySelector('.play-icon');
+            const btnText = btn.querySelector('.btn-text');
+
+            if (isDownloaded) {
+                btn.classList.add('downloaded');
+                btn.classList.remove('downloading');
+                downloadIcon.style.display = 'none';
+                playIcon.style.display = 'block';
+                btnText.textContent = 'View Reel';
+            } else {
+                btn.classList.remove('downloaded', 'downloading');
+                downloadIcon.style.display = 'block';
+                playIcon.style.display = 'none';
+                btnText.textContent = 'Download';
+            }
+        }
+
+        // Open skeleton detail modal
+        // Track current skeleton being viewed in detail modal
+        let currentDetailIndex = null;
+
+        // Format number with K/M suffixes
+        function formatNumber(num) {
+            if (!num) return '0';
+            if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+            if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+            return num.toLocaleString();
+        }
+
+        function openSkeletonDetail(index) {
+            const skeleton = currentSkeletons[index];
+            if (!skeleton) return;
+
+            currentDetailIndex = index;
+
+            // Populate stats
+            document.getElementById('statViews').textContent = formatNumber(skeleton.views);
+            document.getElementById('statLikes').textContent = formatNumber(skeleton.likes);
+            document.getElementById('statDuration').textContent = `~${skeleton.estimated_duration_seconds || 0}s`;
+
+            // URL
+            const url = skeleton.url || '';
+            document.getElementById('skeletonDetailUrl').value = url;
+
+            // Hook with creator prefix
+            const hookText = skeleton.hook || 'No hook available';
+            document.getElementById('skeletonDetailHook').textContent = hookText;
+
+            // Transcript
+            const transcript = skeleton.transcript || '';
+            document.getElementById('skeletonDetailTranscript').textContent =
+                transcript || 'Transcript not available. Run a new analysis to capture transcripts.';
+
+            // Set link
+            const link = document.getElementById('skeletonDetailLink');
+            if (url) {
+                link.href = url;
+                link.style.display = 'flex';
+            } else {
+                link.style.display = 'none';
+            }
+
+            // Update download button state
+            const downloadBtn = document.getElementById('skeletonDetailDownloadBtn');
+            const isDownloaded = skeletonVideoStatus[skeleton.video_id];
+            if (isDownloaded) {
+                downloadBtn.textContent = 'DOWNLOADED ✓';
+                downloadBtn.classList.add('downloaded');
+            } else {
+                downloadBtn.textContent = 'DOWNLOAD';
+                downloadBtn.classList.remove('downloaded');
+            }
+
+            // Show modal
+            document.getElementById('skeletonDetailModal').classList.add('active');
+        }
+
+        function closeSkeletonDetailModal() {
+            document.getElementById('skeletonDetailModal').classList.remove('active');
+            currentDetailIndex = null;
+        }
+
+        // Copy URL from detail modal
+        function copySkeletonUrl() {
+            const url = document.getElementById('skeletonDetailUrl').value;
+            if (url) {
+                navigator.clipboard.writeText(url).then(() => {
+                    showToast('URL copied');
+                });
+            }
+        }
+
+        // Copy transcript from detail modal
+        function copySkeletonDetailTranscript() {
+            const transcript = document.getElementById('skeletonDetailTranscript').textContent;
+            if (transcript && transcript !== 'Transcript not available. Run a new analysis to capture transcripts.') {
+                navigator.clipboard.writeText(transcript).then(() => {
+                    showToast('Transcript copied');
+                });
+            } else {
+                showToast('No transcript available', 'error');
+            }
+        }
+
+        // Handle download from detail modal
+        async function handleDetailDownload() {
+            if (currentDetailIndex === null) return;
+
+            const skeleton = currentSkeletons[currentDetailIndex];
+            if (!skeleton || !skeleton.video_id) {
+                showToast('Video not available', 'error');
+                return;
+            }
+
+            const isDownloaded = skeletonVideoStatus[skeleton.video_id];
+            if (isDownloaded) {
+                // Already downloaded - open video player
+                closeSkeletonDetailModal();
+                openSkeletonVideoModal(currentDetailIndex);
+            } else {
+                // Download the video
+                const btn = document.getElementById('skeletonDetailDownloadBtn');
+                btn.textContent = 'DOWNLOADING...';
+                btn.classList.add('downloading');
+
+                await downloadSkeletonVideo(currentDetailIndex);
+
+                // Update button state
+                if (skeletonVideoStatus[skeleton.video_id]) {
+                    btn.textContent = 'DOWNLOADED ✓';
+                    btn.classList.remove('downloading');
+                    btn.classList.add('downloaded');
+                } else {
+                    btn.textContent = 'DOWNLOAD';
+                    btn.classList.remove('downloading', 'downloaded');
+                }
+            }
+        }
+
+        // Handle video button click (download or play)
+        async function handleSkeletonVideo(index) {
+            const skeleton = currentSkeletons[index];
+            if (!skeleton || !skeleton.video_id) {
+                showToast('Video not available', 'error');
+                return;
+            }
+
+            const videoId = skeleton.video_id;
+            const isDownloaded = skeletonVideoStatus[videoId];
+
+            if (isDownloaded) {
+                // Open video player modal
+                openSkeletonVideoModal(index);
+            } else {
+                // Download the video
+                await downloadSkeletonVideo(index);
+            }
+        }
+
+        // Download skeleton video
+        async function downloadSkeletonVideo(index) {
+            const skeleton = currentSkeletons[index];
+            if (!skeleton || !skeleton.video_id || !currentReportData.reportId) {
+                showToast('Cannot download video', 'error');
+                return;
+            }
+
+            const videoId = skeleton.video_id;
+            const btn = document.getElementById(`videoBtn-${videoId}`);
+            const btnText = btn?.querySelector('.btn-text');
+
+            // Set downloading state
+            if (btn) {
+                btn.classList.add('downloading');
+                if (btnText) btnText.textContent = 'Downloading...';
+            }
+
+            try {
+                const response = await fetch(`/api/skeleton-ripper/video/${currentReportData.reportId}/${videoId}/download`, {
+                    method: 'POST'
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success) {
+                        skeletonVideoStatus[videoId] = true;
+                        updateVideoButton(videoId, true);
+                        showToast('Video downloaded successfully');
+                    } else {
+                        throw new Error(data.error || 'Download failed');
+                    }
+                } else {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Download failed');
+                }
+            } catch (error) {
+                console.error('Video download error:', error);
+                showToast(error.message || 'Failed to download video', 'error');
+                updateVideoButton(videoId, false);
+            }
+        }
+
+        // Open video player modal
+        function openSkeletonVideoModal(index) {
+            const skeleton = currentSkeletons[index];
+            if (!skeleton || !skeleton.video_id || !currentReportData.reportId) {
+                showToast('Video not available', 'error');
+                return;
+            }
+
+            // Set video source
+            const videoUrl = `/api/skeleton-ripper/video/${currentReportData.reportId}/${skeleton.video_id}`;
+            const video = document.getElementById('skeletonVideoPlayer');
+            const source = document.getElementById('skeletonVideoSource');
+
+            source.src = videoUrl;
+            video.load();
+
+            // Set info
+            document.getElementById('skeletonVideoUsername').textContent = `@${skeleton.creator_username || 'unknown'}`;
+            document.getElementById('skeletonVideoStats').textContent =
+                `${skeleton.views ? skeleton.views.toLocaleString() : '0'} views • ${skeleton.likes ? skeleton.likes.toLocaleString() : '0'} likes`;
+
+            // Set transcript
+            document.getElementById('skeletonVideoTranscript').textContent = skeleton.transcript || 'Transcript not available.';
+
+            // Show modal
+            document.getElementById('skeletonVideoModal').classList.add('active');
+        }
+
+        function closeSkeletonVideoModal() {
+            const video = document.getElementById('skeletonVideoPlayer');
+            video.pause();
+            document.getElementById('skeletonVideoModal').classList.remove('active');
+        }
+
+        // Copy skeleton transcript from video modal
+        function copySkeletonTranscript() {
+            const transcript = document.getElementById('skeletonVideoTranscript').textContent;
+            navigator.clipboard.writeText(transcript).then(() => {
+                showToast('Transcript copied');
+            }).catch(() => {
+                showToast('Failed to copy', 'error');
+            });
+        }
+
+        // =========================================================
+
+        // Render markdown tab
+        function renderMarkdownTab(markdown) {
+            document.getElementById('markdownPreview').innerHTML = formatMarkdownPreview(markdown);
+            document.getElementById('markdownRaw').textContent = markdown;
+        }
+
+        // Render JSON tab with syntax highlighting
+        function renderJsonTab(jsonData) {
+            const jsonView = document.getElementById('jsonView');
+            jsonView.innerHTML = syntaxHighlightJson(JSON.stringify(jsonData, null, 2));
+        }
+
+        function syntaxHighlightJson(json) {
+            return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function (match) {
+                let cls = 'number';
+                if (/^"/.test(match)) {
+                    if (/:$/.test(match)) {
+                        cls = 'key';
+                    } else {
+                        cls = 'string';
+                    }
+                } else if (/true|false/.test(match)) {
+                    cls = 'boolean';
+                } else if (/null/.test(match)) {
+                    cls = 'null';
+                }
+                return '<span class="' + cls + '">' + match + '</span>';
+            });
+        }
+
+        // Render AI Prompt tab
+        function renderAiPromptTab(skeletons) {
+            const promptBox = document.getElementById('aiPromptBox');
+
+            if (!skeletons || skeletons.length === 0) {
+                promptBox.textContent = 'No skeleton data available to generate prompt.';
+                return;
+            }
+
+            // Build skeleton summaries
+            const skeletonSummaries = skeletons.map((s, i) => `
+SKELETON ${i + 1} (@${s.creator_username}):
+- Hook Technique: ${s.hook_technique}
+- Hook: "${s.hook}"
+- Value Structure: ${s.value_structure}
+- CTA Type: ${s.cta_type}
+- Duration: ~${s.estimated_duration_seconds}s`).join('\n');
+
+            const prompt = `You are a content strategist helping me create short-form video scripts based on proven skeleton patterns.
+
+I've analyzed successful content and extracted these skeleton templates:
+
+${skeletonSummaries}
+
+---
+
+HOW TO USE THIS:
+1. I'll tell you what topic/product/idea I want to create content about
+2. You'll help me pick the best skeleton pattern for my goal
+3. We'll work together to fill in the template with my specific content
+4. You'll generate a complete script I can use
+
+GUIDELINES:
+- Keep hooks punchy and under 15 words
+- Match the energy and style of the original creators
+- Adapt the skeleton to my niche while keeping what works
+- Suggest multiple hook variations when relevant
+- Flag if my content might not fit the chosen skeleton
+
+I'm ready to create content. What topic or idea would you like to turn into a script?`;
+
+            promptBox.textContent = prompt;
+        }
+
+        // Copy functions
+        function copyMarkdown() {
+            if (!currentReportData.markdown) {
+                showToast('No markdown to copy', 'error');
+                return;
+            }
+            navigator.clipboard.writeText(currentReportData.markdown).then(() => {
+                showToast('Markdown copied');
+            }).catch(() => {
+                showToast('Copy failed', 'error');
+            });
+        }
+
+        function copyJson() {
+            if (!currentReportData.json || currentReportData.json.length === 0) {
+                showToast('No JSON to copy', 'error');
+                return;
+            }
+            navigator.clipboard.writeText(JSON.stringify(currentReportData.json, null, 2)).then(() => {
+                showToast('JSON copied');
+            }).catch(() => {
+                showToast('Copy failed', 'error');
+            });
+        }
+
+        function copyAiPrompt() {
+            const prompt = document.getElementById('aiPromptBox').textContent;
+            if (!prompt) {
+                showToast('No prompt to copy', 'error');
+                return;
+            }
+            navigator.clipboard.writeText(prompt).then(() => {
+                showToast('AI prompt copied');
+            }).catch(() => {
+                showToast('Copy failed', 'error');
+            });
+        }
+
+        function downloadJson() {
+            if (!currentReportData.json || currentReportData.json.length === 0) {
+                showToast('No JSON data to download', 'error');
+                return;
+            }
+            const blob = new Blob([JSON.stringify(currentReportData.json, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `skeletons_${currentReportData.reportId || 'export'}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast('JSON downloaded');
+        }
+
+        function downloadMarkdown() {
+            if (!currentReportData.markdown) {
+                showToast('No markdown to download', 'error');
+                return;
+            }
+            const blob = new Blob([currentReportData.markdown], { type: 'text/markdown' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `report_${currentReportData.reportId || 'export'}.md`;
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast('Markdown downloaded');
+        }
+
+        // Markdown preview formatting
+        function formatMarkdownPreview(markdown) {
+            // Normalize line endings and split
+            const lines = markdown.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+            let html = '';
+            let inList = false;
+            let inCodeBlock = false;
+
+            for (let rawLine of lines) {
+                const line = rawLine.trimEnd(); // Remove trailing whitespace but preserve leading
+
+                // Handle code blocks - check for ``` at start
+                if (line.trim().startsWith('```')) {
+                    if (inCodeBlock) {
+                        html += '</code></pre>';
+                        inCodeBlock = false;
+                    } else {
+                        html += '<pre><code>';
+                        inCodeBlock = true;
+                    }
+                    continue;
+                }
+                if (inCodeBlock) {
+                    html += escapeHtml(line) + '\n';
+                    continue;
+                }
+
+                // Horizontal rule
+                if (line.trim() === '---' || line.trim() === '***') {
+                    if (inList) { html += '</ul>'; inList = false; }
+                    html += '<hr>';
+                    continue;
+                }
+
+                // Headers - use startsWith for reliability
+                if (line.startsWith('#### ')) {
+                    if (inList) { html += '</ul>'; inList = false; }
+                    html += `<h4>${escapeHtml(line.slice(5))}</h4>`;
+                    continue;
+                }
+                if (line.startsWith('### ')) {
+                    if (inList) { html += '</ul>'; inList = false; }
+                    html += `<h3>${escapeHtml(line.slice(4))}</h3>`;
+                    continue;
+                }
+                if (line.startsWith('## ')) {
+                    if (inList) { html += '</ul>'; inList = false; }
+                    html += `<h2>${escapeHtml(line.slice(3))}</h2>`;
+                    continue;
+                }
+                if (line.startsWith('# ')) {
+                    if (inList) { html += '</ul>'; inList = false; }
+                    html += `<h1>${escapeHtml(line.slice(2))}</h1>`;
+                    continue;
+                }
+
+                // List items
+                if (line.trim().startsWith('- ') || line.trim().startsWith('* ')) {
+                    if (!inList) { html += '<ul>'; inList = true; }
+                    html += `<li>${formatInline(line.trim().slice(2))}</li>`;
+                    continue;
+                }
+
+                // End list if we hit non-list content
+                if (inList && line.trim() && !line.trim().startsWith('-') && !line.trim().startsWith('*')) {
+                    html += '</ul>';
+                    inList = false;
+                }
+
+                // Empty line
+                if (!line.trim()) {
+                    if (inList) { html += '</ul>'; inList = false; }
+                    continue;
+                }
+
+                // Regular paragraph
+                html += `<p>${formatInline(line)}</p>`;
+            }
+
+            if (inList) html += '</ul>';
+            if (inCodeBlock) html += '</code></pre>';
+            return html;
+        }
+
+        function formatReport(markdown) {
+            // Process line by line for better control
+            const lines = markdown.split('\n');
+            let html = '';
+            let inList = false;
+            let inCodeBlock = false;
+
+            for (let line of lines) {
+                // Handle code blocks
+                if (line.trim().startsWith('```')) {
+                    if (inCodeBlock) {
+                        html += '</pre>';
+                        inCodeBlock = false;
+                    } else {
+                        html += '<pre><code>';
+                        inCodeBlock = true;
+                    }
+                    continue;
+                }
+
+                if (inCodeBlock) {
+                    html += escapeHtml(line) + '\n';
+                    continue;
+                }
+
+                // Horizontal rule
+                if (line.trim() === '---' || line.trim() === '***') {
+                    if (inList) { html += '</ul>'; inList = false; }
+                    html += '<hr>';
+                    continue;
+                }
+
+                // Headers
+                if (line.startsWith('### ')) {
+                    if (inList) { html += '</ul>'; inList = false; }
+                    html += `<h3>${formatInline(line.slice(4))}</h3>`;
+                    continue;
+                }
+                if (line.startsWith('## ')) {
+                    if (inList) { html += '</ul>'; inList = false; }
+                    html += `<h2>${formatInline(line.slice(3))}</h2>`;
+                    continue;
+                }
+                if (line.startsWith('# ')) {
+                    if (inList) { html += '</ul>'; inList = false; }
+                    html += `<h1>${formatInline(line.slice(2))}</h1>`;
+                    continue;
+                }
+
+                // List items
+                if (line.trim().startsWith('- ') || line.trim().startsWith('* ')) {
+                    if (!inList) { html += '<ul>'; inList = true; }
+                    html += `<li>${formatInline(line.trim().slice(2))}</li>`;
+                    continue;
+                }
+
+                // End list if not a list item
+                if (inList && line.trim() && !line.trim().startsWith('-') && !line.trim().startsWith('*')) {
+                    html += '</ul>';
+                    inList = false;
+                }
+
+                // Empty line
+                if (!line.trim()) {
+                    if (inList) { html += '</ul>'; inList = false; }
+                    html += '<br>';
+                    continue;
+                }
+
+                // Regular paragraph
+                html += `<p>${formatInline(line)}</p>`;
+            }
+
+            if (inList) html += '</ul>';
+            if (inCodeBlock) html += '</code></pre>';
 
             html += `
                 <div class="report-actions">
@@ -1100,6 +2853,17 @@
             `;
 
             return html;
+        }
+
+        function formatInline(text) {
+            return text
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                .replace(/`([^`]+)`/g, '<code>$1</code>');
+        }
+
+        function escapeHtml(text) {
+            return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         }
 
         function showError(errors) {
@@ -1121,8 +2885,11 @@
             document.getElementById('emptyState').style.display = 'flex';
             document.getElementById('progressSection').style.display = 'none';
             document.getElementById('reportContent').style.display = 'none';
+            document.getElementById('reportTabs').classList.remove('active');
             document.getElementById('resultsStatus').textContent = 'Awaiting input';
             document.getElementById('statusLabel').textContent = 'READY';
+            document.getElementById('statusLabel').style.color = '';
+            currentReportData = { markdown: '', json: [], reportId: null };
             resetStartButton();
         }
 
@@ -1133,21 +2900,226 @@
         }
 
         function downloadReport() {
-            if (!currentJobId) return;
-            window.open(`/api/skeleton-ripper/report/${currentJobId}?download=true`, '_blank');
+            // Works for both current job and history reports
+            if (currentJobId) {
+                window.open(`/api/skeleton-ripper/report/${currentJobId}?download=true`, '_blank');
+                showToast('Report download started');
+            } else if (currentHistoryId) {
+                window.open(`/api/skeleton-ripper/history/${currentHistoryId}?download=true`, '_blank');
+                showToast('Report download started');
+            } else {
+                showToast('No report to download', 'error');
+            }
         }
 
         function copyReport() {
             const content = document.getElementById('reportContent').innerText;
+            if (!content) {
+                showToast('No report to copy', 'error');
+                return;
+            }
             navigator.clipboard.writeText(content).then(() => {
-                alert('Report copied to clipboard');
+                showToast('Report copied');
+            }).catch(() => {
+                showToast('Copy failed', 'error');
             });
         }
 
         function newAnalysis() {
             currentJobId = null;
+            currentHistoryId = null;
+            currentReportData = { markdown: '', json: [], reportId: null };
             resetUI();
+            // Clear active state from history items
+            document.querySelectorAll('.history-item').forEach(item => item.classList.remove('active'));
         }
+
+        // Mission History Functions
+        async function loadHistory() {
+            const historyList = document.getElementById('historyList');
+            historyList.innerHTML = '<div class="history-empty">Loading...</div>';
+
+            try {
+                const response = await fetch('/api/skeleton-ripper/history');
+                const data = await response.json();
+
+                if (!data.success || !data.history || data.history.length === 0) {
+                    historyList.innerHTML = '<div class="history-empty">No past missions found</div>';
+                    return;
+                }
+
+                historyList.innerHTML = '';
+                data.history.forEach(item => {
+                    const div = document.createElement('div');
+                    div.className = 'history-item' + (item.id === currentHistoryId ? ' active' : '');
+                    div.onclick = () => loadHistoryReport(item.id);
+
+                    // Primary creator name + tooltip for multiple
+                    const primaryCreator = item.creators.length > 0 ? '@' + item.creators[0] : 'Unknown';
+                    const tooltipHtml = item.creators.length > 1
+                        ? `<div class="creator-tooltip">${item.creators.map(c => '<div>@' + c + '</div>').join('')}</div>`
+                        : '';
+                    const creatorSuffix = item.creators.length > 1 ? ` <span style="opacity:0.6">+${item.creators.length - 1}</span>` : '';
+
+                    div.innerHTML = `
+                        <div class="history-info">
+                            <div class="history-meta">
+                                <span>${item.date}</span>
+                                <span class="platform">${item.platform}</span>
+                            </div>
+                            <span class="history-creator">${primaryCreator}${creatorSuffix}${tooltipHtml}</span>
+                        </div>
+                        <div class="history-stat">
+                            <span class="count">${item.skeleton_count}</span>
+                            <span class="label">skel</span>
+                        </div>
+                    `;
+                    historyList.appendChild(div);
+                });
+
+            } catch (error) {
+                console.error('Failed to load history:', error);
+                historyList.innerHTML = '<div class="history-empty">Failed to load history</div>';
+            }
+        }
+
+        async function loadHistoryReport(reportId) {
+            console.log('Loading historical report:', reportId);
+            currentHistoryId = reportId;
+
+            // Update active state in history list
+            document.querySelectorAll('.history-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            // Find and activate the clicked item
+            loadHistory();
+
+            // Show loading in results area
+            document.getElementById('emptyState').style.display = 'none';
+            document.getElementById('progressSection').style.display = 'block';
+            document.getElementById('reportContent').style.display = 'none';
+            document.getElementById('reportTabs').classList.remove('active');
+            document.getElementById('progressPhase').textContent = 'Loading historical report...';
+            document.getElementById('progressBar').style.width = '50%';
+            document.getElementById('resultsStatus').textContent = 'Loading';
+
+            try {
+                // Fetch both markdown and JSON in parallel
+                const [mdResponse, jsonResponse] = await Promise.all([
+                    fetch(`/api/skeleton-ripper/history/${reportId}`),
+                    fetch(`/api/skeleton-ripper/history/${reportId}/json`)
+                ]);
+
+                if (!mdResponse.ok) {
+                    throw new Error(`Failed to fetch report: ${mdResponse.status}`);
+                }
+
+                const markdown = await mdResponse.text();
+                let jsonData = [];
+                if (jsonResponse.ok) {
+                    jsonData = await jsonResponse.json();
+                }
+
+                // Store report data
+                currentReportData = { markdown, json: jsonData, reportId };
+
+                // Hide progress, show tabbed interface
+                document.getElementById('progressSection').style.display = 'none';
+                document.getElementById('reportContent').style.display = 'none';
+                document.getElementById('reportTabs').classList.add('active');
+
+                // Render all tabs
+                renderVisualSkeletons(jsonData);
+                renderMarkdownTab(markdown);
+                renderJsonTab(jsonData);
+                renderAiPromptTab(jsonData);
+
+                // Reset to first tab
+                switchTab('visual');
+
+                // Update status
+                document.getElementById('resultsStatus').textContent = 'Historical Report';
+                document.getElementById('statusLabel').textContent = 'VIEWING';
+                document.getElementById('statusLabel').style.color = 'var(--color-accent-primary)';
+
+            } catch (error) {
+                console.error('Failed to load historical report:', error);
+                document.getElementById('progressPhase').textContent = 'Failed to load report';
+                document.getElementById('resultsStatus').textContent = 'Error';
+            }
+        }
+
+        function formatHistoryReport(markdown) {
+            // Use same processing as formatReport
+            const lines = markdown.split('\n');
+            let html = '';
+            let inList = false;
+            let inCodeBlock = false;
+
+            for (let line of lines) {
+                if (line.trim().startsWith('```')) {
+                    if (inCodeBlock) { html += '</pre>'; inCodeBlock = false; }
+                    else { html += '<pre><code>'; inCodeBlock = true; }
+                    continue;
+                }
+                if (inCodeBlock) { html += escapeHtml(line) + '\n'; continue; }
+                if (line.trim() === '---' || line.trim() === '***') {
+                    if (inList) { html += '</ul>'; inList = false; }
+                    html += '<hr>'; continue;
+                }
+                if (line.startsWith('### ')) {
+                    if (inList) { html += '</ul>'; inList = false; }
+                    html += `<h3>${formatInline(line.slice(4))}</h3>`; continue;
+                }
+                if (line.startsWith('## ')) {
+                    if (inList) { html += '</ul>'; inList = false; }
+                    html += `<h2>${formatInline(line.slice(3))}</h2>`; continue;
+                }
+                if (line.startsWith('# ')) {
+                    if (inList) { html += '</ul>'; inList = false; }
+                    html += `<h1>${formatInline(line.slice(2))}</h1>`; continue;
+                }
+                if (line.trim().startsWith('- ') || line.trim().startsWith('* ')) {
+                    if (!inList) { html += '<ul>'; inList = true; }
+                    html += `<li>${formatInline(line.trim().slice(2))}</li>`; continue;
+                }
+                if (inList && line.trim() && !line.trim().startsWith('-') && !line.trim().startsWith('*')) {
+                    html += '</ul>'; inList = false;
+                }
+                if (!line.trim()) {
+                    if (inList) { html += '</ul>'; inList = false; }
+                    html += '<br>'; continue;
+                }
+                html += `<p>${formatInline(line)}</p>`;
+            }
+
+            if (inList) html += '</ul>';
+            if (inCodeBlock) html += '</code></pre>';
+
+            html += `
+                <div class="report-actions">
+                    <button class="action-btn primary" onclick="downloadHistoryReport()">DOWNLOAD REPORT</button>
+                    <button class="action-btn" onclick="copyReport()">COPY TO CLIPBOARD</button>
+                    <button class="action-btn" onclick="newAnalysis()">NEW ANALYSIS</button>
+                </div>
+            `;
+
+            return html;
+        }
+
+        function downloadHistoryReport() {
+            if (!currentHistoryId) {
+                showToast('No report to download', 'error');
+                return;
+            }
+            window.open(`/api/skeleton-ripper/history/${currentHistoryId}?download=true`, '_blank');
+            showToast('Report download started');
+        }
+
+        // Load history on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            loadHistory();
+        });
     </script>
 </body>
 </html>

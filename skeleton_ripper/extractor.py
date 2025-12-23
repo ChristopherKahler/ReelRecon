@@ -76,7 +76,7 @@ class BatchedExtractor:
         self.batch_size = min(max(batch_size, 1), 5)  # Clamp to 1-5
         self.max_retries = max_retries
 
-        logger.info(f"BatchedExtractor initialized: batch_size={self.batch_size}")
+        logger.info("EXTRACT", f"BatchedExtractor initialized: batch_size={self.batch_size}")
 
     def extract_all(
         self,
@@ -88,7 +88,7 @@ class BatchedExtractor:
 
         Args:
             transcripts: List of dicts with 'video_id', 'transcript', 'views', etc.
-            on_progress: Optional callback(extracted_count, total_count)
+            on_progress: Optional callback(extracted_count, total_count, batch_idx, total_batches)
 
         Returns:
             BatchExtractionResult with successful extractions and failures
@@ -98,10 +98,11 @@ class BatchedExtractor:
 
         # Split into batches
         batches = self._create_batches(transcripts)
-        logger.info(f"Processing {total} transcripts in {len(batches)} batches")
+        total_batches = len(batches)
+        logger.info("EXTRACT", f"Processing {total} transcripts in {total_batches} batches")
 
         for batch_idx, batch in enumerate(batches):
-            logger.debug(f"Processing batch {batch_idx + 1}/{len(batches)}")
+            logger.debug("EXTRACT", f"Processing batch {batch_idx + 1}/{total_batches}")
 
             batch_result = self._extract_batch_with_retry(batch)
 
@@ -109,11 +110,12 @@ class BatchedExtractor:
             result.failed_video_ids.extend(batch_result.failed_video_ids)
             result.total_attempts += batch_result.total_attempts
 
-            # Progress callback
+            # Progress callback with batch info
             if on_progress:
-                on_progress(len(result.successful), total)
+                on_progress(len(result.successful), total, batch_idx + 1, total_batches)
 
         logger.info(
+            "EXTRACT",
             f"Extraction complete: {len(result.successful)} successful, "
             f"{len(result.failed_video_ids)} failed"
         )
@@ -156,7 +158,7 @@ class BatchedExtractor:
         try:
             # Build and send prompt
             prompt = get_extraction_prompt(batch)
-            response = self.llm_client.complete(prompt, temperature=0.3)
+            response = self.llm_client.complete(prompt, temperature=0)
 
             # Parse JSON response
             parsed = self._parse_response(response)
@@ -179,22 +181,24 @@ class BatchedExtractor:
                         skeleton['views'] = original.get('views', 0)
                         skeleton['likes'] = original.get('likes', 0)
                         skeleton['url'] = original.get('url', '')
+                        skeleton['video_url'] = original.get('video_url', '')
+                        skeleton['transcript'] = original.get('transcript', '')
                         skeleton['extracted_at'] = datetime.utcnow().isoformat()
                         skeleton['extraction_model'] = f"{self.llm_client.provider}/{self.llm_client.model}"
 
                     result.successful.append(skeleton)
                 else:
-                    logger.warning(f"Invalid skeleton for {skeleton.get('video_id')}: {error}")
+                    logger.warning("EXTRACT", f"Invalid skeleton for {skeleton.get('video_id')}: {error}")
                     result.failed_video_ids.append(skeleton.get('video_id', 'unknown'))
 
             return result
 
         except json.JSONDecodeError as e:
-            logger.warning(f"Batch parse failed (attempt {attempt + 1}): {e}")
+            logger.warning("EXTRACT", f"Batch parse failed (attempt {attempt + 1}): {e}")
             return self._handle_parse_failure(batch, attempt)
 
         except Exception as e:
-            logger.error(f"Batch extraction error: {e}")
+            logger.error("EXTRACT", f"Batch extraction error: {e}")
             # Mark all as failed
             result.failed_video_ids = [t.get('video_id', 'unknown') for t in batch]
             return result
@@ -219,7 +223,7 @@ class BatchedExtractor:
         if attempt >= self.max_retries:
             # Max retries reached - mark all as failed
             result.failed_video_ids = [t.get('video_id', 'unknown') for t in batch]
-            logger.warning(f"Max retries reached, {len(batch)} transcripts failed")
+            logger.warning("EXTRACT", f"Max retries reached, {len(batch)} transcripts failed")
             return result
 
         if len(batch) > 1:
@@ -228,7 +232,7 @@ class BatchedExtractor:
             first_half = batch[:mid]
             second_half = batch[mid:]
 
-            logger.info(f"Splitting batch: {len(first_half)} + {len(second_half)}")
+            logger.info("EXTRACT", f"Splitting batch: {len(first_half)} + {len(second_half)}")
 
             # Retry first half
             first_result = self._extract_batch_with_retry(first_half, attempt + 1)
@@ -246,7 +250,7 @@ class BatchedExtractor:
             # Single transcript failed - mark as failed
             video_id = batch[0].get('video_id', 'unknown')
             result.failed_video_ids.append(video_id)
-            logger.warning(f"Single transcript extraction failed: {video_id}")
+            logger.warning("EXTRACT", f"Single transcript extraction failed: {video_id}")
 
         return result
 
@@ -262,19 +266,35 @@ class BatchedExtractor:
         Returns:
             List of skeleton dicts, or None if parse fails
         """
+        import re
+
         # Clean response
         text = response.strip()
 
         # Remove markdown code blocks if present
-        if text.startswith('```'):
-            # Find the closing ```
-            lines = text.split('\n')
-            # Remove first line (```json or ```)
-            lines = lines[1:]
-            # Remove last line if it's just ```
-            if lines and lines[-1].strip() == '```':
-                lines = lines[:-1]
-            text = '\n'.join(lines)
+        if '```' in text:
+            # Extract content between ``` markers
+            match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', text)
+            if match:
+                text = match.group(1).strip()
+            else:
+                # Remove leading ``` and everything before it
+                text = re.sub(r'^.*?```(?:json)?\s*', '', text, flags=re.DOTALL)
+                text = re.sub(r'\s*```.*$', '', text, flags=re.DOTALL)
+
+        # Try to find JSON array or object in the text
+        text = text.strip()
+
+        # If doesn't start with [ or {, try to find them
+        if not text.startswith('[') and not text.startswith('{'):
+            # Find first [ or {
+            array_start = text.find('[')
+            obj_start = text.find('{')
+
+            if array_start >= 0 and (obj_start < 0 or array_start < obj_start):
+                text = text[array_start:]
+            elif obj_start >= 0:
+                text = text[obj_start:]
 
         # Try to parse
         try:
@@ -288,8 +308,9 @@ class BatchedExtractor:
             if isinstance(parsed, list):
                 return parsed
 
-        except json.JSONDecodeError:
-            pass
+        except json.JSONDecodeError as e:
+            # Log the actual error for debugging
+            logger.debug("EXTRACT", f"JSON parse failed: {e}. First 200 chars: {text[:200]}")
 
         return None
 

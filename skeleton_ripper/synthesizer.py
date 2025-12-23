@@ -67,7 +67,7 @@ class PatternSynthesizer:
         self.llm_client = llm_client
         self.timeout = timeout
 
-        logger.info(f"PatternSynthesizer initialized with {llm_client.provider}/{llm_client.model}")
+        logger.info("SYNTH", f"PatternSynthesizer initialized with {llm_client.provider}/{llm_client.model}")
 
     def synthesize(
         self,
@@ -85,13 +85,13 @@ class PatternSynthesizer:
             SynthesisResult with analysis and templates
         """
         if not data.skeletons:
-            logger.warning("No skeletons to synthesize")
+            logger.warning("SYNTH", "No skeletons to synthesize")
             return SynthesisResult(
                 success=False,
                 error="No skeleton data to synthesize"
             )
 
-        logger.info(f"Synthesizing patterns from {len(data.skeletons)} skeletons")
+        logger.info("SYNTH", f"Synthesizing patterns from {len(data.skeletons)} skeletons")
 
         try:
             # Get prompts
@@ -109,14 +109,14 @@ class PatternSynthesizer:
             result.model_used = f"{self.llm_client.provider}/{self.llm_client.model}"
             result.synthesized_at = datetime.utcnow().isoformat()
 
-            logger.info("Synthesis complete")
+            logger.info("SYNTH", "Synthesis complete")
             return result
 
         except Exception as e:
-            logger.error(f"Synthesis failed: {e}")
+            logger.error("SYNTH", f"Synthesis failed: {e}")
 
             if retry_on_failure:
-                logger.info("Retrying synthesis...")
+                logger.info("SYNTH", "Retrying synthesis...")
                 try:
                     # Retry with increased timeout
                     original_timeout = self.llm_client.timeout
@@ -135,11 +135,11 @@ class PatternSynthesizer:
                     result.model_used = f"{self.llm_client.provider}/{self.llm_client.model}"
                     result.synthesized_at = datetime.utcnow().isoformat()
 
-                    logger.info("Synthesis succeeded on retry")
+                    logger.info("SYNTH", "Synthesis succeeded on retry")
                     return result
 
                 except Exception as retry_error:
-                    logger.error(f"Synthesis retry failed: {retry_error}")
+                    logger.error("SYNTH", f"Synthesis retry failed: {retry_error}")
 
             return SynthesisResult(
                 success=False,
