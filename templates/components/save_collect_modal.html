@@ -1,0 +1,75 @@
+<!-- Save/Collect Modal - Universal component for saving assets to library -->
+<div class="modal" id="saveCollectModal">
+    <div class="modal-backdrop" onclick="SaveCollectModal.close()"></div>
+    <div class="modal-content save-collect-modal" style="max-width: 520px;">
+        <div class="modal-header">
+            <span class="modal-title">SAVE TO LIBRARY</span>
+            <button class="modal-close" onclick="SaveCollectModal.close()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <!-- Preview Section -->
+            <div class="save-collect-preview" id="saveCollectPreview">
+                <div class="save-collect-preview-placeholder">
+                    <span class="preview-icon">&#128196;</span>
+                    <span class="preview-text">Preview content will appear here</span>
+                </div>
+            </div>
+
+            <!-- Asset Title -->
+            <div class="save-collect-field">
+                <label class="save-collect-label">TITLE</label>
+                <input type="text" id="saveCollectTitle" class="save-collect-input" placeholder="Enter asset title...">
+            </div>
+
+            <!-- Save Options -->
+            <div class="save-collect-options">
+                <label class="save-collect-checkbox">
+                    <input type="checkbox" id="saveToLibrary" checked>
+                    <span class="checkbox-mark"></span>
+                    <span class="checkbox-label">Save to Library</span>
+                </label>
+            </div>
+
+            <!-- Collection Selection -->
+            <div class="save-collect-field">
+                <label class="save-collect-label">ADD TO COLLECTION</label>
+                <div class="save-collect-dropdown-wrapper">
+                    <select id="saveCollectDropdown" class="save-collect-select" onchange="SaveCollectModal.onCollectionChange()">
+                        <option value="">-- Select Collection --</option>
+                        <!-- Collections populated dynamically -->
+                    </select>
+                    <button class="save-collect-new-btn" onclick="SaveCollectModal.showCreateCollection()">+ NEW</button>
+                </div>
+            </div>
+
+            <!-- New Collection Form (hidden by default) -->
+            <div class="save-collect-new-form" id="newCollectionForm" style="display: none;">
+                <div class="save-collect-field">
+                    <label class="save-collect-label">NEW COLLECTION NAME</label>
+                    <input type="text" id="newCollectionName" class="save-collect-input" placeholder="Enter collection name...">
+                </div>
+                <div class="save-collect-color-row">
+                    <label class="save-collect-label">COLOR</label>
+                    <div class="save-collect-colors">
+                        <button class="color-swatch active" data-color="#10B981" style="background: #10B981;"></button>
+                        <button class="color-swatch" data-color="#6366F1" style="background: #6366F1;"></button>
+                        <button class="color-swatch" data-color="#F59E0B" style="background: #F59E0B;"></button>
+                        <button class="color-swatch" data-color="#EF4444" style="background: #EF4444;"></button>
+                        <button class="color-swatch" data-color="#EC4899" style="background: #EC4899;"></button>
+                        <button class="color-swatch" data-color="#8B5CF6" style="background: #8B5CF6;"></button>
+                    </div>
+                </div>
+                <div class="save-collect-form-actions">
+                    <button class="modal-btn" onclick="SaveCollectModal.cancelCreateCollection()">CANCEL</button>
+                    <button class="modal-btn primary" onclick="SaveCollectModal.createCollection()">CREATE</button>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="modal-actions" id="saveCollectActions">
+                <button class="modal-btn danger" onclick="SaveCollectModal.discard()">DISCARD</button>
+                <button class="modal-btn primary" onclick="SaveCollectModal.save()">SAVE</button>
+            </div>
+        </div>
+    </div>
+</div>
