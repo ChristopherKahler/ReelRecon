@@ -12,9 +12,20 @@ from .database import get_db_connection, db_transaction
 
 @dataclass
 class Asset:
-    """Represents a saved asset (scrape, skeleton, transcript, etc.)"""
+    """Represents a saved asset (reports or granular items).
+
+    Types:
+        Reports (operation outputs):
+        - 'skeleton_report': Results from a skeleton extraction job
+        - 'scrape_report': Results from a batch scrape operation
+
+        Granular Assets (individual items, saved on-demand):
+        - 'skeleton': Individual skeleton pattern (hook, value, CTA)
+        - 'transcript': Individual video transcript text
+        - 'synthesis': AI-generated synthesis or summary
+    """
     id: str
-    type: str  # 'scrape', 'skeleton', 'transcript', 'synthesis'
+    type: str
     title: Optional[str] = None
     content_path: Optional[str] = None
     preview: Optional[str] = None

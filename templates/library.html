@@ -130,11 +130,13 @@
         .collection-item:hover {
             background: var(--color-accent-muted);
             border-color: var(--color-border-dim);
+            border-bottom: 1px solid var(--color-border-dim) !important;
         }
 
         .collection-item.active {
             background: var(--color-accent-dim);
             border-color: var(--color-accent-primary);
+            border-bottom: 1px solid var(--color-accent-primary) !important;
         }
 
         .collection-color {
@@ -162,15 +164,164 @@
             border-radius: 10px;
         }
 
+        .collection-delete-btn {
+            display: none;
+            width: 20px;
+            height: 20px;
+            padding: 0;
+            margin-left: auto;
+            border: none;
+            border-radius: 4px;
+            background: transparent;
+            color: var(--color-text-muted);
+            font-size: 16px;
+            line-height: 1;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .collection-item:hover .collection-delete-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .collection-item:hover .collection-count {
+            display: none;
+        }
+
+        .collection-delete-btn:hover {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+        }
+
+        /* Delete Confirmation Modal */
+        .delete-confirm-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 3000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .delete-confirm-modal.active {
+            display: flex;
+        }
+
+        .delete-confirm-dialog {
+            background: var(--color-bg-panel);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-lg);
+            max-width: 400px;
+            width: 90%;
+            overflow: hidden;
+        }
+
+        .delete-confirm-header {
+            padding: var(--space-md) var(--space-lg);
+            border-bottom: 1px solid var(--color-border);
+        }
+
+        .delete-confirm-title {
+            font-family: var(--font-mono);
+            font-size: 14px;
+            font-weight: 600;
+            color: #ef4444;
+        }
+
+        .delete-confirm-body {
+            padding: var(--space-lg);
+        }
+
+        .delete-confirm-message {
+            font-size: 14px;
+            line-height: 1.6;
+            color: var(--color-text-secondary);
+        }
+
+        .delete-confirm-highlight {
+            color: var(--color-text-primary);
+            font-weight: 600;
+        }
+
+        .delete-confirm-note {
+            margin-top: var(--space-md);
+            padding: var(--space-sm) var(--space-md);
+            background: var(--color-bg-elevated);
+            border-radius: var(--radius-sm);
+            font-size: 12px;
+            color: var(--color-text-muted);
+        }
+
+        .delete-confirm-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: var(--space-sm);
+            padding: var(--space-md) var(--space-lg);
+            border-top: 1px solid var(--color-border);
+            background: var(--color-bg-elevated);
+        }
+
+        .delete-confirm-btn {
+            padding: var(--space-sm) var(--space-md);
+            font-family: var(--font-mono);
+            font-size: 12px;
+            font-weight: 600;
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .delete-confirm-btn.cancel {
+            background: var(--color-bg-panel);
+            color: var(--color-text-secondary);
+        }
+
+        .delete-confirm-btn.cancel:hover {
+            background: var(--color-bg-elevated);
+            color: var(--color-text-primary);
+        }
+
+        .delete-confirm-btn.danger {
+            background: #ef4444;
+            border-color: #ef4444;
+            color: white;
+        }
+
+        .delete-confirm-btn.danger:hover {
+            background: #dc2626;
+            border-color: #dc2626;
+        }
+
         /* All Items special item */
         .collection-item.all-items {
-            border-bottom: 1px solid var(--color-border-dim);
+            border-bottom: 0px solid var(--color-border-dim);
             padding-bottom: var(--space-md);
             margin-bottom: var(--space-sm);
         }
 
         .collection-item.all-items .collection-color {
             background: linear-gradient(135deg, var(--color-accent-primary), #6366f1);
+        }
+
+        /* Starred Filter */
+        .collection-item.starred-filter .collection-color {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            color: #1a1a2e;
+        }
+
+        .collection-item.starred-filter.active {
+            background: rgba(251, 191, 36, 0.1);
+            border-color: rgba(251, 191, 36, 0.3);
         }
 
         /* New Collection Button */
@@ -283,20 +434,21 @@
             gap: var(--space-md);
         }
 
-        /* Asset Card */
+        /* Asset Card - Enhanced Design */
         .asset-card {
             background: var(--color-bg-panel);
             border: 1px solid var(--color-border);
             border-radius: var(--radius-md);
             overflow: hidden;
             transition: all 0.2s;
-            cursor: pointer;
+            display: flex;
+            flex-direction: column;
         }
 
         .asset-card:hover {
             border-color: var(--color-accent-primary);
             transform: translateY(-2px);
-            box-shadow: 0 4px 20px rgba(16, 185, 129, 0.1);
+            box-shadow: 0 8px 32px rgba(16, 185, 129, 0.15);
         }
 
         .asset-card-header {
@@ -316,59 +468,149 @@
             font-size: 10px;
             text-transform: uppercase;
             letter-spacing: 0.1em;
-            padding: 3px 8px;
+            padding: 4px 10px;
             border-radius: 4px;
+            font-weight: 600;
+        }
+
+        .asset-type-badge.skeleton_report {
+            background: rgba(239, 68, 68, 0.2);
+            color: #f87171;
+            border: 1px solid rgba(239, 68, 68, 0.3);
         }
 
         .asset-type-badge.skeleton {
-            background: rgba(99, 102, 241, 0.2);
-            color: #818cf8;
+            background: rgba(59, 130, 246, 0.2);
+            color: #60a5fa;
+            border: 1px solid rgba(59, 130, 246, 0.3);
         }
 
+        .asset-type-badge.scrape_report,
         .asset-type-badge.scrape {
             background: rgba(16, 185, 129, 0.2);
             color: var(--color-accent-primary);
+            border: 1px solid rgba(16, 185, 129, 0.3);
         }
 
         .asset-type-badge.transcript {
             background: rgba(245, 158, 11, 0.2);
             color: #fbbf24;
+            border: 1px solid rgba(245, 158, 11, 0.3);
         }
 
         .asset-starred {
             color: var(--color-text-muted);
             cursor: pointer;
-            transition: color 0.2s;
+            transition: all 0.2s;
+            font-size: 18px;
         }
 
-        .asset-starred:hover,
+        .asset-starred:hover {
+            color: #fbbf24;
+            transform: scale(1.2);
+        }
+
         .asset-starred.active {
             color: #fbbf24;
         }
 
         .asset-card-body {
             padding: var(--space-md);
+            flex: 1;
+            display: flex;
+            flex-direction: column;
         }
 
         .asset-title {
-            font-size: 14px;
+            font-size: 15px;
             font-weight: 600;
             color: var(--color-text-primary);
-            margin-bottom: var(--space-xs);
-            white-space: nowrap;
+            margin-bottom: var(--space-sm);
+            line-height: 1.3;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
             overflow: hidden;
-            text-overflow: ellipsis;
         }
 
         .asset-preview {
             font-size: 12px;
             color: var(--color-text-secondary);
-            line-height: 1.4;
+            line-height: 1.5;
             display: -webkit-box;
             -webkit-line-clamp: 3;
             -webkit-box-orient: vertical;
             overflow: hidden;
+            flex: 1;
+            margin-bottom: var(--space-md);
+        }
+
+        /* Asset Metadata Stats Grid */
+        .asset-hook-preview,
+        .asset-caption-preview {
+            font-size: 12px;
+            color: var(--color-text-secondary);
+            line-height: 1.4;
             margin-bottom: var(--space-sm);
+            padding: var(--space-xs) var(--space-sm);
+            background: var(--color-bg-input);
+            border-left: 2px solid var(--color-accent-secondary);
+            border-radius: 0 4px 4px 0;
+        }
+
+        .asset-stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-bottom: var(--space-md);
+            flex: 1;
+        }
+
+        .asset-stats.compact {
+            grid-template-columns: 1fr 1fr;
+            margin-bottom: var(--space-sm);
+        }
+
+        .asset-stat {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .asset-stat-label {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--color-text-muted);
+        }
+
+        .asset-stat-value {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--color-text-primary);
+            font-family: var(--font-mono);
+        }
+
+        .asset-stat-value.true {
+            color: var(--color-accent-primary);
+        }
+
+        .asset-stat-value.false {
+            color: var(--color-text-muted);
+        }
+
+        .asset-creators {
+            font-size: 11px;
+            color: var(--color-text-secondary);
+            margin-bottom: 8px;
+            display: -webkit-box;
+            -webkit-line-clamp: 1;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .asset-creators strong {
+            color: var(--color-accent-primary);
         }
 
         .asset-meta {
@@ -377,6 +619,7 @@
             justify-content: space-between;
             padding-top: var(--space-sm);
             border-top: 1px solid var(--color-border-dim);
+            margin-bottom: var(--space-sm);
         }
 
         .asset-date {
@@ -387,13 +630,107 @@
 
         .asset-collections {
             display: flex;
-            gap: 4px;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: var(--space-sm);
         }
 
-        .asset-collection-dot {
-            width: 8px;
-            height: 8px;
+        .asset-collection-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 8px;
+            font-size: 10px;
+            font-weight: 500;
+            border-radius: 12px;
+            background: var(--color-bg-elevated);
+            border: 1px solid var(--color-border);
+            color: var(--color-text-secondary);
+        }
+
+        .asset-collection-badge .badge-color {
+            width: 6px;
+            height: 6px;
             border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .asset-collection-badge .badge-name {
+            max-width: 80px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .asset-collection-badge .badge-remove {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 14px;
+            height: 14px;
+            font-size: 12px;
+            line-height: 1;
+            color: var(--color-text-muted);
+            cursor: pointer;
+            border-radius: 50%;
+            transition: all 0.15s;
+        }
+
+        .asset-collection-badge .badge-remove:hover {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+        }
+
+        /* Collection button states */
+        .asset-btn.in-collection {
+            background: var(--color-accent-primary);
+            border-color: var(--color-accent-primary);
+            color: var(--color-bg-deep);
+        }
+
+        .asset-btn.in-collection:hover {
+            background: #0ea572;
+        }
+
+        /* Card Footer with Actions */
+        .asset-card-footer {
+            display: flex;
+            gap: var(--space-sm);
+            padding-top: var(--space-sm);
+        }
+
+        .asset-btn {
+            flex: 1;
+            padding: var(--space-sm) var(--space-md);
+            font-family: var(--font-mono);
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-sm);
+            background: var(--color-bg-elevated);
+            color: var(--color-text-secondary);
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: center;
+        }
+
+        .asset-btn:hover {
+            border-color: var(--color-accent-primary);
+            color: var(--color-accent-primary);
+            background: var(--color-accent-muted);
+        }
+
+        .asset-btn.primary {
+            background: var(--color-accent-primary);
+            border-color: var(--color-accent-primary);
+            color: var(--color-bg-deep);
+        }
+
+        .asset-btn.primary:hover {
+            background: #0ea572;
+            border-color: #0ea572;
         }
 
         /* Empty State */
@@ -472,6 +809,908 @@
                 opacity: 1;
             }
         }
+
+        /* Collection Menu Dropdown */
+        .collection-menu {
+            background: var(--color-bg-panel);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+            min-width: 200px;
+            overflow: hidden;
+        }
+
+        .collection-menu-header {
+            font-family: var(--font-mono);
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--color-text-muted);
+            padding: var(--space-sm) var(--space-md);
+            background: var(--color-bg-elevated);
+            border-bottom: 1px solid var(--color-border-dim);
+        }
+
+        .collection-menu-item {
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+            padding: var(--space-sm) var(--space-md);
+            cursor: pointer;
+            transition: background 0.15s;
+            font-size: 13px;
+            color: var(--color-text-primary);
+        }
+
+        .collection-menu-item:hover {
+            background: var(--color-accent-muted);
+        }
+
+        .collection-menu-item.in-collection {
+            background: var(--color-accent-dim);
+        }
+
+        .collection-menu-item .checkmark {
+            margin-left: auto;
+            color: var(--color-accent-primary);
+        }
+
+        .collection-menu-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 3px;
+            flex-shrink: 0;
+        }
+
+        .collection-menu-divider {
+            height: 1px;
+            background: var(--color-border-dim);
+            margin: var(--space-xs) 0;
+        }
+
+        .collection-menu-item.new-collection {
+            color: var(--color-accent-primary);
+        }
+
+        .collection-menu-empty {
+            padding: var(--space-md);
+            color: var(--color-text-muted);
+            font-size: 12px;
+            text-align: center;
+        }
+
+        /* Visual feedback for collection actions */
+        .asset-btn.collection-success {
+            background: var(--color-accent-primary) !important;
+            border-color: var(--color-accent-primary) !important;
+            color: var(--color-bg-deep) !important;
+            animation: pulseSuccess 0.4s ease-out;
+        }
+
+        @keyframes pulseSuccess {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+
+        .asset-collection-badge.new-badge {
+            animation: popIn 0.3s ease-out;
+        }
+
+        @keyframes popIn {
+            0% { transform: scale(0); opacity: 0; }
+            70% { transform: scale(1.1); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        .collection-item.count-updated .collection-count {
+            animation: countBump 0.3s ease-out;
+        }
+
+        @keyframes countBump {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.2); background: var(--color-accent-primary); }
+            100% { transform: scale(1); }
+        }
+
+        /* New Collection Modal */
+        .new-collection-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .new-collection-modal.active {
+            display: flex;
+        }
+
+        .new-collection-dialog {
+            background: var(--color-bg-panel);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            width: 100%;
+            max-width: 400px;
+            box-shadow: 0 16px 64px rgba(0, 0, 0, 0.5);
+        }
+
+        .new-collection-dialog-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: var(--space-md);
+            border-bottom: 1px solid var(--color-border-dim);
+        }
+
+        .new-collection-dialog-title {
+            font-family: var(--font-mono);
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--color-accent-primary);
+        }
+
+        .new-collection-dialog-close {
+            background: none;
+            border: none;
+            color: var(--color-text-muted);
+            font-size: 20px;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+
+        .new-collection-dialog-close:hover {
+            color: var(--color-text-primary);
+        }
+
+        .new-collection-dialog-body {
+            padding: var(--space-lg);
+        }
+
+        .new-collection-field {
+            margin-bottom: var(--space-md);
+        }
+
+        .new-collection-label {
+            display: block;
+            font-family: var(--font-mono);
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--color-text-muted);
+            margin-bottom: var(--space-xs);
+        }
+
+        .new-collection-input {
+            width: 100%;
+            padding: var(--space-sm) var(--space-md);
+            background: var(--color-bg-input);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-sm);
+            color: var(--color-text-primary);
+            font-family: var(--font-body);
+            font-size: 14px;
+        }
+
+        .new-collection-input:focus {
+            outline: none;
+            border-color: var(--color-accent-primary);
+        }
+
+        .new-collection-colors {
+            display: flex;
+            gap: var(--space-sm);
+            flex-wrap: wrap;
+        }
+
+        .new-collection-color-btn {
+            width: 28px;
+            height: 28px;
+            border-radius: var(--radius-sm);
+            border: 2px solid transparent;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .new-collection-color-btn:hover {
+            transform: scale(1.1);
+        }
+
+        .new-collection-color-btn.active {
+            border-color: white;
+            box-shadow: 0 0 8px var(--color-accent-glow);
+        }
+
+        .new-collection-dialog-footer {
+            display: flex;
+            gap: var(--space-sm);
+            justify-content: flex-end;
+            padding: var(--space-md);
+            border-top: 1px solid var(--color-border-dim);
+        }
+
+        .dialog-btn {
+            padding: var(--space-sm) var(--space-lg);
+            font-family: var(--font-mono);
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .dialog-btn.cancel {
+            background: transparent;
+            border: 1px solid var(--color-border);
+            color: var(--color-text-secondary);
+        }
+
+        .dialog-btn.cancel:hover {
+            border-color: var(--color-text-muted);
+            color: var(--color-text-primary);
+        }
+
+        .dialog-btn.create {
+            background: var(--color-accent-primary);
+            border: 1px solid var(--color-accent-primary);
+            color: var(--color-bg-deep);
+        }
+
+        .dialog-btn.create:hover {
+            background: #0ea572;
+        }
+
+        /* Asset Detail Modal */
+        .asset-detail-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 3000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .asset-detail-modal.active {
+            display: flex;
+        }
+
+        .asset-detail-dialog {
+            background: var(--color-bg-panel);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            width: 95%;
+            max-width: 900px;
+            max-height: 90vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 16px 64px rgba(0, 0, 0, 0.5);
+        }
+
+        .asset-detail-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: var(--space-md) var(--space-lg);
+            border-bottom: 1px solid var(--color-border);
+            background: var(--color-bg-elevated);
+        }
+
+        .asset-detail-title {
+            display: flex;
+            align-items: center;
+            gap: var(--space-md);
+        }
+
+        .asset-detail-title h2 {
+            font-family: var(--font-mono);
+            font-size: 14px;
+            color: var(--color-accent-primary);
+            margin: 0;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        .asset-detail-badge {
+            font-family: var(--font-mono);
+            font-size: 10px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            text-transform: uppercase;
+        }
+
+        .asset-detail-badge.skeleton {
+            background: rgba(99, 102, 241, 0.2);
+            color: #818cf8;
+            border: 1px solid rgba(99, 102, 241, 0.3);
+        }
+
+        .asset-detail-badge.scrape {
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--color-accent-primary);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+
+        .asset-detail-close {
+            background: none;
+            border: none;
+            color: var(--color-text-muted);
+            font-size: 24px;
+            cursor: pointer;
+            padding: var(--space-xs);
+            line-height: 1;
+        }
+
+        .asset-detail-close:hover {
+            color: var(--color-text-primary);
+        }
+
+        .asset-detail-body {
+            flex: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Tabs for skeleton view */
+        .detail-tabs-nav {
+            display: flex;
+            gap: 2px;
+            padding: 0 var(--space-lg);
+            background: var(--color-bg-elevated);
+            border-bottom: 1px solid var(--color-border);
+        }
+
+        .detail-tab-btn {
+            padding: 12px 20px;
+            background: transparent;
+            border: none;
+            border-bottom: 2px solid transparent;
+            color: var(--color-text-muted);
+            font-family: var(--font-mono);
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .detail-tab-btn:hover {
+            color: var(--color-text-secondary);
+            background: var(--color-bg-input);
+        }
+
+        .detail-tab-btn.active {
+            color: var(--color-accent-primary);
+            border-bottom-color: var(--color-accent-primary);
+        }
+
+        .detail-tab-content {
+            display: none;
+            flex: 1;
+            overflow-y: auto;
+            padding: var(--space-lg);
+        }
+
+        .detail-tab-content.active {
+            display: block;
+        }
+
+        /* Skeleton Cards in Detail Modal */
+        .detail-skeleton-grid {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-md);
+        }
+
+        .detail-skeleton-card {
+            background: var(--color-bg-elevated);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            overflow: hidden;
+        }
+
+        .detail-skeleton-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: var(--space-sm) var(--space-md);
+            background: var(--color-bg-input);
+            border-bottom: 1px solid var(--color-border-dim);
+        }
+
+        .detail-skeleton-creator {
+            font-family: var(--font-mono);
+            font-size: 12px;
+            color: var(--color-accent-primary);
+        }
+
+        .detail-skeleton-meta {
+            display: flex;
+            gap: var(--space-md);
+            font-family: var(--font-mono);
+            font-size: 11px;
+            color: var(--color-text-muted);
+        }
+
+        .detail-skeleton-body {
+            padding: var(--space-md);
+        }
+
+        .detail-skeleton-section {
+            margin-bottom: var(--space-md);
+        }
+
+        .detail-skeleton-section:last-child {
+            margin-bottom: 0;
+        }
+
+        .detail-skeleton-label {
+            font-family: var(--font-mono);
+            font-size: 10px;
+            color: var(--color-accent-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 4px;
+        }
+
+        .detail-skeleton-hook {
+            font-size: 14px;
+            color: var(--color-text-primary);
+            font-weight: 500;
+            line-height: 1.4;
+            padding: var(--space-sm);
+            background: var(--color-accent-dim);
+            border-left: 3px solid var(--color-accent-primary);
+            border-radius: 0 4px 4px 0;
+        }
+
+        .detail-skeleton-value {
+            font-size: 13px;
+            color: var(--color-text-secondary);
+            line-height: 1.5;
+        }
+
+        .detail-skeleton-points {
+            margin-top: var(--space-xs);
+            padding-left: var(--space-md);
+        }
+
+        .detail-skeleton-points li {
+            font-size: 13px;
+            color: var(--color-text-secondary);
+            margin-bottom: 4px;
+        }
+
+        .detail-skeleton-footer {
+            padding: var(--space-sm) var(--space-md);
+            border-top: 1px solid var(--color-border-dim);
+            background: var(--color-bg-input);
+            display: flex;
+            justify-content: flex-end;
+            gap: var(--space-sm);
+        }
+
+        .save-skeleton-btn,
+        .save-transcript-btn {
+            font-size: 11px !important;
+            padding: 4px 10px !important;
+            background: rgba(59, 130, 246, 0.15) !important;
+            border: 1px solid rgba(59, 130, 246, 0.3) !important;
+            color: #60a5fa !important;
+        }
+
+        .save-skeleton-btn:hover,
+        .save-transcript-btn:hover {
+            background: rgba(59, 130, 246, 0.25) !important;
+            border-color: rgba(59, 130, 246, 0.5) !important;
+        }
+
+        .save-transcript-btn {
+            background: rgba(245, 158, 11, 0.15) !important;
+            border-color: rgba(245, 158, 11, 0.3) !important;
+            color: #fbbf24 !important;
+        }
+
+        .save-transcript-btn:hover {
+            background: rgba(245, 158, 11, 0.25) !important;
+            border-color: rgba(245, 158, 11, 0.5) !important;
+        }
+
+        .save-skeleton-btn.save-success,
+        .save-transcript-btn.save-success {
+            background: rgba(16, 185, 129, 0.2) !important;
+            border-color: rgba(16, 185, 129, 0.4) !important;
+            color: #34d399 !important;
+            cursor: default;
+        }
+
+        .save-skeleton-btn.save-error,
+        .save-transcript-btn.save-error {
+            background: rgba(239, 68, 68, 0.2) !important;
+            border-color: rgba(239, 68, 68, 0.4) !important;
+            color: #f87171 !important;
+        }
+
+        .save-skeleton-btn:disabled,
+        .save-transcript-btn:disabled {
+            opacity: 0.7;
+            cursor: wait;
+        }
+
+        /* Markdown/JSON/Prompt Views */
+        .detail-code-view {
+            background: var(--color-bg-input);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-sm);
+            padding: var(--space-md);
+            font-family: var(--font-mono);
+            font-size: 12px;
+            line-height: 1.6;
+            color: var(--color-text-secondary);
+            white-space: pre-wrap;
+            overflow-x: auto;
+            max-height: 500px;
+        }
+
+        .detail-markdown-view {
+            line-height: 1.7;
+            color: var(--color-text-secondary);
+        }
+
+        .detail-markdown-view h1, .detail-markdown-view h2, .detail-markdown-view h3 {
+            color: var(--color-text-primary);
+            margin-top: var(--space-lg);
+            margin-bottom: var(--space-sm);
+        }
+
+        .detail-markdown-view h1 { font-size: 1.5rem; }
+        .detail-markdown-view h2 { font-size: 1.25rem; }
+        .detail-markdown-view h3 { font-size: 1.1rem; }
+
+        .detail-markdown-view p {
+            margin-bottom: var(--space-md);
+        }
+
+        .detail-markdown-view ul, .detail-markdown-view ol {
+            padding-left: var(--space-lg);
+            margin-bottom: var(--space-md);
+        }
+
+        .detail-markdown-view code {
+            background: var(--color-bg-input);
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: var(--font-mono);
+            font-size: 0.9em;
+        }
+
+        /* Scrape Detail View */
+        .scrape-detail-view {
+            padding: var(--space-lg);
+        }
+
+        .scrape-stats-row {
+            display: flex;
+            gap: var(--space-lg);
+            margin-bottom: var(--space-lg);
+            padding-bottom: var(--space-lg);
+            border-bottom: 1px solid var(--color-border-dim);
+        }
+
+        .scrape-stat {
+            text-align: center;
+        }
+
+        .scrape-stat-value {
+            font-family: var(--font-mono);
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--color-accent-primary);
+        }
+
+        .scrape-stat-label {
+            font-family: var(--font-mono);
+            font-size: 10px;
+            color: var(--color-text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-top: 4px;
+        }
+
+        .scrape-section {
+            margin-bottom: var(--space-lg);
+        }
+
+        .scrape-section-title {
+            font-family: var(--font-mono);
+            font-size: 10px;
+            color: var(--color-accent-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: var(--space-sm);
+        }
+
+        .scrape-url-row {
+            display: flex;
+            gap: var(--space-sm);
+            align-items: center;
+        }
+
+        .scrape-url-input {
+            flex: 1;
+            background: var(--color-bg-input);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-sm);
+            padding: var(--space-sm) var(--space-md);
+            font-family: var(--font-mono);
+            font-size: 12px;
+            color: var(--color-text-secondary);
+        }
+
+        .scrape-caption {
+            background: var(--color-bg-input);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-sm);
+            padding: var(--space-md);
+            font-size: 14px;
+            line-height: 1.6;
+            color: var(--color-text-primary);
+        }
+
+        .scrape-transcript {
+            background: var(--color-bg-input);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-sm);
+            padding: var(--space-md);
+            font-size: 13px;
+            line-height: 1.7;
+            color: var(--color-text-secondary);
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .scrape-reels-list {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-sm);
+        }
+
+        .scrape-reel-item {
+            display: flex;
+            align-items: center;
+            gap: var(--space-md);
+            padding: var(--space-sm) var(--space-md);
+            background: var(--color-bg-elevated);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .scrape-reel-item:hover {
+            border-color: var(--color-accent-primary);
+            background: var(--color-accent-muted);
+        }
+
+        .scrape-reel-rank {
+            font-family: var(--font-mono);
+            font-size: 12px;
+            color: var(--color-accent-primary);
+            width: 24px;
+        }
+
+        .scrape-reel-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .scrape-reel-caption {
+            font-size: 13px;
+            color: var(--color-text-primary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .scrape-reel-stats {
+            font-family: var(--font-mono);
+            font-size: 11px;
+            color: var(--color-text-muted);
+            margin-top: 2px;
+        }
+
+        /* Reel expanded detail */
+        .scrape-reel-item.expanded {
+            flex-direction: column;
+            align-items: stretch;
+            border-color: var(--color-accent-primary);
+            background: var(--color-bg-panel);
+        }
+
+        .scrape-reel-header {
+            display: flex;
+            align-items: center;
+            gap: var(--space-md);
+        }
+
+        .scrape-reel-expanded {
+            margin-top: var(--space-md);
+            padding-top: var(--space-md);
+            border-top: 1px solid var(--color-border);
+        }
+
+        .scrape-reel-expanded-section {
+            margin-bottom: var(--space-md);
+        }
+
+        .scrape-reel-expanded-label {
+            font-family: var(--font-mono);
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--color-accent-primary);
+            margin-bottom: var(--space-xs);
+        }
+
+        .scrape-reel-transcript {
+            font-size: 13px;
+            line-height: 1.6;
+            color: var(--color-text-primary);
+            background: var(--color-bg-elevated);
+            padding: var(--space-md);
+            border-radius: var(--radius-sm);
+            max-height: 200px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+
+        .scrape-reel-no-transcript {
+            font-size: 13px;
+            color: var(--color-text-muted);
+            font-style: italic;
+            padding: var(--space-md);
+            background: var(--color-bg-elevated);
+            border-radius: var(--radius-sm);
+        }
+
+        .scrape-reel-url {
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+        }
+
+        .scrape-reel-url input {
+            flex: 1;
+            font-family: var(--font-mono);
+            font-size: 11px;
+            padding: var(--space-xs) var(--space-sm);
+            background: var(--color-bg-elevated);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-sm);
+            color: var(--color-text-secondary);
+        }
+
+        .scrape-reel-actions {
+            display: flex;
+            gap: var(--space-sm);
+            margin-top: var(--space-md);
+        }
+
+        .scrape-reel-close {
+            position: absolute;
+            top: var(--space-sm);
+            right: var(--space-sm);
+            font-size: 16px;
+            color: var(--color-text-muted);
+            cursor: pointer;
+        }
+
+        .scrape-reel-close:hover {
+            color: var(--color-text-primary);
+        }
+
+        /* Detail Modal Actions */
+        .asset-detail-footer {
+            display: flex;
+            gap: var(--space-sm);
+            padding: var(--space-md) var(--space-lg);
+            border-top: 1px solid var(--color-border);
+            background: var(--color-bg-elevated);
+        }
+
+        .detail-action-btn {
+            padding: var(--space-sm) var(--space-md);
+            font-family: var(--font-mono);
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-sm);
+            background: var(--color-bg-panel);
+            color: var(--color-text-secondary);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .detail-action-btn:hover {
+            border-color: var(--color-accent-primary);
+            color: var(--color-accent-primary);
+        }
+
+        .detail-action-btn.primary {
+            background: var(--color-accent-primary);
+            border-color: var(--color-accent-primary);
+            color: var(--color-bg-deep);
+        }
+
+        .detail-action-btn.primary:hover {
+            background: #0ea572;
+        }
+
+        .detail-action-btn.copy-success {
+            background: #22c55e !important;
+            border-color: #22c55e !important;
+            color: white !important;
+        }
+
+        .detail-spacer {
+            flex: 1;
+        }
+
+        /* Tab toolbar */
+        .detail-tab-toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: var(--space-md);
+            padding-bottom: var(--space-sm);
+            border-bottom: 1px solid var(--color-border-dim);
+        }
+
+        .detail-tab-toolbar-left {
+            font-family: var(--font-mono);
+            font-size: 10px;
+            color: var(--color-text-muted);
+        }
+
+        .detail-tab-toolbar-right {
+            display: flex;
+            gap: var(--space-sm);
+        }
+
+        /* Loading state in modal */
+        .detail-loading {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: var(--space-2xl);
+            color: var(--color-text-muted);
+        }
+
+        .detail-loading .spinner {
+            width: 32px;
+            height: 32px;
+            border: 2px solid var(--color-border);
+            border-top-color: var(--color-accent-primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: var(--space-md);
+        }
     </style>
 </head>
 <body>
@@ -511,20 +1750,36 @@
                     </div>
 
                     <div class="sidebar-section">
+                        <div class="sidebar-title">QUICK FILTERS</div>
+                        <div class="collection-list">
+                            <div class="collection-item starred-filter" data-starred="true" onclick="filterByStarred()">
+                                <div class="collection-color" style="background: #fbbf24;">&#9733;</div>
+                                <span class="collection-name">Starred</span>
+                                <span class="collection-count" id="starredCount">0</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="sidebar-section">
                         <div class="sidebar-title">FILTER BY TYPE</div>
                         <div class="collection-list">
-                            <div class="collection-item" data-type="skeleton" onclick="filterByType('skeleton')">
-                                <div class="collection-color" style="background: #818cf8;"></div>
+                            <div class="collection-item" data-type="skeleton_report" onclick="filterByType('skeleton_report')">
+                                <div class="collection-color" style="background: #f87171;">💀</div>
                                 <span class="collection-name">Skeleton Reports</span>
+                                <span class="collection-count" id="skeletonReportCount">0</span>
+                            </div>
+                            <div class="collection-item" data-type="scrape_report" onclick="filterByType('scrape_report')">
+                                <div class="collection-color" style="background: var(--color-accent-primary);">🎯</div>
+                                <span class="collection-name">Scrape Reports</span>
+                                <span class="collection-count" id="scrapeReportCount">0</span>
+                            </div>
+                            <div class="collection-item" data-type="skeleton" onclick="filterByType('skeleton')">
+                                <div class="collection-color" style="background: #60a5fa;">🦴</div>
+                                <span class="collection-name">Skeletons</span>
                                 <span class="collection-count" id="skeletonCount">0</span>
                             </div>
-                            <div class="collection-item" data-type="scrape" onclick="filterByType('scrape')">
-                                <div class="collection-color" style="background: var(--color-accent-primary);"></div>
-                                <span class="collection-name">Scrapes</span>
-                                <span class="collection-count" id="scrapeCount">0</span>
-                            </div>
                             <div class="collection-item" data-type="transcript" onclick="filterByType('transcript')">
-                                <div class="collection-color" style="background: #fbbf24;"></div>
+                                <div class="collection-color" style="background: #fbbf24;">📝</div>
                                 <span class="collection-name">Transcripts</span>
                                 <span class="collection-count" id="transcriptCount">0</span>
                             </div>
@@ -565,6 +1820,79 @@
     <!-- Toast Container -->
     <div class="toast-container" id="toastContainer"></div>
 
+    <!-- New Collection Modal -->
+    <div class="new-collection-modal" id="newCollectionModal">
+        <div class="new-collection-dialog">
+            <div class="new-collection-dialog-header">
+                <span class="new-collection-dialog-title">Create New Collection</span>
+                <button class="new-collection-dialog-close" onclick="closeNewCollectionModal()">&times;</button>
+            </div>
+            <div class="new-collection-dialog-body">
+                <div class="new-collection-field">
+                    <label class="new-collection-label">Collection Name</label>
+                    <input type="text" class="new-collection-input" id="newCollectionNameInput" placeholder="Enter collection name...">
+                </div>
+                <div class="new-collection-field">
+                    <label class="new-collection-label">Color</label>
+                    <div class="new-collection-colors" id="newCollectionColors">
+                        <button type="button" class="new-collection-color-btn active" data-color="#10B981" style="background: #10B981;"></button>
+                        <button type="button" class="new-collection-color-btn" data-color="#6366F1" style="background: #6366F1;"></button>
+                        <button type="button" class="new-collection-color-btn" data-color="#F59E0B" style="background: #F59E0B;"></button>
+                        <button type="button" class="new-collection-color-btn" data-color="#EF4444" style="background: #EF4444;"></button>
+                        <button type="button" class="new-collection-color-btn" data-color="#EC4899" style="background: #EC4899;"></button>
+                        <button type="button" class="new-collection-color-btn" data-color="#8B5CF6" style="background: #8B5CF6;"></button>
+                        <button type="button" class="new-collection-color-btn" data-color="#14B8A6" style="background: #14B8A6;"></button>
+                        <button type="button" class="new-collection-color-btn" data-color="#F97316" style="background: #F97316;"></button>
+                    </div>
+                </div>
+            </div>
+            <div class="new-collection-dialog-footer">
+                <button class="dialog-btn cancel" onclick="closeNewCollectionModal()">Cancel</button>
+                <button class="dialog-btn create" onclick="submitNewCollection()">Create</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Asset Detail Modal -->
+    <div class="asset-detail-modal" id="assetDetailModal">
+        <div class="asset-detail-dialog">
+            <div class="asset-detail-header">
+                <div class="asset-detail-title">
+                    <h2 id="assetDetailTitle">Asset Details</h2>
+                    <span class="asset-detail-badge" id="assetDetailBadge"></span>
+                </div>
+                <button class="asset-detail-close" onclick="closeAssetDetailModal()">&times;</button>
+            </div>
+            <div class="asset-detail-body" id="assetDetailBody">
+                <div class="detail-loading">
+                    <div class="spinner"></div>
+                    <span>Loading asset details...</span>
+                </div>
+            </div>
+            <div class="asset-detail-footer" id="assetDetailFooter">
+                <!-- Populated dynamically based on asset type -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Collection Confirmation Modal -->
+    <div class="delete-confirm-modal" id="deleteCollectionModal">
+        <div class="delete-confirm-dialog">
+            <div class="delete-confirm-header">
+                <span class="delete-confirm-icon">&#9888;</span>
+                <h3>Delete Collection</h3>
+            </div>
+            <div class="delete-confirm-body">
+                <p>Are you sure you want to delete <strong id="deleteCollectionName"></strong>?</p>
+                <p class="delete-confirm-info" id="deleteCollectionInfo"></p>
+            </div>
+            <div class="delete-confirm-footer">
+                <button class="delete-confirm-btn cancel" onclick="closeDeleteConfirmModal()">Cancel</button>
+                <button class="delete-confirm-btn delete" id="confirmDeleteBtn">Delete Collection</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Save/Collect Modal Component -->
     {% include 'components/save_collect_modal.html' %}
     <script src="{{ url_for('static', filename='js/save_collect.js') }}"></script>
@@ -572,14 +1900,52 @@
     <script>
         // State
         let currentAssets = [];
-        let currentFilter = { type: null, collection: null, search: '' };
+        let allAssets = [];  // Store all assets for accurate counts
+        let currentFilter = { type: null, collection: null, search: '', starred: false };
         let searchTimeout = null;
 
         // Load assets on page load
         document.addEventListener('DOMContentLoaded', () => {
             loadCollections();
+            loadTotalCounts();  // Load counts first
             loadAssets();
         });
+
+        // Load total counts (always shows all assets regardless of filter)
+        async function loadTotalCounts() {
+            try {
+                const response = await fetch('/api/assets');
+                allAssets = await response.json();
+                updateSidebarCounts();
+            } catch (error) {
+                console.error('Failed to load counts:', error);
+            }
+        }
+
+        // Update sidebar counts from allAssets (not filtered)
+        function updateSidebarCounts() {
+            const total = allAssets.length;
+            const starred = allAssets.filter(a => a.starred).length;
+
+            // Each type is counted separately - no combining
+            const skeletonReportCount = allAssets.filter(a => a.type === 'skeleton_report').length;
+            const scrapeReportCount = allAssets.filter(a => a.type === 'scrape_report' || a.type === 'scrape').length;
+            const skeletonCount = allAssets.filter(a => a.type === 'skeleton').length;
+            const transcriptCount = allAssets.filter(a => a.type === 'transcript').length;
+
+            document.getElementById('totalCount').textContent = total;
+            document.getElementById('starredCount').textContent = starred;
+            document.getElementById('skeletonReportCount').textContent = skeletonReportCount;
+            document.getElementById('scrapeReportCount').textContent = scrapeReportCount;
+            document.getElementById('skeletonCount').textContent = skeletonCount;
+            document.getElementById('transcriptCount').textContent = transcriptCount;
+
+            // Hide starred filter if nothing is starred (other filters always visible)
+            const starredFilter = document.querySelector('.starred-filter');
+            if (starredFilter) {
+                starredFilter.style.display = starred > 0 ? '' : 'none';
+            }
+        }
 
         // Load collections into sidebar
         async function loadCollections() {
@@ -597,17 +1963,46 @@
                     const item = document.createElement('div');
                     item.className = 'collection-item';
                     item.dataset.collection = c.id;
-                    item.onclick = () => filterByCollection(c.id);
+                    item.onclick = (e) => {
+                        if (!e.target.closest('.collection-delete-btn')) {
+                            filterByCollection(c.id);
+                        }
+                    };
                     item.innerHTML = `
                         <div class="collection-color" style="background: ${c.color || '#6366f1'};"></div>
                         <span class="collection-name">${escapeHtml(c.name)}</span>
                         <span class="collection-count">${c.asset_count || 0}</span>
+                        <button class="collection-delete-btn" onclick="event.stopPropagation(); confirmDeleteCollection('${c.id}', '${escapeHtml(c.name)}', ${c.asset_count || 0})" title="Delete collection">&times;</button>
                     `;
                     listEl.appendChild(item);
                 });
             } catch (error) {
                 console.error('Failed to load collections:', error);
             }
+        }
+
+        // Sort assets (client-side sorting since API doesn't support it)
+        function sortAssets(assets, field, order) {
+            return assets.slice().sort((a, b) => {
+                let aVal = a[field] || '';
+                let bVal = b[field] || '';
+
+                // Handle date sorting
+                if (field === 'created_at') {
+                    aVal = new Date(aVal || 0).getTime();
+                    bVal = new Date(bVal || 0).getTime();
+                } else {
+                    // String comparison (case-insensitive)
+                    aVal = String(aVal).toLowerCase();
+                    bVal = String(bVal).toLowerCase();
+                }
+
+                if (order === 'asc') {
+                    return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+                } else {
+                    return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+                }
+            });
         }
 
         // Load assets
@@ -618,16 +2013,12 @@
             try {
                 // Build query params
                 const params = new URLSearchParams();
+
+                // Each filter shows exactly that type - no combining
                 if (currentFilter.type) params.set('type', currentFilter.type);
                 if (currentFilter.collection && currentFilter.collection !== 'all') {
                     params.set('collection_id', currentFilter.collection);
                 }
-
-                // Get sort
-                const sortValue = document.getElementById('sortSelect').value;
-                const [sortField, sortOrder] = sortValue.split(':');
-                params.set('sort_by', sortField);
-                params.set('sort_order', sortOrder);
 
                 // Search or list
                 let url = '/api/assets';
@@ -637,13 +2028,21 @@
                 }
 
                 const response = await fetch(`${url}?${params}`);
-                const assets = await response.json();
+                let assets = await response.json();
+
+                // Filter by starred if active
+                if (currentFilter.starred) {
+                    assets = assets.filter(a => a.starred);
+                }
+
+                // Client-side sorting
+                const sortValue = document.getElementById('sortSelect').value;
+                const [sortField, sortOrder] = sortValue.split(':');
+                assets = sortAssets(assets, sortField, sortOrder);
+
                 currentAssets = assets;
 
-                // Update counts
-                updateCounts(assets);
-
-                // Render grid
+                // Render grid (counts are handled separately by loadTotalCounts)
                 renderAssetGrid(assets);
             } catch (error) {
                 console.error('Failed to load assets:', error);
@@ -672,42 +2071,387 @@
                 return;
             }
 
-            grid.innerHTML = assets.map(asset => `
-                <div class="asset-card" onclick="openAsset('${asset.id}')">
+            grid.innerHTML = assets.map(asset => {
+                const hasCollections = (asset.collections || []).length > 0;
+                const meta = asset.metadata || {};
+                return `
+                <div class="asset-card" data-asset-id="${asset.id}">
                     <div class="asset-card-header">
-                        <span class="asset-type-badge ${asset.type}">${getTypeIcon(asset.type)} ${asset.type}</span>
-                        <span class="asset-starred ${asset.starred ? 'active' : ''}" onclick="event.stopPropagation(); toggleStar('${asset.id}')">
+                        <span class="asset-type-badge ${asset.type}">${getTypeIcon(asset.type)} ${getTypeLabel(asset.type)}</span>
+                        <span class="asset-starred ${asset.starred ? 'active' : ''}" onclick="toggleStar('${asset.id}')">
                             ${asset.starred ? '&#9733;' : '&#9734;'}
                         </span>
                     </div>
                     <div class="asset-card-body">
                         <div class="asset-title">${escapeHtml(asset.title)}</div>
-                        <div class="asset-preview">${escapeHtml(asset.preview || 'No preview available')}</div>
+                        ${renderAssetMetadata(asset)}
                         <div class="asset-meta">
                             <span class="asset-date">${formatDate(asset.created_at)}</span>
-                            <div class="asset-collections">
-                                ${(asset.collections || []).map(c =>
-                                    `<div class="asset-collection-dot" style="background: ${c.color || '#6366f1'};" title="${escapeHtml(c.name)}"></div>`
-                                ).join('')}
-                            </div>
+                        </div>
+                        <div class="asset-card-footer">
+                            <button class="asset-btn collection-btn ${hasCollections ? 'in-collection' : ''}" onclick="showAddToCollectionMenu('${asset.id}', event)">+ Collection</button>
+                            <button class="asset-btn primary" onclick="openAsset('${asset.id}')">View Details</button>
+                        </div>
+                        <div class="asset-collections">
+                            ${(asset.collections || []).map(c =>
+                                `<div class="asset-collection-badge" data-collection-id="${c.id}">
+                                    <span class="badge-color" style="background: ${c.color || '#6366f1'};"></span>
+                                    <span class="badge-name">${escapeHtml(c.name)}</span>
+                                    <span class="badge-remove" onclick="event.stopPropagation(); removeFromCollectionBadge('${asset.id}', '${c.id}')">&times;</span>
+                                </div>`
+                            ).join('')}
                         </div>
                     </div>
                 </div>
-            `).join('');
+            `}).join('');
         }
 
-        // Update sidebar counts
-        function updateCounts(assets) {
-            const total = assets.length;
-            const skeleton = assets.filter(a => a.type === 'skeleton').length;
-            const scrape = assets.filter(a => a.type === 'scrape').length;
-            const transcript = assets.filter(a => a.type === 'transcript').length;
+        // Add to Collection Menu
+        let activeCollectionMenu = null;
 
-            document.getElementById('totalCount').textContent = total;
-            document.getElementById('skeletonCount').textContent = skeleton;
-            document.getElementById('scrapeCount').textContent = scrape;
-            document.getElementById('transcriptCount').textContent = transcript;
+        async function showAddToCollectionMenu(assetId, event) {
+            event.stopPropagation();
+
+            // Remove any existing menu
+            if (activeCollectionMenu) {
+                activeCollectionMenu.remove();
+                activeCollectionMenu = null;
+            }
+
+            // Fetch collections
+            const response = await fetch('/api/collections');
+            const collections = await response.json();
+
+            // Get asset's current collections
+            const asset = currentAssets.find(a => a.id === assetId);
+            const assetCollectionIds = (asset?.collections || []).map(c => c.id);
+
+            // Create menu
+            const menu = document.createElement('div');
+            menu.className = 'collection-menu';
+            menu.innerHTML = `
+                <div class="collection-menu-header">Add to Collection</div>
+                ${collections.length === 0 ? '<div class="collection-menu-empty">No collections yet</div>' : ''}
+                ${collections.map(c => `
+                    <div class="collection-menu-item ${assetCollectionIds.includes(c.id) ? 'in-collection' : ''}"
+                         onclick="toggleAssetCollection('${assetId}', '${c.id}', ${assetCollectionIds.includes(c.id)})">
+                        <div class="collection-menu-color" style="background: ${c.color || '#6366f1'};"></div>
+                        <span>${escapeHtml(c.name)}</span>
+                        ${assetCollectionIds.includes(c.id) ? '<span class="checkmark">&#10003;</span>' : ''}
+                    </div>
+                `).join('')}
+                <div class="collection-menu-divider"></div>
+                <div class="collection-menu-item new-collection" onclick="createCollectionForAsset('${assetId}')">
+                    <span>+ Create New Collection</span>
+                </div>
+            `;
+
+            // Position menu
+            const rect = event.target.getBoundingClientRect();
+            menu.style.position = 'fixed';
+            menu.style.top = `${rect.bottom + 4}px`;
+            menu.style.left = `${rect.left}px`;
+            menu.style.zIndex = '1000';
+
+            document.body.appendChild(menu);
+            activeCollectionMenu = menu;
+
+            // Close on click outside
+            setTimeout(() => {
+                document.addEventListener('click', closeCollectionMenu, { once: true });
+            }, 10);
         }
+
+        function closeCollectionMenu() {
+            if (activeCollectionMenu) {
+                activeCollectionMenu.remove();
+                activeCollectionMenu = null;
+            }
+        }
+
+        async function toggleAssetCollection(assetId, collectionId, isInCollection) {
+            // Close menu immediately for responsiveness
+            closeCollectionMenu();
+
+            // Find the asset and card
+            const assetIndex = currentAssets.findIndex(a => a.id === assetId);
+            if (assetIndex === -1) return;
+
+            const asset = currentAssets[assetIndex];
+            const cardEl = document.querySelector(`.asset-card[data-asset-id="${assetId}"]`);
+
+            try {
+                if (isInCollection) {
+                    // Remove from collection
+                    await fetch(`/api/assets/${assetId}/collections/${collectionId}`, {
+                        method: 'DELETE'
+                    });
+
+                    // Update local state
+                    asset.collections = (asset.collections || []).filter(c => c.id !== collectionId);
+                    showToast('Removed from collection');
+
+                    // Update sidebar count
+                    updateSidebarCollectionCount(collectionId, -1);
+                } else {
+                    // Add to collection
+                    const response = await fetch(`/api/assets/${assetId}/collections`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ collection_id: collectionId })
+                    });
+
+                    // Get collection info for the dot
+                    const collectionsResponse = await fetch('/api/collections');
+                    const allCollections = await collectionsResponse.json();
+                    const collection = allCollections.find(c => c.id === collectionId);
+
+                    // Update local state
+                    if (!asset.collections) asset.collections = [];
+                    if (collection) {
+                        asset.collections.push({ id: collection.id, name: collection.name, color: collection.color });
+                    }
+
+                    showToast('Added to collection');
+
+                    // Update sidebar count
+                    updateSidebarCollectionCount(collectionId, 1);
+                }
+
+                // Update just this card's collection dots
+                if (cardEl) {
+                    updateCardCollectionBadges(cardEl, asset);
+                    flashCollectionButton(cardEl);
+                }
+
+            } catch (error) {
+                console.error('Failed to update collection:', error);
+                showToast('Failed to update collection', 'error');
+            }
+        }
+
+        // Update a card's collection dots without full re-render
+        function updateCardCollectionBadges(cardEl, asset) {
+            const badgesContainer = cardEl.querySelector('.asset-collections');
+            if (!badgesContainer) return;
+
+            badgesContainer.innerHTML = (asset.collections || []).map(c =>
+                `<div class="asset-collection-badge new-badge" data-collection-id="${c.id}">
+                    <span class="badge-color" style="background: ${c.color || '#6366f1'};"></span>
+                    <span class="badge-name">${escapeHtml(c.name)}</span>
+                    <span class="badge-remove" onclick="event.stopPropagation(); removeFromCollectionBadge('${asset.id}', '${c.id}')">&times;</span>
+                </div>`
+            ).join('');
+
+            // Update button state
+            updateCollectionButtonState(cardEl, asset);
+        }
+
+        // Update collection button state (green when in collection, default when not)
+        function updateCollectionButtonState(cardEl, asset) {
+            const btn = cardEl.querySelector('.collection-btn');
+            if (!btn) return;
+
+            const hasCollections = (asset.collections || []).length > 0;
+            if (hasCollections) {
+                btn.classList.add('in-collection');
+            } else {
+                btn.classList.remove('in-collection');
+            }
+        }
+
+        // Remove asset from collection via badge X button
+        async function removeFromCollectionBadge(assetId, collectionId) {
+            try {
+                const response = await fetch(`/api/assets/${assetId}/collections/${collectionId}`, {
+                    method: 'DELETE'
+                });
+
+                if (!response.ok) throw new Error('Failed to remove from collection');
+
+                // Update local state
+                const asset = currentAssets.find(a => a.id === assetId);
+                if (asset) {
+                    asset.collections = (asset.collections || []).filter(c => c.id !== collectionId);
+
+                    // Update the card UI
+                    const cardEl = document.querySelector(`.asset-card[data-asset-id="${assetId}"]`);
+                    if (cardEl) {
+                        updateCardCollectionBadges(cardEl, asset);
+                    }
+                }
+
+                // Update sidebar count
+                updateSidebarCollectionCount(collectionId, -1);
+
+            } catch (error) {
+                console.error('Failed to remove from collection:', error);
+                showToast('Failed to remove from collection');
+            }
+        }
+
+        // Flash the collection button to show success (keep for backwards compat)
+        function flashCollectionButton(cardEl) {
+            // No longer needed - button stays green while in collection
+        }
+
+        // Update sidebar collection count without full reload
+        function updateSidebarCollectionCount(collectionId, delta) {
+            const collectionItem = document.querySelector(`.collection-item[data-collection="${collectionId}"]`);
+            if (!collectionItem) return;
+
+            const countEl = collectionItem.querySelector('.collection-count');
+            if (!countEl) return;
+
+            const currentCount = parseInt(countEl.textContent) || 0;
+            countEl.textContent = Math.max(0, currentCount + delta);
+
+            // Add animation class
+            collectionItem.classList.add('count-updated');
+            setTimeout(() => collectionItem.classList.remove('count-updated'), 400);
+        }
+
+        // New Collection Modal State
+        let newCollectionState = {
+            assetId: null,  // If set, add this asset to the collection after creating
+            selectedColor: '#10B981'
+        };
+
+        function openNewCollectionModal(assetId = null) {
+            closeCollectionMenu();
+            newCollectionState.assetId = assetId;
+            newCollectionState.selectedColor = '#10B981';
+
+            // Reset form
+            document.getElementById('newCollectionNameInput').value = '';
+            document.querySelectorAll('.new-collection-color-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.color === '#10B981');
+            });
+
+            // Show modal
+            document.getElementById('newCollectionModal').classList.add('active');
+            document.getElementById('newCollectionNameInput').focus();
+        }
+
+        function closeNewCollectionModal() {
+            document.getElementById('newCollectionModal').classList.remove('active');
+            newCollectionState.assetId = null;
+        }
+
+        function selectNewCollectionColor(color) {
+            newCollectionState.selectedColor = color;
+            document.querySelectorAll('.new-collection-color-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.color === color);
+            });
+        }
+
+        async function submitNewCollection() {
+            const name = document.getElementById('newCollectionNameInput').value.trim();
+            if (!name) {
+                showToast('Please enter a collection name', 'error');
+                return;
+            }
+
+            // Close modal immediately for responsiveness
+            closeNewCollectionModal();
+
+            try {
+                const response = await fetch('/api/collections', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name: name,
+                        color: newCollectionState.selectedColor
+                    })
+                });
+
+                if (response.ok) {
+                    const collection = await response.json();
+
+                    // Add collection to sidebar without full reload
+                    addCollectionToSidebar(collection);
+
+                    // If we have an asset to add, add it
+                    if (newCollectionState.assetId) {
+                        await fetch(`/api/assets/${newCollectionState.assetId}/collections`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ collection_id: collection.id })
+                        });
+
+                        // Update local asset state
+                        const asset = currentAssets.find(a => a.id === newCollectionState.assetId);
+                        if (asset) {
+                            if (!asset.collections) asset.collections = [];
+                            asset.collections.push({ id: collection.id, name: collection.name, color: collection.color });
+
+                            // Update the card's collection dots
+                            const cardEl = document.querySelector(`.asset-card[data-asset-id="${newCollectionState.assetId}"]`);
+                            if (cardEl) {
+                                updateCardCollectionBadges(cardEl, asset);
+                                flashCollectionButton(cardEl);
+                            }
+                        }
+
+                        // Update sidebar count for new collection
+                        updateSidebarCollectionCount(collection.id, 1);
+
+                        showToast(`Created "${name}" and added asset`);
+                    } else {
+                        showToast(`Collection "${name}" created`);
+                    }
+                } else {
+                    showToast('Failed to create collection', 'error');
+                }
+            } catch (error) {
+                console.error('Failed to create collection:', error);
+                showToast('Failed to create collection', 'error');
+            }
+        }
+
+        // Add a new collection to sidebar without full reload
+        function addCollectionToSidebar(collection) {
+            const listEl = document.getElementById('collectionList');
+            if (!listEl) return;
+
+            const item = document.createElement('div');
+            item.className = 'collection-item';
+            item.dataset.collection = collection.id;
+            item.onclick = () => filterByCollection(collection.id);
+            item.innerHTML = `
+                <div class="collection-color" style="background: ${collection.color || '#6366f1'};"></div>
+                <span class="collection-name">${escapeHtml(collection.name)}</span>
+                <span class="collection-count">0</span>
+            `;
+
+            // Add with animation
+            item.style.opacity = '0';
+            item.style.transform = 'translateX(-10px)';
+            listEl.appendChild(item);
+
+            // Trigger animation
+            requestAnimationFrame(() => {
+                item.style.transition = 'opacity 0.3s, transform 0.3s';
+                item.style.opacity = '1';
+                item.style.transform = 'translateX(0)';
+            });
+        }
+
+        function createCollectionForAsset(assetId) {
+            openNewCollectionModal(assetId);
+        }
+
+        // Initialize color button click handlers
+        document.addEventListener('DOMContentLoaded', () => {
+            document.querySelectorAll('.new-collection-color-btn').forEach(btn => {
+                btn.addEventListener('click', () => selectNewCollectionColor(btn.dataset.color));
+            });
+
+            // Handle Enter key in collection name input
+            document.getElementById('newCollectionNameInput')?.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') submitNewCollection();
+            });
+        });
 
         // Filter functions
         function filterByCollection(collectionId) {
@@ -744,6 +2488,33 @@
             loadAssets();
         }
 
+        // Filter by starred
+        function filterByStarred() {
+            // Toggle starred filter
+            if (currentFilter.starred) {
+                currentFilter.starred = false;
+            } else {
+                currentFilter.starred = true;
+            }
+
+            // Clear other filters when showing starred
+            if (currentFilter.starred) {
+                currentFilter.type = null;
+                currentFilter.collection = 'all';
+            }
+
+            // Update UI
+            document.querySelector('.starred-filter')?.classList.toggle('active', currentFilter.starred);
+            document.querySelectorAll('.collection-item[data-type]').forEach(item => {
+                item.classList.remove('active');
+            });
+            document.querySelectorAll('.collection-item[data-collection]').forEach(item => {
+                item.classList.toggle('active', item.dataset.collection === 'all' && !currentFilter.starred);
+            });
+
+            loadAssets();
+        }
+
         // Search
         function debounceSearch() {
             clearTimeout(searchTimeout);
@@ -774,56 +2545,887 @@
             }
         }
 
-        // Open asset detail (placeholder for now)
-        function openAsset(assetId) {
+        // Asset Detail Modal State
+        let currentDetailAsset = null;
+        let currentSkeletonData = null;
+
+        // Open asset detail modal
+        async function openAsset(assetId) {
             const asset = currentAssets.find(a => a.id === assetId);
             if (!asset) return;
 
-            // For now, if it's a skeleton report, open the report
-            if (asset.type === 'skeleton' && asset.content_path) {
-                const reportDir = asset.content_path.split('/').pop();
-                // Navigate to skeleton ripper with this report loaded
-                showToast(`Opening ${asset.title}...`);
-                // TODO: Implement asset detail view
-            } else {
-                showToast(`Asset detail view coming soon`);
-            }
-        }
+            currentDetailAsset = asset;
 
-        // New collection modal
-        function showNewCollectionModal() {
-            // Use the SaveCollectModal for consistency
-            const name = prompt('Enter collection name:');
-            if (name && name.trim()) {
-                createCollection(name.trim());
-            }
-        }
+            // Show modal with loading state
+            const modal = document.getElementById('assetDetailModal');
+            const body = document.getElementById('assetDetailBody');
+            const footer = document.getElementById('assetDetailFooter');
+            const title = document.getElementById('assetDetailTitle');
+            const badge = document.getElementById('assetDetailBadge');
 
-        async function createCollection(name) {
+            // Set header
+            title.textContent = asset.title;
+            badge.textContent = asset.type;
+            badge.className = `asset-detail-badge ${asset.type}`;
+
+            // Show loading
+            body.innerHTML = `
+                <div class="detail-loading">
+                    <div class="spinner"></div>
+                    <span>Loading ${asset.type} details...</span>
+                </div>
+            `;
+            footer.innerHTML = '';
+
+            modal.classList.add('active');
+
+            // Load content based on type
             try {
-                const response = await fetch('/api/collections', {
+                if (asset.type === 'skeleton_report') {
+                    await loadSkeletonDetail(asset);
+                } else if (asset.type === 'scrape_report') {
+                    await loadScrapeDetail(asset);
+                } else if (asset.type === 'skeleton') {
+                    // Individual skeleton - show skeleton card
+                    await loadSingleSkeletonDetail(asset);
+                } else if (asset.type === 'transcript') {
+                    // Individual transcript - show transcript view
+                    await loadTranscriptDetail(asset);
+                } else {
+                    body.innerHTML = `<div class="detail-loading">Detail view not available for this asset type.</div>`;
+                }
+            } catch (error) {
+                console.error('Failed to load asset details:', error);
+                body.innerHTML = `<div class="detail-loading">Failed to load details: ${error.message}</div>`;
+            }
+        }
+
+        // Close asset detail modal
+        function closeAssetDetailModal() {
+            document.getElementById('assetDetailModal').classList.remove('active');
+            currentDetailAsset = null;
+            currentSkeletonData = null;
+        }
+
+        // Load skeleton report detail
+        async function loadSkeletonDetail(asset) {
+            const body = document.getElementById('assetDetailBody');
+            const footer = document.getElementById('assetDetailFooter');
+
+            // Fetch skeleton data from API
+            const response = await fetch(`/api/assets/${asset.id}/content`);
+            if (!response.ok) throw new Error('Failed to load skeleton data');
+
+            const data = await response.json();
+            currentSkeletonData = data;
+
+            // Build tabbed interface
+            body.innerHTML = `
+                <div class="detail-tabs-nav">
+                    <button class="detail-tab-btn active" onclick="switchDetailTab('skeletons')">Skeletons</button>
+                    <button class="detail-tab-btn" onclick="switchDetailTab('markdown')">Markdown</button>
+                    <button class="detail-tab-btn" onclick="switchDetailTab('json')">JSON</button>
+                    <button class="detail-tab-btn" onclick="switchDetailTab('prompt')">AI Prompt</button>
+                </div>
+
+                <div class="detail-tab-content active" id="detail-tab-skeletons">
+                    <div class="detail-tab-toolbar">
+                        <span class="detail-tab-toolbar-left">${data.skeletons?.length || 0} skeleton patterns extracted</span>
+                        <div class="detail-tab-toolbar-right">
+                            <button class="detail-action-btn" onclick="copyDetailContent('skeletons')">Copy All</button>
+                        </div>
+                    </div>
+                    <div class="detail-skeleton-grid" id="detailSkeletonGrid">
+                        ${renderDetailSkeletons(data.skeletons || [])}
+                    </div>
+                </div>
+
+                <div class="detail-tab-content" id="detail-tab-markdown">
+                    <div class="detail-tab-toolbar">
+                        <span class="detail-tab-toolbar-left">Markdown report</span>
+                        <div class="detail-tab-toolbar-right">
+                            <button class="detail-action-btn" onclick="copyDetailContent('markdown')">Copy</button>
+                            <button class="detail-action-btn" onclick="downloadDetailContent('markdown')">Download</button>
+                        </div>
+                    </div>
+                    <div class="detail-markdown-view" id="detailMarkdownView">${renderMarkdown(data.markdown || 'No markdown content available.')}</div>
+                </div>
+
+                <div class="detail-tab-content" id="detail-tab-json">
+                    <div class="detail-tab-toolbar">
+                        <span class="detail-tab-toolbar-left">Raw JSON data</span>
+                        <div class="detail-tab-toolbar-right">
+                            <button class="detail-action-btn" onclick="copyDetailContent('json')">Copy</button>
+                            <button class="detail-action-btn" onclick="downloadDetailContent('json')">Download</button>
+                        </div>
+                    </div>
+                    <pre class="detail-code-view" id="detailJsonView">${escapeHtml(JSON.stringify(data.skeletons || [], null, 2))}</pre>
+                </div>
+
+                <div class="detail-tab-content" id="detail-tab-prompt">
+                    <div class="detail-tab-toolbar">
+                        <span class="detail-tab-toolbar-left">AI script generation prompt</span>
+                        <div class="detail-tab-toolbar-right">
+                            <button class="detail-action-btn primary" onclick="copyDetailContent('prompt')">Copy Prompt</button>
+                        </div>
+                    </div>
+                    <div class="detail-code-view" id="detailPromptView">${escapeHtml(generateAIPrompt(data.skeletons || []))}</div>
+                </div>
+            `;
+
+            // Footer actions
+            footer.innerHTML = `
+                <button class="detail-action-btn" onclick="showAddToCollectionMenu('${asset.id}', event)">+ Add to Collection</button>
+                <div class="detail-spacer"></div>
+                <button class="detail-action-btn" onclick="closeAssetDetailModal()">Close</button>
+            `;
+        }
+
+        // Render skeleton cards for detail view
+        function renderDetailSkeletons(skeletons) {
+            if (!skeletons || skeletons.length === 0) {
+                return '<div class="detail-loading">No skeleton data available.</div>';
+            }
+
+            return skeletons.map((sk, index) => `
+                <div class="detail-skeleton-card">
+                    <div class="detail-skeleton-header">
+                        <span class="detail-skeleton-creator">@${sk.creator_username || 'unknown'}</span>
+                        <div class="detail-skeleton-meta">
+                            <span>${formatNumber(sk.views || 0)} views</span>
+                            <span>${formatNumber(sk.likes || 0)} likes</span>
+                        </div>
+                    </div>
+                    <div class="detail-skeleton-body">
+                        <div class="detail-skeleton-section">
+                            <div class="detail-skeleton-label">Hook</div>
+                            <div class="detail-skeleton-hook">${escapeHtml(sk.hook || 'No hook')}</div>
+                        </div>
+                        ${sk.problem ? `
+                            <div class="detail-skeleton-section">
+                                <div class="detail-skeleton-label">Problem</div>
+                                <div class="detail-skeleton-value">${escapeHtml(sk.problem)}</div>
+                            </div>
+                        ` : ''}
+                        ${sk.key_points && sk.key_points.length > 0 ? `
+                            <div class="detail-skeleton-section">
+                                <div class="detail-skeleton-label">Key Points</div>
+                                <ul class="detail-skeleton-points">
+                                    ${sk.key_points.map(p => `<li>${escapeHtml(p)}</li>`).join('')}
+                                </ul>
+                            </div>
+                        ` : ''}
+                        ${sk.cta ? `
+                            <div class="detail-skeleton-section">
+                                <div class="detail-skeleton-label">Call to Action</div>
+                                <div class="detail-skeleton-value">${escapeHtml(sk.cta)}</div>
+                            </div>
+                        ` : ''}
+                    </div>
+                    <div class="detail-skeleton-footer">
+                        <button class="detail-action-btn save-skeleton-btn" onclick="saveSkeletonAsAsset(${index}, event)">
+                            🦴 Save as Asset
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Generate AI prompt from skeletons
+        function generateAIPrompt(skeletons) {
+            if (!skeletons || skeletons.length === 0) return 'No skeleton data available for prompt generation.';
+
+            let prompt = `I have analyzed ${skeletons.length} high-performing short-form videos and extracted their content patterns. Help me create a new script following these proven structures:\n\n`;
+
+            skeletons.forEach((sk, i) => {
+                prompt += `--- VIDEO ${i + 1} ---\n`;
+                prompt += `Hook: "${sk.hook || 'N/A'}"\n`;
+                if (sk.problem) prompt += `Problem: ${sk.problem}\n`;
+                if (sk.key_points && sk.key_points.length > 0) {
+                    prompt += `Key Points:\n${sk.key_points.map(p => `  - ${p}`).join('\n')}\n`;
+                }
+                if (sk.cta) prompt += `CTA: ${sk.cta}\n`;
+                prompt += `Performance: ${formatNumber(sk.metrics?.views || 0)} views, ${formatNumber(sk.metrics?.likes || 0)} likes\n\n`;
+            });
+
+            prompt += `Based on these patterns, please help me write a new script for [YOUR TOPIC]. Focus on the hook structure and key point delivery that made these videos successful.`;
+
+            return prompt;
+        }
+
+        // Simple markdown renderer
+        function renderMarkdown(md) {
+            if (!md) return '';
+            // Basic markdown to HTML conversion
+            return md
+                .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+                .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+                .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                .replace(/`(.*?)`/g, '<code>$1</code>')
+                .replace(/^\- (.*$)/gim, '<li>$1</li>')
+                .replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>')
+                .replace(/\n\n/g, '</p><p>')
+                .replace(/^(.+)$/gm, '<p>$1</p>')
+                .replace(/<p><h/g, '<h')
+                .replace(/<\/h(\d)><\/p>/g, '</h$1>')
+                .replace(/<p><li>/g, '<li>')
+                .replace(/<\/li><\/p>/g, '</li>');
+        }
+
+        // Switch detail tabs
+        function switchDetailTab(tabName) {
+            // Update nav buttons
+            document.querySelectorAll('.detail-tab-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.textContent.toLowerCase().includes(tabName));
+            });
+
+            // Update content
+            document.querySelectorAll('.detail-tab-content').forEach(content => {
+                content.classList.toggle('active', content.id === `detail-tab-${tabName}`);
+            });
+        }
+
+        // Copy detail content
+        function copyDetailContent(type) {
+            let content = '';
+
+            if (type === 'skeletons' && currentSkeletonData?.skeletons) {
+                content = JSON.stringify(currentSkeletonData.skeletons, null, 2);
+            } else if (type === 'markdown' && currentSkeletonData?.markdown) {
+                content = currentSkeletonData.markdown;
+            } else if (type === 'json' && currentSkeletonData?.skeletons) {
+                content = JSON.stringify(currentSkeletonData.skeletons, null, 2);
+            } else if (type === 'prompt' && currentSkeletonData?.skeletons) {
+                content = generateAIPrompt(currentSkeletonData.skeletons);
+            }
+
+            if (content) {
+                navigator.clipboard.writeText(content);
+                showToast('Copied to clipboard');
+            }
+        }
+
+        // Download detail content
+        function downloadDetailContent(type) {
+            let content = '';
+            let filename = '';
+            let mimeType = 'text/plain';
+
+            if (type === 'markdown' && currentSkeletonData?.markdown) {
+                content = currentSkeletonData.markdown;
+                filename = `skeleton-report-${currentDetailAsset?.id || 'export'}.md`;
+            } else if (type === 'json' && currentSkeletonData?.skeletons) {
+                content = JSON.stringify(currentSkeletonData.skeletons, null, 2);
+                filename = `skeletons-${currentDetailAsset?.id || 'export'}.json`;
+                mimeType = 'application/json';
+            }
+
+            if (content) {
+                const blob = new Blob([content], { type: mimeType });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                a.click();
+                URL.revokeObjectURL(url);
+                showToast('Download started');
+            }
+        }
+
+        // Load scrape detail
+        async function loadScrapeDetail(asset) {
+            const body = document.getElementById('assetDetailBody');
+            const footer = document.getElementById('assetDetailFooter');
+
+            // Fetch scrape data from API
+            const response = await fetch(`/api/assets/${asset.id}/content`);
+            if (!response.ok) throw new Error('Failed to load scrape data');
+
+            const data = await response.json();
+
+            // Calculate totals
+            const totalViews = (data.top_reels || []).reduce((sum, r) => sum + (r.views || 0), 0);
+            const totalLikes = (data.top_reels || []).reduce((sum, r) => sum + (r.likes || 0), 0);
+            const reelCount = data.top_reels?.length || 0;
+
+            body.innerHTML = `
+                <div class="scrape-detail-view">
+                    <div class="scrape-stats-row">
+                        <div class="scrape-stat">
+                            <div class="scrape-stat-value">${formatNumber(totalViews)}</div>
+                            <div class="scrape-stat-label">Total Views</div>
+                        </div>
+                        <div class="scrape-stat">
+                            <div class="scrape-stat-value">${formatNumber(totalLikes)}</div>
+                            <div class="scrape-stat-label">Total Likes</div>
+                        </div>
+                        <div class="scrape-stat">
+                            <div class="scrape-stat-value">${reelCount}</div>
+                            <div class="scrape-stat-label">Reels</div>
+                        </div>
+                    </div>
+
+                    ${data.profile?.channel_url ? `
+                        <div class="scrape-section">
+                            <div class="scrape-section-title">Profile URL</div>
+                            <div class="scrape-url-row">
+                                <input type="text" class="scrape-url-input" value="${escapeHtml(data.profile.channel_url)}" readonly>
+                                <button class="detail-action-btn" onclick="navigator.clipboard.writeText('${escapeHtml(data.profile.channel_url)}'); showToast('Copied!')">Copy</button>
+                            </div>
+                        </div>
+                    ` : ''}
+
+                    <div class="scrape-section">
+                        <div class="scrape-section-title">Top Performing Reels</div>
+                        <div class="scrape-reels-list">
+                            ${(data.top_reels || []).map((reel, i) => `
+                                <div class="scrape-reel-item" onclick="openReelDetail(${i}, event)">
+                                    <span class="scrape-reel-rank">#${i + 1}</span>
+                                    <div class="scrape-reel-info">
+                                        <div class="scrape-reel-caption">${escapeHtml((reel.caption || 'No caption').slice(0, 100))}${reel.caption?.length > 100 ? '...' : ''}</div>
+                                        <div class="scrape-reel-stats">${formatNumber(reel.views || 0)} views • ${formatNumber(reel.likes || 0)} likes</div>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // Store reels for detail view
+            window.currentScrapeReels = data.top_reels || [];
+
+            footer.innerHTML = `
+                <button class="detail-action-btn" onclick="showAddToCollectionMenu('${asset.id}', event)">+ Add to Collection</button>
+                <div class="detail-spacer"></div>
+                <button class="detail-action-btn" onclick="closeAssetDetailModal()">Close</button>
+            `;
+        }
+
+        // Load individual skeleton detail (granular asset)
+        async function loadSingleSkeletonDetail(asset) {
+            const body = document.getElementById('assetDetailBody');
+            const footer = document.getElementById('assetDetailFooter');
+
+            // Individual skeleton has its content in metadata
+            const meta = asset.metadata || {};
+
+            body.innerHTML = `
+                <div class="detail-skeleton-grid">
+                    <div class="detail-skeleton-card">
+                        <div class="detail-skeleton-section">
+                            <span class="detail-skeleton-label">HOOK</span>
+                            <p class="detail-skeleton-text">${escapeHtml(meta.hook || 'N/A')}</p>
+                        </div>
+                        <div class="detail-skeleton-section">
+                            <span class="detail-skeleton-label">VALUE</span>
+                            <p class="detail-skeleton-text">${escapeHtml(meta.value || 'N/A')}</p>
+                        </div>
+                        <div class="detail-skeleton-section">
+                            <span class="detail-skeleton-label">CTA</span>
+                            <p class="detail-skeleton-text">${escapeHtml(meta.cta || 'N/A')}</p>
+                        </div>
+                        ${meta.video_url ? `
+                            <div class="detail-skeleton-section">
+                                <span class="detail-skeleton-label">SOURCE VIDEO</span>
+                                <a href="${escapeHtml(meta.video_url)}" target="_blank" class="detail-skeleton-link">${escapeHtml(meta.video_url)}</a>
+                            </div>
+                        ` : ''}
+                        <div class="detail-skeleton-meta">
+                            ${meta.views ? `<span>${formatNumber(meta.views)} views</span>` : ''}
+                            ${meta.creator_username ? `<span>@${escapeHtml(meta.creator_username)}</span>` : ''}
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            footer.innerHTML = `
+                <button class="detail-action-btn" onclick="showAddToCollectionMenu('${asset.id}', event)">+ Add to Collection</button>
+                <button class="detail-action-btn" onclick="copySingleSkeleton()">Copy Skeleton</button>
+                <div class="detail-spacer"></div>
+                <button class="detail-action-btn" onclick="closeAssetDetailModal()">Close</button>
+            `;
+        }
+
+        // Load individual transcript detail (granular asset)
+        async function loadTranscriptDetail(asset) {
+            const body = document.getElementById('assetDetailBody');
+            const footer = document.getElementById('assetDetailFooter');
+
+            // Individual transcript has its content in metadata
+            const meta = asset.metadata || {};
+            const transcript = meta.transcript || asset.preview || 'No transcript content available.';
+
+            body.innerHTML = `
+                <div class="scrape-detail-view">
+                    ${meta.views || meta.likes ? `
+                        <div class="scrape-stats-row">
+                            ${meta.views ? `<div class="scrape-stat"><div class="scrape-stat-value">${formatNumber(meta.views)}</div><div class="scrape-stat-label">Views</div></div>` : ''}
+                            ${meta.likes ? `<div class="scrape-stat"><div class="scrape-stat-value">${formatNumber(meta.likes)}</div><div class="scrape-stat-label">Likes</div></div>` : ''}
+                        </div>
+                    ` : ''}
+
+                    <div class="scrape-section">
+                        <div class="scrape-section-title">Transcript</div>
+                        <div class="scrape-reel-transcript">${escapeHtml(transcript)}</div>
+                    </div>
+
+                    ${meta.caption ? `
+                        <div class="scrape-section">
+                            <div class="scrape-section-title">Caption</div>
+                            <div class="scrape-reel-transcript">${escapeHtml(meta.caption)}</div>
+                        </div>
+                    ` : ''}
+
+                    ${meta.video_url ? `
+                        <div class="scrape-section">
+                            <div class="scrape-section-title">Source Video</div>
+                            <div class="scrape-reel-url">
+                                <input type="text" value="${escapeHtml(meta.video_url)}" readonly>
+                                <button class="detail-action-btn" onclick="navigator.clipboard.writeText('${escapeHtml(meta.video_url)}'); showToast('Copied!')">Copy</button>
+                                <button class="detail-action-btn" onclick="window.open('${escapeHtml(meta.video_url)}', '_blank')">Open</button>
+                            </div>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+
+            // Store transcript for copy
+            window.currentTranscriptText = transcript;
+
+            footer.innerHTML = `
+                <button class="detail-action-btn" onclick="showAddToCollectionMenu('${asset.id}', event)">+ Add to Collection</button>
+                <button class="detail-action-btn primary" onclick="copyCurrentTranscript()">Copy Transcript</button>
+                <div class="detail-spacer"></div>
+                <button class="detail-action-btn" onclick="closeAssetDetailModal()">Close</button>
+            `;
+        }
+
+        // Copy single skeleton content
+        function copySingleSkeleton() {
+            const asset = currentDetailAsset;
+            if (!asset?.metadata) return;
+            const meta = asset.metadata;
+            const text = `HOOK: ${meta.hook || 'N/A'}\n\nVALUE: ${meta.value || 'N/A'}\n\nCTA: ${meta.cta || 'N/A'}`;
+            navigator.clipboard.writeText(text);
+            showToast('Skeleton copied!');
+        }
+
+        // Copy current transcript
+        function copyCurrentTranscript() {
+            if (window.currentTranscriptText) {
+                navigator.clipboard.writeText(window.currentTranscriptText);
+                showToast('Transcript copied!');
+            }
+        }
+
+        // Open individual reel detail (expand in-place)
+        function openReelDetail(index, event) {
+            if (event) event.stopPropagation();
+
+            const reel = window.currentScrapeReels?.[index];
+            if (!reel) return;
+
+            // Find the clicked reel item
+            const reelItems = document.querySelectorAll('.scrape-reel-item');
+            const clickedItem = reelItems[index];
+
+            // If already expanded, collapse it
+            if (clickedItem.classList.contains('expanded')) {
+                collapseReelDetail(index);
+                return;
+            }
+
+            // Collapse any other expanded reels first
+            reelItems.forEach((item, i) => {
+                if (item.classList.contains('expanded')) {
+                    collapseReelDetail(i);
+                }
+            });
+
+            // Expand this reel
+            clickedItem.classList.add('expanded');
+            clickedItem.style.position = 'relative';
+
+            // Build expanded content
+            const expandedHtml = `
+                <div class="scrape-reel-header">
+                    <span class="scrape-reel-rank">#${index + 1}</span>
+                    <div class="scrape-reel-info">
+                        <div class="scrape-reel-caption">${escapeHtml((reel.caption || 'No caption').slice(0, 100))}${reel.caption?.length > 100 ? '...' : ''}</div>
+                        <div class="scrape-reel-stats">${formatNumber(reel.views || 0)} views • ${formatNumber(reel.likes || 0)} likes</div>
+                    </div>
+                    <span class="scrape-reel-close" onclick="collapseReelDetail(${index})">&times;</span>
+                </div>
+                <div class="scrape-reel-expanded">
+                    <div class="scrape-reel-expanded-section">
+                        <div class="scrape-reel-expanded-label">Transcript</div>
+                        ${reel.transcript
+                            ? `<div class="scrape-reel-transcript">${escapeHtml(reel.transcript)}</div>`
+                            : `<div class="scrape-reel-no-transcript">No transcript available for this reel.</div>`
+                        }
+                    </div>
+                    ${reel.caption ? `
+                        <div class="scrape-reel-expanded-section">
+                            <div class="scrape-reel-expanded-label">Full Caption</div>
+                            <div class="scrape-reel-transcript">${escapeHtml(reel.caption)}</div>
+                        </div>
+                    ` : ''}
+                    <div class="scrape-reel-expanded-section">
+                        <div class="scrape-reel-expanded-label">Reel URL</div>
+                        <div class="scrape-reel-url">
+                            <input type="text" value="${escapeHtml(reel.url || '')}" readonly onclick="event.stopPropagation()">
+                            <button class="detail-action-btn" onclick="event.stopPropagation(); copyReelUrl('${escapeHtml(reel.url || '')}', this)">Copy</button>
+                            ${reel.url ? `<button class="detail-action-btn" onclick="event.stopPropagation(); window.open('${escapeHtml(reel.url)}', '_blank')">Open</button>` : ''}
+                        </div>
+                    </div>
+                    <div class="scrape-reel-actions">
+                        ${reel.transcript ? `<button class="detail-action-btn primary copy-btn" id="copyBtn-${index}" onclick="event.stopPropagation(); copyReelTranscript(${index}, this)">Copy Transcript</button>` : ''}
+                        ${reel.transcript ? `<button class="detail-action-btn save-transcript-btn" onclick="event.stopPropagation(); saveTranscriptAsAsset(${index}, event)">📝 Save as Asset</button>` : ''}
+                    </div>
+                </div>
+            `;
+
+            clickedItem.innerHTML = expandedHtml;
+        }
+
+        // Collapse reel detail back to summary
+        function collapseReelDetail(index) {
+            const reel = window.currentScrapeReels?.[index];
+            if (!reel) return;
+
+            const reelItems = document.querySelectorAll('.scrape-reel-item');
+            const clickedItem = reelItems[index];
+
+            clickedItem.classList.remove('expanded');
+            clickedItem.style.position = '';
+
+            // Restore original content
+            clickedItem.innerHTML = `
+                <span class="scrape-reel-rank">#${index + 1}</span>
+                <div class="scrape-reel-info">
+                    <div class="scrape-reel-caption">${escapeHtml((reel.caption || 'No caption').slice(0, 100))}${reel.caption?.length > 100 ? '...' : ''}</div>
+                    <div class="scrape-reel-stats">${formatNumber(reel.views || 0)} views • ${formatNumber(reel.likes || 0)} likes</div>
+                </div>
+            `;
+        }
+
+        // Copy reel URL
+        function copyReelUrl(url, btnElement) {
+            navigator.clipboard.writeText(url);
+
+            // Show inline success feedback
+            if (btnElement) {
+                const originalText = btnElement.textContent;
+                btnElement.textContent = '✓ Copied!';
+                btnElement.classList.add('copy-success');
+                btnElement.disabled = true;
+
+                setTimeout(() => {
+                    btnElement.textContent = originalText;
+                    btnElement.classList.remove('copy-success');
+                    btnElement.disabled = false;
+                }, 2000);
+            } else {
+                showToast('URL copied!');
+            }
+        }
+
+        // Copy reel transcript
+        function copyReelTranscript(index, btnElement) {
+            const reel = window.currentScrapeReels?.[index];
+            if (reel?.transcript) {
+                navigator.clipboard.writeText(reel.transcript);
+
+                // Show inline success feedback
+                if (btnElement) {
+                    const originalText = btnElement.textContent;
+                    btnElement.textContent = '✓ Copied!';
+                    btnElement.classList.add('copy-success');
+                    btnElement.disabled = true;
+
+                    setTimeout(() => {
+                        btnElement.textContent = originalText;
+                        btnElement.classList.remove('copy-success');
+                        btnElement.disabled = false;
+                    }, 2000);
+                }
+            }
+        }
+
+        // Save individual skeleton as asset
+        async function saveSkeletonAsAsset(index, event) {
+            const skeleton = currentSkeletonData?.skeletons?.[index];
+            if (!skeleton || !currentDetailAsset) return;
+
+            // Find the button that was clicked
+            const btn = event?.target || document.querySelectorAll('.save-skeleton-btn')[index];
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '⏳ Saving...';
+            }
+
+            try {
+                const response = await fetch('/api/assets/save-skeleton', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name, color: '#6366f1' })
+                    body: JSON.stringify({
+                        skeleton_data: skeleton,
+                        source_report_id: currentDetailAsset.id
+                    })
                 });
 
                 if (response.ok) {
-                    showToast(`Collection "${name}" created`);
-                    loadCollections();
+                    const asset = await response.json();
+                    if (btn) {
+                        btn.innerHTML = '✓ Saved!';
+                        btn.classList.add('save-success');
+                    }
+                    // Refresh asset list in background
+                    loadAssets();
+                } else {
+                    const error = await response.json();
+                    if (btn) {
+                        btn.innerHTML = '✗ Failed';
+                        btn.classList.add('save-error');
+                        setTimeout(() => {
+                            btn.innerHTML = '🦴 Save as Asset';
+                            btn.classList.remove('save-error');
+                            btn.disabled = false;
+                        }, 2000);
+                    }
                 }
-            } catch (error) {
-                console.error('Failed to create collection:', error);
+            } catch (e) {
+                console.error('Error saving skeleton:', e);
+                if (btn) {
+                    btn.innerHTML = '✗ Error';
+                    btn.classList.add('save-error');
+                    setTimeout(() => {
+                        btn.innerHTML = '🦴 Save as Asset';
+                        btn.classList.remove('save-error');
+                        btn.disabled = false;
+                    }, 2000);
+                }
             }
+        }
+
+        // Save individual transcript as asset
+        async function saveTranscriptAsAsset(index, event) {
+            const reel = window.currentScrapeReels?.[index];
+            if (!reel || !currentDetailAsset) return;
+
+            // Get username from asset metadata
+            const username = currentDetailAsset.metadata?.username || 'unknown';
+
+            // Find the button that was clicked
+            const btn = event?.target || document.querySelectorAll('.save-transcript-btn')[index];
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '⏳ Saving...';
+            }
+
+            try {
+                const response = await fetch('/api/assets/save-transcript', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        reel_data: reel,
+                        source_report_id: currentDetailAsset.id,
+                        username: username
+                    })
+                });
+
+                if (response.ok) {
+                    const asset = await response.json();
+                    if (btn) {
+                        btn.innerHTML = '✓ Saved!';
+                        btn.classList.add('save-success');
+                    }
+                    // Refresh asset list in background
+                    loadAssets();
+                } else {
+                    const error = await response.json();
+                    if (btn) {
+                        btn.innerHTML = '✗ Failed';
+                        btn.classList.add('save-error');
+                        setTimeout(() => {
+                            btn.innerHTML = '📝 Save as Asset';
+                            btn.classList.remove('save-error');
+                            btn.disabled = false;
+                        }, 2000);
+                    }
+                }
+            } catch (e) {
+                console.error('Error saving transcript:', e);
+                if (btn) {
+                    btn.innerHTML = '✗ Error';
+                    btn.classList.add('save-error');
+                    setTimeout(() => {
+                        btn.innerHTML = '📝 Save as Asset';
+                        btn.classList.remove('save-error');
+                        btn.disabled = false;
+                    }, 2000);
+                }
+            }
+        }
+
+        // Helper: Format number
+        function formatNumber(num) {
+            if (!num) return '0';
+            if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+            if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+            return num.toString();
+        }
+
+        // New collection modal (from sidebar button)
+        function showNewCollectionModal() {
+            // Use the custom modal instead of prompt()
+            openNewCollectionModal(null);
         }
 
         // Utilities
         function getTypeIcon(type) {
             switch (type) {
-                case 'skeleton': return '&#128200;';
-                case 'scrape': return '&#128206;';
-                case 'transcript': return '&#128221;';
-                default: return '&#128196;';
+                case 'skeleton_report': return '💀';  // Skull for reports
+                case 'skeleton': return '🦴';         // Bone for individual skeletons
+                case 'scrape_report':
+                case 'scrape': return '🎯';           // Target
+                case 'transcript': return '📝';       // Memo
+                default: return '📄';
             }
+        }
+
+        function getTypeLabel(type) {
+            switch (type) {
+                case 'skeleton_report': return 'Skeleton Report';
+                case 'skeleton': return 'Skeleton';
+                case 'scrape_report':
+                case 'scrape': return 'Scrape Report';
+                case 'transcript': return 'Transcript';
+                default: return type;
+            }
+        }
+
+        function renderAssetMetadata(asset) {
+            const meta = asset.metadata || {};
+
+            // Individual skeleton (saved from a report)
+            if (asset.type === 'skeleton') {
+                const creator = meta.creator_username || 'unknown';
+                const views = meta.views || 0;
+                const likes = meta.likes || 0;
+                const hook = meta.hook || '';
+                const hookPreview = hook.length > 80 ? hook.slice(0, 80) + '...' : hook;
+
+                return `
+                    <div class="asset-creators"><strong>@${escapeHtml(creator)}</strong></div>
+                    <div class="asset-hook-preview">${escapeHtml(hookPreview)}</div>
+                    <div class="asset-stats compact">
+                        <div class="asset-stat">
+                            <span class="asset-stat-label">Views</span>
+                            <span class="asset-stat-value">${formatNumber(views)}</span>
+                        </div>
+                        <div class="asset-stat">
+                            <span class="asset-stat-label">Likes</span>
+                            <span class="asset-stat-value">${formatNumber(likes)}</span>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Skeleton report (contains multiple skeletons)
+            if (asset.type === 'skeleton_report') {
+                const creators = meta.creators || [];
+                const videoCount = meta.video_count || 0;
+                const totalViews = meta.total_views || 0;
+                const totalLikes = meta.total_likes || 0;
+                const hasTranscripts = meta.has_transcripts !== false;
+
+                return `
+                    ${creators.length > 0 ? `<div class="asset-creators"><strong>Creators:</strong> ${creators.slice(0, 3).map(c => '@' + c).join(', ')}${creators.length > 3 ? ` +${creators.length - 3} more` : ''}</div>` : ''}
+                    <div class="asset-stats">
+                        <div class="asset-stat">
+                            <span class="asset-stat-label">Skeletons</span>
+                            <span class="asset-stat-value">${videoCount}</span>
+                        </div>
+                        <div class="asset-stat">
+                            <span class="asset-stat-label">Total Views</span>
+                            <span class="asset-stat-value">${formatNumber(totalViews)}</span>
+                        </div>
+                        <div class="asset-stat">
+                            <span class="asset-stat-label">Total Likes</span>
+                            <span class="asset-stat-value">${formatNumber(totalLikes)}</span>
+                        </div>
+                        <div class="asset-stat">
+                            <span class="asset-stat-label">Transcripts</span>
+                            <span class="asset-stat-value ${hasTranscripts}">${hasTranscripts ? '✓ Yes' : '✗ No'}</span>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Individual transcript (saved from a scrape report)
+            if (asset.type === 'transcript') {
+                const username = meta.username || 'unknown';
+                const views = meta.views || 0;
+                const likes = meta.likes || 0;
+                const caption = meta.caption || '';
+                const captionPreview = caption.length > 80 ? caption.slice(0, 80) + '...' : caption;
+
+                return `
+                    <div class="asset-creators"><strong>@${escapeHtml(username)}</strong></div>
+                    ${captionPreview ? `<div class="asset-caption-preview">${escapeHtml(captionPreview)}</div>` : ''}
+                    <div class="asset-stats compact">
+                        <div class="asset-stat">
+                            <span class="asset-stat-label">Views</span>
+                            <span class="asset-stat-value">${formatNumber(views)}</span>
+                        </div>
+                        <div class="asset-stat">
+                            <span class="asset-stat-label">Likes</span>
+                            <span class="asset-stat-value">${formatNumber(likes)}</span>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Scrape report (contains multiple videos/transcripts)
+            if (asset.type === 'scrape_report' || asset.type === 'scrape') {
+                const username = meta.username || 'Unknown';
+                const platform = meta.platform || 'unknown';
+                const totalReels = meta.total_reels || 0;
+                const topCount = meta.top_count || 0;
+                const profile = meta.profile || {};
+                const totalViews = profile.total_views || meta.total_views || 0;
+                const totalLikes = profile.total_likes || meta.total_likes || 0;
+                const hasTranscripts = meta.has_transcripts !== false;
+
+                return `
+                    <div class="asset-creators"><strong>@${escapeHtml(username)}</strong> · ${platform === 'tiktok' ? 'TikTok' : 'Instagram'}</div>
+                    <div class="asset-stats">
+                        <div class="asset-stat">
+                            <span class="asset-stat-label">Videos</span>
+                            <span class="asset-stat-value">${topCount}/${totalReels}</span>
+                        </div>
+                        <div class="asset-stat">
+                            <span class="asset-stat-label">Total Views</span>
+                            <span class="asset-stat-value">${formatNumber(totalViews)}</span>
+                        </div>
+                        <div class="asset-stat">
+                            <span class="asset-stat-label">Total Likes</span>
+                            <span class="asset-stat-value">${formatNumber(totalLikes)}</span>
+                        </div>
+                        <div class="asset-stat">
+                            <span class="asset-stat-label">Transcripts</span>
+                            <span class="asset-stat-value ${hasTranscripts}">${hasTranscripts ? '✓ Yes' : '✗ No'}</span>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Fallback to preview for other types
+            return `<div class="asset-preview">${escapeHtml(asset.preview || 'No preview available')}</div>`;
         }
 
         function formatDate(dateStr) {
@@ -849,6 +3451,69 @@
             setTimeout(() => {
                 toast.remove();
             }, 3000);
+        }
+
+        // Delete Collection Modal Functions
+        let deleteCollectionState = {
+            collectionId: null,
+            collectionName: null
+        };
+
+        function confirmDeleteCollection(collectionId, collectionName, assetCount) {
+            deleteCollectionState.collectionId = collectionId;
+            deleteCollectionState.collectionName = collectionName;
+
+            // Update modal content
+            document.getElementById('deleteCollectionName').textContent = collectionName;
+
+            // Set info message based on asset count
+            const infoEl = document.getElementById('deleteCollectionInfo');
+            if (assetCount > 0) {
+                infoEl.textContent = `This collection contains ${assetCount} asset${assetCount !== 1 ? 's' : ''}. The assets will be removed from this collection but will remain in your library.`;
+            } else {
+                infoEl.textContent = 'This collection is empty.';
+            }
+
+            // Set up the delete button click handler
+            const confirmBtn = document.getElementById('confirmDeleteBtn');
+            confirmBtn.onclick = deleteCollection;
+
+            // Show modal
+            document.getElementById('deleteCollectionModal').classList.add('active');
+        }
+
+        function closeDeleteConfirmModal() {
+            document.getElementById('deleteCollectionModal').classList.remove('active');
+            deleteCollectionState.collectionId = null;
+            deleteCollectionState.collectionName = null;
+        }
+
+        async function deleteCollection() {
+            if (!deleteCollectionState.collectionId) return;
+
+            try {
+                const response = await fetch(`/api/collections/${deleteCollectionState.collectionId}`, {
+                    method: 'DELETE'
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to delete collection');
+                }
+
+                showToast(`Collection "${deleteCollectionState.collectionName}" deleted`);
+                closeDeleteConfirmModal();
+
+                // Refresh collections list
+                loadCollections();
+
+                // If we were filtering by this collection, clear the filter
+                if (currentFilter.collection === deleteCollectionState.collectionId) {
+                    filterByCollection(null);
+                }
+            } catch (error) {
+                console.error('Failed to delete collection:', error);
+                showToast('Failed to delete collection');
+            }
         }
     </script>
 </body>

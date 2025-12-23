@@ -1770,6 +1770,98 @@ def create_asset():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/assets/save-skeleton', methods=['POST'])
+def save_skeleton_asset():
+    """Save an individual skeleton from a skeleton report as a separate asset"""
+    data = request.get_json()
+
+    required = ['skeleton_data', 'source_report_id']
+    if not all(k in data for k in required):
+        return jsonify({'error': 'Missing required fields: skeleton_data, source_report_id'}), 400
+
+    sk = data['skeleton_data']
+    source_report_id = data['source_report_id']
+
+    # Build title from hook
+    hook = sk.get('hook', 'Unknown hook')[:50]
+    creator = sk.get('creator_username', 'unknown')
+    title = f"@{creator}: {hook}..." if len(sk.get('hook', '')) > 50 else f"@{creator}: {hook}"
+
+    # Build preview
+    preview_parts = []
+    if sk.get('hook'):
+        preview_parts.append(f"HOOK: {sk['hook'][:100]}")
+    if sk.get('problem'):
+        preview_parts.append(f"PROBLEM: {sk['problem'][:100]}")
+    if sk.get('cta'):
+        preview_parts.append(f"CTA: {sk['cta'][:100]}")
+    preview = '\n'.join(preview_parts) if preview_parts else 'No preview available'
+
+    try:
+        asset = Asset.create(
+            type='skeleton',
+            title=title,
+            preview=preview,
+            metadata={
+                'hook': sk.get('hook'),
+                'problem': sk.get('problem'),
+                'key_points': sk.get('key_points', []),
+                'cta': sk.get('cta'),
+                'value': sk.get('value'),
+                'creator_username': sk.get('creator_username'),
+                'views': sk.get('views') or sk.get('metrics', {}).get('views', 0),
+                'likes': sk.get('likes') or sk.get('metrics', {}).get('likes', 0),
+                'video_url': sk.get('video_url'),
+                'source_report_id': source_report_id
+            }
+        )
+        return jsonify(asset.to_dict()), 201
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/assets/save-transcript', methods=['POST'])
+def save_transcript_asset():
+    """Save an individual transcript from a scrape report as a separate asset"""
+    data = request.get_json()
+
+    required = ['reel_data', 'source_report_id', 'username']
+    if not all(k in data for k in required):
+        return jsonify({'error': 'Missing required fields: reel_data, source_report_id, username'}), 400
+
+    reel = data['reel_data']
+    source_report_id = data['source_report_id']
+    username = data['username']
+
+    # Build title from caption
+    caption = reel.get('caption', 'No caption')[:50]
+    title = f"@{username}: {caption}..." if len(reel.get('caption', '')) > 50 else f"@{username}: {caption}"
+
+    # Preview is the transcript itself (truncated)
+    transcript = reel.get('transcript', '')
+    preview = transcript[:500] + '...' if len(transcript) > 500 else transcript
+
+    try:
+        asset = Asset.create(
+            type='transcript',
+            title=title,
+            preview=preview,
+            metadata={
+                'transcript': transcript,
+                'caption': reel.get('caption'),
+                'views': reel.get('views', 0),
+                'likes': reel.get('likes', 0),
+                'comments': reel.get('comments', 0),
+                'video_url': reel.get('url'),
+                'username': username,
+                'source_report_id': source_report_id
+            }
+        )
+        return jsonify(asset.to_dict()), 201
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/assets', methods=['GET'])
 def list_assets():
     """List assets with optional filters"""
@@ -1790,7 +1882,14 @@ def list_assets():
         offset=offset
     )
 
-    return jsonify([a.to_dict() for a in assets])
+    # Include collections for each asset
+    result = []
+    for asset in assets:
+        asset_dict = asset.to_dict()
+        asset_dict['collections'] = [c.to_dict() for c in asset.get_collections()]
+        result.append(asset_dict)
+
+    return jsonify(result)
 
 
 @app.route('/api/assets/search', methods=['GET'])
@@ -1844,6 +1943,135 @@ def delete_asset(asset_id):
 
     asset.delete()
     return jsonify({'success': True})
+
+
+def normalize_path(path_str):
+    """
+    Normalize paths for cross-platform compatibility.
+    - WSL paths (/mnt/c/...) -> Windows paths (C:/...)
+    - Relative paths -> Absolute paths based on BASE_DIR
+    - Mac/Linux native paths stay as-is
+    """
+    import platform
+
+    if not path_str:
+        return path_str
+
+    # If running on Windows and path looks like WSL format, convert it
+    if platform.system() == 'Windows' and path_str.startswith('/mnt/'):
+        if len(path_str) > 6:
+            drive_letter = path_str[5].upper()
+            rest_of_path = path_str[7:]
+            return f"{drive_letter}:/{rest_of_path}"
+
+    # If the path doesn't exist and is absolute, try resolving relative to BASE_DIR
+    test_path = Path(path_str)
+    if not test_path.exists():
+        # Try as relative path from BASE_DIR
+        relative_attempt = BASE_DIR / path_str.lstrip('/')
+        if relative_attempt.exists():
+            return str(relative_attempt)
+
+        # On Mac/Linux, WSL paths won't work - try extracting relative portion
+        if path_str.startswith('/mnt/'):
+            # Extract everything after /mnt/X/Users/.../ReelRecon/
+            parts = path_str.split('ReelRecon/')
+            if len(parts) > 1:
+                relative_path = parts[1]
+                mac_attempt = BASE_DIR / relative_path
+                if mac_attempt.exists():
+                    return str(mac_attempt)
+
+    return path_str
+
+
+@app.route('/api/assets/<asset_id>/content', methods=['GET'])
+def get_asset_content(asset_id):
+    """Get the full content for an asset (skeleton data or scrape data)"""
+    asset = Asset.get(asset_id)
+    if not asset:
+        return jsonify({'error': 'Asset not found'}), 404
+
+    content_path = normalize_path(asset.content_path)
+    asset_type = asset.type
+    metadata = asset.metadata or {}
+
+    if asset_type == 'skeleton_report':
+        # Skeleton Report: read skeletons.json and report.md from the directory
+        content_dir = Path(content_path)
+
+        skeletons = []
+        markdown = ''
+
+        # Read skeletons.json
+        skeletons_file = content_dir / 'skeletons.json'
+        if skeletons_file.exists():
+            try:
+                skeletons = json.loads(skeletons_file.read_text(encoding='utf-8'))
+            except Exception as e:
+                print(f"[ASSET CONTENT] Error reading skeletons.json: {e}")
+
+        # Read report.md
+        report_file = content_dir / 'report.md'
+        if report_file.exists():
+            try:
+                markdown = report_file.read_text(encoding='utf-8')
+            except Exception as e:
+                print(f"[ASSET CONTENT] Error reading report.md: {e}")
+
+        return jsonify({
+            'type': 'skeleton_report',
+            'skeletons': skeletons,
+            'markdown': markdown,
+            'report_id': metadata.get('report_id', content_dir.name),
+            'video_count': len(skeletons),
+            'creators': metadata.get('creators', [])
+        })
+
+    elif asset_type == 'scrape_report':
+        # Scrape: find matching entry in scrape_history.json
+        original_id = metadata.get('original_id')
+        username = metadata.get('username')
+
+        history = load_history()
+
+        # Find matching scrape entry
+        scrape_data = None
+        if original_id:
+            scrape_data = next((h for h in history if h.get('id') == original_id), None)
+
+        if not scrape_data and username:
+            # Fallback: find by username
+            scrape_data = next((h for h in history if h.get('username') == username), None)
+
+        if not scrape_data:
+            return jsonify({
+                'type': 'scrape_report',
+                'error': 'Scrape data not found in history',
+                'metadata': metadata
+            })
+
+        # Return the full scrape data
+        return jsonify({
+            'type': 'scrape_report',
+            'scrape_id': scrape_data.get('id'),
+            'username': scrape_data.get('username'),
+            'platform': scrape_data.get('platform', 'instagram'),
+            'timestamp': scrape_data.get('timestamp'),
+            'profile': scrape_data.get('profile', {}),
+            'total_reels': scrape_data.get('total_reels', 0),
+            'top_count': scrape_data.get('top_count', 0),
+            'top_reels': scrape_data.get('top_reels', []),
+            'status': scrape_data.get('status', 'unknown')
+        })
+
+    else:
+        return jsonify({
+            'type': asset_type,
+            'error': f'Unknown asset type: {asset_type}',
+            'content_path': content_path,
+            'metadata': metadata
+        })
 
 
 @app.route('/api/assets/<asset_id>/collections', methods=['POST'])

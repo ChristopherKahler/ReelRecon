@@ -49,8 +49,10 @@ def migrate_scrape_history():
         if not scrape_id:
             continue
 
-        # Check if already imported (by checking content_path or metadata)
-        existing = Asset.list(type='scrape')
+        # Check if already imported (check both old and new type names)
+        existing_scrape = Asset.list(type='scrape')
+        existing_report = Asset.list(type='scrape_report')
+        existing = existing_scrape + existing_report
         already_exists = any(
             a.metadata and a.metadata.get('original_id') == scrape_id
             for a in existing
@@ -72,6 +74,12 @@ def migrate_scrape_history():
         channel_url = profile.get('channel_url', '')
         platform = 'tiktok' if 'tiktok.com' in channel_url else 'instagram'
 
+        # Calculate aggregate stats from top_reels
+        total_views = sum(r.get('views', 0) or 0 for r in top_reels)
+        total_likes = sum(r.get('likes', 0) or 0 for r in top_reels)
+        total_comments = sum(r.get('comments', 0) or 0 for r in top_reels)
+        has_transcripts = any(r.get('transcript') for r in top_reels)
+
         # Build preview
         preview_parts = []
         for i, reel in enumerate(top_reels[:3], 1):
@@ -87,7 +95,7 @@ def migrate_scrape_history():
         # Create asset
         try:
             asset = Asset.create(
-                type='scrape',
+                type='scrape_report',
                 title=f"@{username} - {platform.title()} Scrape ({top_count}/{total_reels} reels)",
                 content_path=content_path,
                 preview=preview,
@@ -97,6 +105,10 @@ def migrate_scrape_history():
                     'platform': platform,
                     'total_reels': total_reels,
                     'top_count': top_count,
+                    'total_views': total_views,
+                    'total_likes': total_likes,
+                    'total_comments': total_comments,
+                    'has_transcripts': has_transcripts,
                     'profile': profile,
                     'original_timestamp': timestamp
                 }
@@ -127,8 +139,10 @@ def migrate_skeleton_reports():
 
         report_id = report_dir.name
 
-        # Check if already imported
-        existing = Asset.list(type='skeleton')
+        # Check if already imported (check both old and new type names)
+        existing_skeleton = Asset.list(type='skeleton')
+        existing_report = Asset.list(type='skeleton_report')
+        existing = existing_skeleton + existing_report
         already_exists = any(
             a.metadata and a.metadata.get('report_id') == report_id
             for a in existing
@@ -157,16 +171,26 @@ def migrate_skeleton_reports():
         # Read skeletons.json for metadata
         video_count = 0
         creators = []
+        total_views = 0
+        total_likes = 0
+        has_transcripts = False
         if skeletons_json.exists():
             try:
                 with open(skeletons_json, 'r', encoding='utf-8') as f:
                     skeletons = json.load(f)
                 video_count = len(skeletons) if isinstance(skeletons, list) else 0
-                # Extract unique creators
+                # Extract unique creators and aggregate stats
                 for sk in skeletons if isinstance(skeletons, list) else []:
-                    creator = sk.get('creator', {}).get('handle', '')
+                    # Creator name - try multiple locations
+                    creator = sk.get('creator_username') or sk.get('creator', {}).get('handle', '')
                     if creator and creator not in creators:
                         creators.append(creator)
+                    # Aggregate views and likes
+                    total_views += sk.get('views', 0) or sk.get('metrics', {}).get('views', 0) or 0
+                    total_likes += sk.get('likes', 0) or sk.get('metrics', {}).get('likes', 0) or 0
+                    # Check for transcripts
+                    if sk.get('transcript'):
+                        has_transcripts = True
             except Exception:
                 pass
 
@@ -187,7 +211,7 @@ def migrate_skeleton_reports():
         # Create asset
         try:
             asset = Asset.create(
-                type='skeleton',
+                type='skeleton_report',
                 title=title,
                 content_path=str(report_dir),
                 preview=preview,
@@ -195,6 +219,9 @@ def migrate_skeleton_reports():
                     'report_id': report_id,
                     'video_count': video_count,
                     'creators': creators,
+                    'total_views': total_views,
+                    'total_likes': total_likes,
+                    'has_transcripts': has_transcripts,
                     'original_created_at': created_at
                 }
             )
