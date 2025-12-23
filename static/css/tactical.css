@@ -2810,6 +2810,34 @@ select.form-input {
     margin-bottom: var(--space-sm);
 }
 
+/* Preview stats for skeleton reports */
+.save-preview-stats {
+    display: flex;
+    gap: var(--space-lg);
+    margin-bottom: var(--space-sm);
+    padding-bottom: var(--space-sm);
+    border-bottom: 1px solid var(--color-border-dim);
+}
+
+.save-preview-stats .stat {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--color-text-muted);
+}
+
+.save-preview-stats .stat strong {
+    color: var(--color-accent-primary);
+}
+
+.save-preview-excerpt {
+    font-size: 11px;
+    color: var(--color-text-secondary);
+    line-height: 1.4;
+    max-height: 60px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 .save-collect-field {
     margin-bottom: var(--space-md);
 }

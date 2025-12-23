@@ -2155,6 +2155,33 @@
                 // Refresh history
                 loadHistory();
 
+                // Prompt user to save to library
+                const creatorHandle = window.creatorData?.handle || 'Unknown Creator';
+                const videoCount = jsonData?.length || 0;
+                SaveCollectModal.open({
+                    type: 'skeleton',
+                    title: `${creatorHandle} - Skeleton Report (${videoCount} videos)`,
+                    preview: `<div class="save-preview-stats">
+                        <span class="stat"><strong>${videoCount}</strong> videos analyzed</span>
+                        <span class="stat"><strong>${creatorHandle}</strong></span>
+                    </div>
+                    <div class="save-preview-excerpt">${markdown.substring(0, 300)}...</div>`,
+                    contentPath: `output/skeleton_reports/${actualReportId}`,
+                    metadata: {
+                        creator: creatorHandle,
+                        video_count: videoCount,
+                        report_id: actualReportId,
+                        job_id: currentJobId,
+                        created_at: new Date().toISOString()
+                    },
+                    onSave: (result) => {
+                        showToast(`Saved "${result.title}" to library`);
+                    },
+                    onDiscard: () => {
+                        showToast('Report discarded', 'warning');
+                    }
+                });
+
                 console.log('Report displayed successfully');
             } catch (error) {
                 console.error('Failed to load report:', error);
@@ -3136,5 +3163,9 @@ I'm ready to create content. What topic or idea would you like to turn into a sc
             loadHistory();
         });
     </script>
+
+    <!-- Save/Collect Modal Component -->
+    {% include 'components/save_collect_modal.html' %}
+    <script src="{{ url_for('static', filename='js/save_collect.js') }}"></script>
 </body>
 </html>
