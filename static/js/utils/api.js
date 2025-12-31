@@ -43,6 +43,14 @@ export const API = {
         return request(`/api/assets/${id}`);
     },
 
+    deleteAsset(id) {
+        return request(`/api/assets/${id}`, { method: 'DELETE' });
+    },
+
+    toggleStar(id) {
+        return request(`/api/assets/${id}/star`, { method: 'POST' });
+    },
+
     searchAssets(query) {
         return request(`/api/assets/search?q=${encodeURIComponent(query)}`);
     },
