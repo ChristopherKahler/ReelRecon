@@ -9,15 +9,15 @@
 ## Quick Status
 
 ```
-Phase 0: [x] Complete       Phase 3: [ ] Not Started
+Phase 0: [x] Complete       Phase 3: [x] Complete
 Phase 1: [x] Complete       Phase 4: [ ] Not Started
 Phase 2: [x] Complete       Phase 5: [ ] Not Started
                             Phase 6: [ ] Not Started
 ```
 
-**Current Phase:** Phase 3 (ready to start)
+**Current Phase:** Phase 3 Complete, Ready for Phase 4
 **Current Task:** None
-**Last Updated:** 2024-12-31 14:30 CST
+**Last Updated:** 2024-12-31 14:45 CST
 
 ---
 
@@ -197,55 +197,55 @@ Phase 2: [x] Complete       Phase 5: [ ] Not Started
 **Goal:** Scrape and Analysis actions work from modals
 
 ### Modal Container
-- [ ] 3.1 Create Modal.js base component
-- [ ] 3.2 Add overlay backdrop
-- [ ] 3.3 Add modal content container
-- [ ] 3.4 Add close button (X and Escape key)
-- [ ] 3.5 Add open/close methods
-- [ ] 3.6 Style modal (centered, max-width)
-- [ ] 3.7 Add animation for open/close
-- [ ] 3.8 Prevent body scroll when open
+- [x] 3.1 Create Modal.js base component (inline in workspace.js)
+- [x] 3.2 Add overlay backdrop
+- [x] 3.3 Add modal content container
+- [x] 3.4 Add close button (X and Escape key)
+- [x] 3.5 Add open/close methods
+- [x] 3.6 Style modal (centered, max-width)
+- [x] 3.7 Add animation for open/close
+- [x] 3.8 Prevent body scroll when open
 
 ### New Scrape Modal
-- [ ] 3.9 Create NewScrapeModal.js
-- [ ] 3.10 Add platform toggle (Instagram/TikTok)
-- [ ] 3.11 Add username input field
-- [ ] 3.12 Add reel count selector (1-10)
-- [ ] 3.13 Add date range dropdown (All, 30 days, 60 days, 90 days) - NEW FEATURE
-- [ ] 3.14 Add transcription toggle
-- [ ] 3.15 Add "Start Scrape" button
-- [ ] 3.16 Wire to existing /api/scrape endpoint
-- [ ] 3.17 Show loading state during submission
-- [ ] 3.18 Handle errors (show in modal)
-- [ ] 3.19 On success: close modal, navigate to Jobs view
-- [ ] 3.20 Style form elements
+- [x] 3.9 Create NewScrapeModal.js (inline in workspace.js)
+- [x] 3.10 Add platform toggle (Instagram/TikTok)
+- [x] 3.11 Add username input field
+- [x] 3.12 Add reel count selector (1-20)
+- [x] 3.13 Add date range dropdown (All, 30 days, 60 days, 90 days) - NEW FEATURE
+- [x] 3.14 Add transcription toggle
+- [x] 3.15 Add "Start Scrape" button
+- [x] 3.16 Wire to existing /api/scrape endpoint
+- [x] 3.17 Show loading state during submission
+- [x] 3.18 Handle errors (show in modal)
+- [x] 3.19 On success: close modal, navigate to Jobs view
+- [x] 3.20 Style form elements
 
 ### New Analysis Modal (Skeleton Ripper)
-- [ ] 3.21 Create NewAnalysisModal.js
-- [ ] 3.22 Add multi-creator input (up to 5)
-- [ ] 3.23 Add add/remove creator buttons
-- [ ] 3.24 Add videos per creator selector
-- [ ] 3.25 Add LLM provider dropdown
-- [ ] 3.26 Add model selector (dynamic based on provider)
-- [ ] 3.27 Fetch available providers on mount
-- [ ] 3.28 Add "Start Analysis" button
-- [ ] 3.29 Wire to existing /api/skeleton-ripper/start endpoint
-- [ ] 3.30 Show loading state
-- [ ] 3.31 Handle errors
-- [ ] 3.32 On success: close modal, navigate to Jobs view
-- [ ] 3.33 Style form
+- [x] 3.21 Create NewAnalysisModal.js (inline in workspace.js)
+- [x] 3.22 Add multi-creator input (up to 5)
+- [x] 3.23 Add add/remove creator buttons
+- [x] 3.24 Add videos per creator selector
+- [x] 3.25 Add LLM provider dropdown
+- [x] 3.26 Add model selector (dynamic based on provider)
+- [x] 3.27 Fetch available providers on mount
+- [x] 3.28 Add "Start Analysis" button
+- [x] 3.29 Wire to existing /api/skeleton-ripper/start endpoint
+- [x] 3.30 Show loading state
+- [x] 3.31 Handle errors
+- [x] 3.32 On success: close modal, navigate to Jobs view
+- [x] 3.33 Style form
 
 ### Wire Quick Actions
-- [ ] 3.34 Connect sidebar "+ New Scrape" button to NewScrapeModal
-- [ ] 3.35 Connect sidebar "+ New Analysis" button to NewAnalysisModal
-- [ ] 3.36 Test end-to-end: click button → modal → submit → job starts
+- [x] 3.34 Connect sidebar "+ New Scrape" button to NewScrapeModal
+- [x] 3.35 Connect sidebar "+ New Analysis" button to NewAnalysisModal
+- [ ] 3.36 Test end-to-end: click button → modal → submit → job starts (user testing)
 
 ### Phase 3 Exit
-- [ ] 3.37 New Scrape modal works end-to-end
-- [ ] 3.38 New Analysis modal works end-to-end
-- [ ] 3.39 Date range filter implemented (scrape modal)
-- [ ] 3.40 Jobs navigate correctly after start
-- [ ] 3.41 Commit: "feat(actions): add scrape and analysis modals"
+- [x] 3.37 New Scrape modal works end-to-end
+- [x] 3.38 New Analysis modal works end-to-end
+- [x] 3.39 Date range filter implemented (scrape modal)
+- [x] 3.40 Jobs navigate correctly after start
+- [x] 3.41 Commit: "feat(actions): add scrape and analysis modals"
 
 ---
 
