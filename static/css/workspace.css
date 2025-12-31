@@ -1,36 +1,52 @@
 /* =========================================
-   IG REEL SCRAPER - TACTICAL THEME
-   Dark background with emerald green accents
+   REELRECON V3 - WORKSPACE THEME
+   Clean dark theme with emerald accents
    ========================================= */
 
 :root {
-    /* Colors */
-    --color-bg-deep: #060A0E;
-    --color-bg-base: #080C12;
-    --color-bg-elevated: #0C1218;
-    --color-bg-panel: #101820;
-    --color-bg-input: #0A0E14;
+    /* Background Colors - Zinc Scale (warmer, less harsh) */
+    --color-bg-deep: #09090B;       /* Zinc-950 */
+    --color-bg-base: #18181B;       /* Zinc-900 */
+    --color-bg-elevated: #27272A;   /* Zinc-800 */
+    --color-bg-panel: #3F3F46;      /* Zinc-700 */
+    --color-bg-input: #27272A;      /* Zinc-800 */
+    --color-bg-hover: #3F3F46;      /* Zinc-700 */
 
-    --color-accent-primary: #10B981;
-    --color-accent-glow: rgba(16, 185, 129, 0.3);
+    /* Accent Colors - Green for actions/success only */
+    --color-accent-primary: #10B981;    /* Emerald-500 */
+    --color-accent-hover: #059669;      /* Emerald-600 */
+    --color-accent-glow: rgba(16, 185, 129, 0.25);
     --color-accent-dim: rgba(16, 185, 129, 0.15);
     --color-accent-muted: rgba(16, 185, 129, 0.08);
 
-    --color-text-primary: #E5E7EB;
-    --color-text-secondary: #9CA3AF;
-    --color-text-muted: #6B7280;
-    --color-text-accent: #10B981;
+    /* Text Colors - Better contrast */
+    --color-text-primary: #FAFAFA;      /* Zinc-50 */
+    --color-text-secondary: #A1A1AA;    /* Zinc-400 */
+    --color-text-muted: #71717A;        /* Zinc-500 */
+    --color-text-accent: #34D399;       /* Emerald-400 */
 
-    --color-border: rgba(16, 185, 129, 0.2);
-    --color-border-dim: rgba(16, 185, 129, 0.1);
+    /* Border Colors - Neutral, not green */
+    --color-border: #3F3F46;            /* Zinc-700 */
+    --color-border-dim: #27272A;        /* Zinc-800 */
+    --color-border-focus: #10B981;      /* Emerald for focus */
 
+    /* Semantic Colors */
     --color-danger: #EF4444;
     --color-warning: #F59E0B;
     --color-success: #10B981;
+    --color-info: #3B82F6;
 
     /* Fonts */
     --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
     --font-body: 'Inter', system-ui, sans-serif;
+
+    /* Typography Scale */
+    --text-xs: 0.75rem;      /* 12px */
+    --text-sm: 0.875rem;     /* 14px */
+    --text-base: 1rem;       /* 16px */
+    --text-lg: 1.125rem;     /* 18px */
+    --text-xl: 1.25rem;      /* 20px */
+    --text-2xl: 1.5rem;      /* 24px */
 
     /* Spacing */
     --space-xs: 0.25rem;
@@ -55,7 +71,9 @@
 
 /* Body */
 body {
-    font-family: var(--font-mono);
+    font-family: var(--font-body);
+    font-size: var(--text-base);
+    line-height: 1.5;
     background: var(--color-bg-deep);
     color: var(--color-text-primary);
     min-height: 100vh;
@@ -63,57 +81,12 @@ body {
     position: relative;
 }
 
-/* Scan Lines Effect */
-.scan-lines {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    pointer-events: none;
-    z-index: 1000;
-    background: repeating-linear-gradient(
-        0deg,
-        rgba(0, 0, 0, 0.03),
-        rgba(0, 0, 0, 0.03) 1px,
-        transparent 1px,
-        transparent 2px
-    );
+/* Monospace utility - use for data displays */
+.mono, code, pre {
+    font-family: var(--font-mono);
 }
 
-/* Corner HUD Elements */
-.corner-hud {
-    position: fixed;
-    z-index: 100;
-    display: flex;
-    align-items: center;
-    gap: var(--space-sm);
-    padding: var(--space-sm);
-}
-
-.corner-hud.top-left { top: var(--space-md); left: var(--space-md); }
-.corner-hud.top-right { top: var(--space-md); right: var(--space-md); }
-.corner-hud.bottom-left { bottom: var(--space-md); left: var(--space-md); }
-.corner-hud.bottom-right { bottom: var(--space-md); right: var(--space-md); }
-
-.hud-bracket {
-    width: 12px;
-    height: 12px;
-    border: 1px solid var(--color-accent-primary);
-    opacity: 0.5;
-}
-
-.corner-hud.top-left .hud-bracket { border-right: none; border-bottom: none; }
-.corner-hud.top-right .hud-bracket { border-left: none; border-bottom: none; }
-.corner-hud.bottom-left .hud-bracket { border-right: none; border-top: none; }
-.corner-hud.bottom-right .hud-bracket { border-left: none; border-top: none; }
-
-.hud-label {
-    font-size: 10px;
-    color: var(--color-text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-}
+/* V3: Scan-lines and corner HUD effects removed for cleaner UI */
 
 /* Container */
 .container {
@@ -3119,6 +3092,11 @@ select.form-input {
     color: var(--color-text-primary);
 }
 
+.nav-item:focus {
+    outline: 2px solid var(--color-accent-primary);
+    outline-offset: -2px;
+}
+
 .nav-item.active {
     background: var(--color-accent-dim);
     color: var(--color-accent-primary);
@@ -3132,11 +3110,16 @@ select.form-input {
 .btn {
     padding: var(--space-sm) var(--space-md);
     border-radius: var(--radius-md);
-    font-size: 0.875rem;
+    font-size: var(--text-sm);
     font-weight: 500;
     cursor: pointer;
     transition: all 0.15s ease;
     border: 1px solid transparent;
+}
+
+.btn:focus {
+    outline: 2px solid var(--color-accent-primary);
+    outline-offset: 2px;
 }
 
 .btn-primary {
@@ -3145,7 +3128,7 @@ select.form-input {
 }
 
 .btn-primary:hover {
-    background: #059669;
+    background: var(--color-accent-hover);
 }
 
 .btn-secondary {
