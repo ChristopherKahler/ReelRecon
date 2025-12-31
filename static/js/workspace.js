@@ -34,16 +34,14 @@ function setupEventListeners() {
     if (newScrapeBtn) {
         newScrapeBtn.addEventListener('click', () => {
             console.log('[Workspace] New Scrape clicked');
-            Store.dispatch({ type: 'SET_MODAL', payload: 'new-scrape' });
-            // TODO: Open modal in Phase 3
+            openModal('new-scrape');
         });
     }
 
     if (newAnalysisBtn) {
         newAnalysisBtn.addEventListener('click', () => {
             console.log('[Workspace] New Analysis clicked');
-            Store.dispatch({ type: 'SET_MODAL', payload: 'new-analysis' });
-            // TODO: Open modal in Phase 3
+            openModal('new-analysis');
         });
     }
 
@@ -105,15 +103,33 @@ function setupEventListeners() {
         deleteAssetBtn.addEventListener('click', deleteAsset);
     }
 
-    // Close detail panel with Escape key
+    // Close detail panel or modal with Escape key
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
+            // Check modal first (higher z-index)
+            const modalOverlay = document.getElementById('modal-overlay');
+            if (modalOverlay.classList.contains('open')) {
+                closeModal();
+                return;
+            }
+
+            // Then check detail panel
             const panel = document.getElementById('detail-panel');
             if (panel.classList.contains('open')) {
                 closeAssetDetail();
             }
         }
     });
+
+    // Close modal when clicking overlay
+    const modalOverlay = document.getElementById('modal-overlay');
+    if (modalOverlay) {
+        modalOverlay.addEventListener('click', (e) => {
+            if (e.target === modalOverlay) {
+                closeModal();
+            }
+        });
+    }
 }
 
 async function loadInitialData() {
@@ -451,6 +467,315 @@ function updateAssetCount(count) {
     const countEl = document.querySelector('.collection-item.active .collection-count');
     if (countEl) {
         countEl.textContent = count;
+    }
+}
+
+// =========================================
+// MODAL SYSTEM (Phase 3)
+// =========================================
+
+function openModal(modalType) {
+    const overlay = document.getElementById('modal-overlay');
+    const content = document.getElementById('modal-content');
+
+    // Prevent body scroll
+    document.body.style.overflow = 'hidden';
+
+    // Render modal content
+    if (modalType === 'new-scrape') {
+        content.innerHTML = renderNewScrapeModal();
+        setupNewScrapeModal();
+    } else if (modalType === 'new-analysis') {
+        content.innerHTML = renderNewAnalysisModal();
+        setupNewAnalysisModal();
+    }
+
+    overlay.classList.add('open');
+    Store.dispatch({ type: 'SET_MODAL', payload: modalType });
+}
+
+function closeModal() {
+    const overlay = document.getElementById('modal-overlay');
+    document.body.style.overflow = '';
+    overlay.classList.remove('open');
+    Store.dispatch({ type: 'SET_MODAL', payload: null });
+}
+
+// New Scrape Modal
+function renderNewScrapeModal() {
+    return `
+        <div class="modal-header">
+            <h2 class="modal-title">New Scrape</h2>
+            <button class="btn-icon" id="btn-close-modal">×</button>
+        </div>
+        <div class="modal-body">
+            <div id="modal-error" class="modal-error" style="display: none;"></div>
+
+            <div class="form-group">
+                <label class="form-label">Platform</label>
+                <div class="toggle-group">
+                    <button type="button" class="toggle-btn active" data-platform="instagram">Instagram</button>
+                    <button type="button" class="toggle-btn" data-platform="tiktok">TikTok</button>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Username</label>
+                <input type="text" id="scrape-username" class="form-input" placeholder="@username or profile URL">
+                <p class="form-hint">Enter username without @ or paste profile URL</p>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Number of Reels</label>
+                <div class="number-input-group">
+                    <input type="number" id="scrape-count" class="form-input" value="5" min="1" max="20">
+                    <span class="form-hint">Max 20</span>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Date Range</label>
+                <select id="scrape-date-range" class="form-select">
+                    <option value="">All time</option>
+                    <option value="30">Last 30 days</option>
+                    <option value="60">Last 60 days</option>
+                    <option value="90">Last 90 days</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label class="checkbox-group">
+                    <input type="checkbox" id="scrape-transcribe" checked>
+                    <span>Transcribe audio with Whisper</span>
+                </label>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" id="btn-cancel-scrape">Cancel</button>
+            <button class="btn btn-primary" id="btn-start-scrape">Start Scrape</button>
+        </div>
+    `;
+}
+
+function setupNewScrapeModal() {
+    // Close buttons
+    document.getElementById('btn-close-modal').addEventListener('click', closeModal);
+    document.getElementById('btn-cancel-scrape').addEventListener('click', closeModal);
+
+    // Platform toggle
+    document.querySelectorAll('.toggle-btn[data-platform]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            document.querySelectorAll('.toggle-btn[data-platform]').forEach(b => b.classList.remove('active'));
+            e.target.classList.add('active');
+        });
+    });
+
+    // Start scrape
+    document.getElementById('btn-start-scrape').addEventListener('click', startScrape);
+}
+
+async function startScrape() {
+    const errorEl = document.getElementById('modal-error');
+    const submitBtn = document.getElementById('btn-start-scrape');
+
+    // Get form values
+    const platform = document.querySelector('.toggle-btn[data-platform].active').dataset.platform;
+    const username = document.getElementById('scrape-username').value.trim();
+    const count = parseInt(document.getElementById('scrape-count').value) || 5;
+    const dateRange = document.getElementById('scrape-date-range').value;
+    const transcribe = document.getElementById('scrape-transcribe').checked;
+
+    // Validate
+    if (!username) {
+        errorEl.textContent = 'Please enter a username';
+        errorEl.style.display = 'block';
+        return;
+    }
+
+    // Show loading
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span class="spinner"></span> Starting...';
+    errorEl.style.display = 'none';
+
+    try {
+        const result = await API.startScrape({
+            platform,
+            username: username.replace('@', ''),
+            count,
+            date_range_days: dateRange ? parseInt(dateRange) : null,
+            transcribe
+        });
+
+        console.log('[Workspace] Scrape started:', result);
+        closeModal();
+
+        // Navigate to jobs view
+        window.location.hash = '#jobs';
+    } catch (error) {
+        console.error('[Workspace] Failed to start scrape:', error);
+        errorEl.textContent = error.message || 'Failed to start scrape';
+        errorEl.style.display = 'block';
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Start Scrape';
+    }
+}
+
+// New Analysis Modal (Skeleton Ripper)
+function renderNewAnalysisModal() {
+    return `
+        <div class="modal-header">
+            <h2 class="modal-title">New Analysis</h2>
+            <button class="btn-icon" id="btn-close-modal">×</button>
+        </div>
+        <div class="modal-body">
+            <div id="modal-error" class="modal-error" style="display: none;"></div>
+
+            <div class="form-group">
+                <label class="form-label">Creators to Analyze</label>
+                <div id="creators-list" class="multi-input-list">
+                    <div class="multi-input-row">
+                        <input type="text" class="form-input creator-input" placeholder="@username">
+                    </div>
+                </div>
+                <button type="button" id="btn-add-creator" class="btn-add-row">+ Add Creator</button>
+                <p class="form-hint">Up to 5 creators</p>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Videos per Creator</label>
+                <div class="number-input-group">
+                    <input type="number" id="analysis-videos" class="form-input" value="3" min="1" max="10">
+                    <span class="form-hint">1-10 videos</span>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">LLM Provider</label>
+                <select id="analysis-provider" class="form-select">
+                    <option value="">Loading providers...</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Model</label>
+                <select id="analysis-model" class="form-select" disabled>
+                    <option value="">Select a provider first</option>
+                </select>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" id="btn-cancel-analysis">Cancel</button>
+            <button class="btn btn-primary" id="btn-start-analysis">Start Analysis</button>
+        </div>
+    `;
+}
+
+async function setupNewAnalysisModal() {
+    // Close buttons
+    document.getElementById('btn-close-modal').addEventListener('click', closeModal);
+    document.getElementById('btn-cancel-analysis').addEventListener('click', closeModal);
+
+    // Add creator button
+    document.getElementById('btn-add-creator').addEventListener('click', () => {
+        const list = document.getElementById('creators-list');
+        const rows = list.querySelectorAll('.multi-input-row');
+        if (rows.length >= 5) return;
+
+        const row = document.createElement('div');
+        row.className = 'multi-input-row';
+        row.innerHTML = `
+            <input type="text" class="form-input creator-input" placeholder="@username">
+            <button type="button" class="btn-remove-row">×</button>
+        `;
+        list.appendChild(row);
+
+        row.querySelector('.btn-remove-row').addEventListener('click', () => row.remove());
+    });
+
+    // Load providers
+    try {
+        const providersData = await API.getProviders();
+        const providers = providersData.providers || providersData || [];
+        const providerSelect = document.getElementById('analysis-provider');
+
+        providerSelect.innerHTML = '<option value="">Select a provider</option>' +
+            providers.map(p => `<option value="${p.id}" data-models='${JSON.stringify(p.models)}'>${p.name}</option>`).join('');
+
+        // Provider change handler
+        providerSelect.addEventListener('change', (e) => {
+            const modelSelect = document.getElementById('analysis-model');
+            const option = e.target.selectedOptions[0];
+
+            if (!option.value) {
+                modelSelect.disabled = true;
+                modelSelect.innerHTML = '<option value="">Select a provider first</option>';
+                return;
+            }
+
+            const models = JSON.parse(option.dataset.models || '[]');
+            modelSelect.disabled = false;
+            modelSelect.innerHTML = models.map(m => `<option value="${m.id}">${m.name}</option>`).join('');
+        });
+    } catch (error) {
+        console.error('[Workspace] Failed to load providers:', error);
+        document.getElementById('analysis-provider').innerHTML = '<option value="">Failed to load</option>';
+    }
+
+    // Start analysis
+    document.getElementById('btn-start-analysis').addEventListener('click', startAnalysis);
+}
+
+async function startAnalysis() {
+    const errorEl = document.getElementById('modal-error');
+    const submitBtn = document.getElementById('btn-start-analysis');
+
+    // Get creators
+    const creatorInputs = document.querySelectorAll('.creator-input');
+    const creators = Array.from(creatorInputs)
+        .map(input => input.value.trim().replace('@', ''))
+        .filter(c => c.length > 0);
+
+    const videosPerCreator = parseInt(document.getElementById('analysis-videos').value) || 3;
+    const provider = document.getElementById('analysis-provider').value;
+    const model = document.getElementById('analysis-model').value;
+
+    // Validate
+    if (creators.length === 0) {
+        errorEl.textContent = 'Please enter at least one creator';
+        errorEl.style.display = 'block';
+        return;
+    }
+
+    if (!provider || !model) {
+        errorEl.textContent = 'Please select a provider and model';
+        errorEl.style.display = 'block';
+        return;
+    }
+
+    // Show loading
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span class="spinner"></span> Starting...';
+    errorEl.style.display = 'none';
+
+    try {
+        const result = await API.startAnalysis({
+            creators,
+            videos_per_creator: videosPerCreator,
+            provider_id: provider,
+            model_id: model
+        });
+
+        console.log('[Workspace] Analysis started:', result);
+        closeModal();
+
+        // Navigate to jobs view
+        window.location.hash = '#jobs';
+    } catch (error) {
+        console.error('[Workspace] Failed to start analysis:', error);
+        errorEl.textContent = error.message || 'Failed to start analysis';
+        errorEl.style.display = 'block';
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Start Analysis';
     }
 }
 
