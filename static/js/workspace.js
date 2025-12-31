@@ -45,17 +45,36 @@ function setupEventListeners() {
         });
     }
 
-    // Filter chips
+    // Filter chips - multi-select
     document.querySelectorAll('.filter-chip').forEach(chip => {
         chip.addEventListener('click', (e) => {
-            // Remove active from all chips
-            document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
-            // Add active to clicked chip
-            e.target.classList.add('active');
-            // Update filter
-            const filterType = e.target.dataset.filterType || null;
-            Store.dispatch({ type: 'SET_FILTER', payload: { type: filterType } });
-            console.log('[Workspace] Filter changed:', filterType || 'all');
+            const clickedType = e.target.dataset.filterType || null;
+            const allChip = document.querySelector('.filter-chip[data-filter-type=""]');
+
+            if (!clickedType) {
+                // Clicked "All" - clear all selections
+                document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+                e.target.classList.add('active');
+                Store.dispatch({ type: 'SET_FILTER', payload: { types: [] } });
+            } else {
+                // Toggle this chip
+                e.target.classList.toggle('active');
+                // Remove "All" active state
+                allChip.classList.remove('active');
+
+                // Gather all active types
+                const activeTypes = Array.from(document.querySelectorAll('.filter-chip.active'))
+                    .map(c => c.dataset.filterType)
+                    .filter(t => t); // exclude empty string
+
+                // If none selected, reactivate "All"
+                if (activeTypes.length === 0) {
+                    allChip.classList.add('active');
+                }
+
+                Store.dispatch({ type: 'SET_FILTER', payload: { types: activeTypes } });
+            }
+            console.log('[Workspace] Filters changed:', Store.getState().filters.types || 'all');
         });
     });
 
@@ -165,8 +184,9 @@ Store.subscribe((state) => {
 function filterAssets(assets, filters) {
     let result = assets;
 
-    if (filters.type) {
-        result = result.filter(a => a.type === filters.type);
+    // Multi-select type filter - show assets matching ANY selected type
+    if (filters.types && filters.types.length > 0) {
+        result = result.filter(a => filters.types.includes(a.type));
     }
 
     if (filters.search) {
@@ -226,6 +246,14 @@ function renderAssetCard(asset) {
     const preview = asset.preview ? asset.preview.substring(0, 120) + '...' : 'No preview available';
     const date = asset.created_at ? new Date(asset.created_at).toLocaleDateString() : '';
 
+    // Render collection tags
+    const collections = asset.collections || [];
+    const collectionTags = collections.map(col => `
+        <span class="collection-tag" style="background: ${col.color || '#6366f1'}20; color: ${col.color || '#6366f1'}; border-color: ${col.color || '#6366f1'}40">
+            ${col.name}
+        </span>
+    `).join('');
+
     return `
         <div class="asset-card" data-asset-id="${asset.id}">
             <div class="asset-card-header">
@@ -239,6 +267,7 @@ function renderAssetCard(asset) {
             <div class="asset-meta">
                 <span class="asset-date">${date}</span>
             </div>
+            ${collections.length > 0 ? `<div class="asset-collections">${collectionTags}</div>` : ''}
         </div>
     `;
 }

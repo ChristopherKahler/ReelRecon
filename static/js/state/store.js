@@ -12,7 +12,7 @@ export const Store = {
 
         // Filters
         filters: {
-            type: null,
+            types: [],  // Array for multi-select
             collection: null,
             search: '',
             dateRange: null
