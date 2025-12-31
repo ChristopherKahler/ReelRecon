@@ -42,7 +42,7 @@ None - Phase 1 complete. Ready to start Phase 2.
 
 - Phase 0 committed: `6772eaf`
 - Phase 1 committed: `a888628`
-- Test `/workspace` route at http://localhost:5001/workspace
+- User is restarting server themselves after each phase - no need to provide startup instructions
 - See `docs/V3-TASK-TRACKER.md` for granular task breakdown
 
 ---
