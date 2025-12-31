@@ -13,7 +13,7 @@ scrape_history.json
 
 # Runtime state and logs (v2)
 logs/
-state/
+/state/
 
 # Additional cookies
 tiktok_cookies.txt

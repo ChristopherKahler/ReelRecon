@@ -352,6 +352,12 @@ def library_page():
     return render_template('library.html')
 
 
+@app.route('/workspace')
+def workspace_page():
+    """V3 Unified Workspace (development)"""
+    return render_template('workspace.html')
+
+
 @app.route('/api/scrape', methods=['POST'])
 def start_scrape():
     """Start a new scrape for Instagram or TikTok"""
