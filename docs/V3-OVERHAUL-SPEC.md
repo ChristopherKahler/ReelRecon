@@ -18,32 +18,45 @@
 
 | Field | Value |
 |-------|-------|
-| **Current Phase** | Phase 1 Complete, Ready for Phase 2 |
+| **Current Phase** | Phase 3 Complete + Enhancements, Ready for Phase 4 |
 | **Branch Created** | Yes - `feature/v3-workspace-overhaul` |
-| **Last Updated** | 2024-12-31 14:15 CST |
+| **Last Updated** | 2024-12-31 14:35 CST |
 | **Blocker** | None |
 
 ### Last Session Summary
 
-_2024-12-31: Phase 0 + Phase 1 complete. Design system updated (Zinc colors, better typography, no scan-lines). Sidebar working with navigation. Ready for Phase 2 (Library View)._
+_2024-12-31: Phases 0-3 complete plus enhancements. Library view with multi-select filters, collection tags on cards, favorites view, collection removal via X button. Modals working for New Scrape and New Analysis. Ready for Phase 4 (Jobs View)._
 
 ### Active Task
 
-None - Phase 1 complete. Ready to start Phase 2.
+None - Phase 3 complete. Ready to start Phase 4.
 
 ### Next Actions
 
-1. Start Phase 2: Build Library view components
-2. Create asset grid and cards
-3. Implement search and filter functionality
-4. Add asset detail panel
+1. Start Phase 4: Build Jobs view
+2. Add /api/jobs/active and /api/jobs/recent endpoints
+3. Create job cards with progress display
+4. Implement tabs for Active/Recent
 
 ### Session Notes
 
 - Phase 0 committed: `6772eaf`
 - Phase 1 committed: `a888628`
-- User is restarting server themselves after each phase - no need to provide startup instructions
+- Phase 2 committed: `2b95452`
+- Phase 3 committed: `68c4b01`
+- Enhancements committed: `813e86d`, `18452ba`
+- User is restarting server themselves after each phase
 - See `docs/V3-TASK-TRACKER.md` for granular task breakdown
+
+### Phase 3 Enhancements Summary
+
+| Feature | Description |
+|---------|-------------|
+| Multi-select filters | Toggle multiple type chips, shows assets matching ANY |
+| Collection tags | Color-coded pills on asset cards, wrap to multiple lines |
+| Remove from collection | X button on tags removes asset from that collection |
+| Favorites view | Nav item + view showing only starred assets |
+| Softer red | Changed from #EF4444 to #F87171 throughout |
 
 ---
 

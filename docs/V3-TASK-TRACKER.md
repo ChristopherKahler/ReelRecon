@@ -247,11 +247,27 @@ Phase 2: [x] Complete       Phase 5: [ ] Not Started
 - [x] 3.40 Jobs navigate correctly after start
 - [x] 3.41 Commit: "feat(actions): add scrape and analysis modals"
 
+### Phase 3 Enhancements (Added During Testing)
+- [x] 3.42 Multi-select filter chips (toggle multiple types, show ANY match)
+- [x] 3.43 Collection tags on asset cards (color-coded pills at bottom)
+- [x] 3.44 Collection tags wrap to multiple lines
+- [x] 3.45 X button on collection tags to remove from collection
+- [x] 3.46 Favorites nav item in sidebar with count badge
+- [x] 3.47 Favorites view showing starred assets
+- [x] 3.48 Softer red color (#F87171 instead of #EF4444)
+- [x] 3.49 Commit: "feat(library): add multi-select filters and collection tags"
+- [x] 3.50 Commit: "feat(ui): add favorites view and collection removal"
+
 ---
 
 ## Phase 4: Jobs View
 
 **Goal:** Unified view of active and recent jobs
+
+**User Note (Phase 3 Testing):** Need expanded view for job results - either:
+- Replace grid with full report view when clicking a result
+- Add new sidemenu option like "Reports" for expanded multi-tab viewing
+- Consider tabbed interface within detail panel for full content access
 
 ### Backend Endpoints
 - [ ] 4.1 Add /api/jobs/active endpoint to app.py
