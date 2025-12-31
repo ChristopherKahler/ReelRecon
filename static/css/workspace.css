@@ -3881,3 +3881,159 @@ select.form-input {
     font-size: var(--text-sm);
     margin-bottom: var(--space-lg);
 }
+
+/* ========================================
+   Jobs View
+======================================== */
+
+.jobs-tabs {
+    display: flex;
+    gap: var(--space-sm);
+    margin-bottom: var(--space-lg);
+    border-bottom: 1px solid var(--color-border-dim);
+    padding-bottom: var(--space-md);
+}
+
+.jobs-tab {
+    padding: var(--space-sm) var(--space-md);
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-md);
+    color: var(--color-text-secondary);
+    font-size: var(--text-sm);
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.jobs-tab:hover {
+    color: var(--color-text-primary);
+    background: var(--color-bg-tertiary);
+}
+
+.jobs-tab.active {
+    color: var(--color-accent-primary);
+    background: rgba(99, 102, 241, 0.1);
+}
+
+.jobs-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
+}
+
+.jobs-empty {
+    text-align: center;
+    padding: var(--space-2xl);
+    color: var(--color-text-muted);
+}
+
+.jobs-empty svg {
+    width: 48px;
+    height: 48px;
+    margin-bottom: var(--space-md);
+    opacity: 0.5;
+}
+
+/* Job Cards */
+.job-card {
+    background: var(--color-bg-secondary);
+    border: 1px solid var(--color-border-dim);
+    border-radius: var(--radius-lg);
+    padding: var(--space-md);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.job-card:hover {
+    border-color: var(--color-border);
+    background: var(--color-bg-tertiary);
+}
+
+.job-card-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    margin-bottom: var(--space-sm);
+}
+
+.job-type-icon {
+    font-size: var(--text-lg);
+}
+
+.job-title {
+    flex: 1;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    font-size: var(--text-sm);
+}
+
+.job-status {
+    padding: 2px 8px;
+    border-radius: var(--radius-full);
+    font-size: var(--text-xs);
+    font-weight: 500;
+    text-transform: capitalize;
+}
+
+/* Job Progress Bar */
+.job-progress-bar {
+    height: 4px;
+    background: var(--color-bg-tertiary);
+    border-radius: var(--radius-full);
+    overflow: hidden;
+    margin: var(--space-sm) 0;
+}
+
+.job-progress-fill {
+    height: 100%;
+    background: var(--color-accent-primary);
+    border-radius: var(--radius-full);
+    transition: width 0.3s ease;
+}
+
+.job-progress-fill.completed {
+    background: var(--color-success);
+}
+
+.job-progress-fill.failed {
+    background: #F87171;
+}
+
+.job-progress-text {
+    font-size: var(--text-xs);
+    color: var(--color-text-muted);
+    margin: var(--space-xs) 0;
+}
+
+/* Job Meta */
+.job-meta {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    margin-top: var(--space-sm);
+}
+
+.job-date,
+.job-platform {
+    font-size: var(--text-xs);
+    color: var(--color-text-muted);
+}
+
+.job-platform {
+    text-transform: capitalize;
+}
+
+/* Job card in running state */
+.job-card.running {
+    border-color: rgba(99, 102, 241, 0.3);
+}
+
+.job-card.running .job-progress-fill {
+    animation: progress-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes progress-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+}

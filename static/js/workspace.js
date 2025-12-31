@@ -92,11 +92,13 @@ function setupEventListeners() {
     }
 
     // Tab switching (Jobs view)
-    document.querySelectorAll('.tab').forEach(tab => {
+    document.querySelectorAll('.jobs-tab').forEach(tab => {
         tab.addEventListener('click', (e) => {
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.jobs-tab').forEach(t => t.classList.remove('active'));
             e.target.classList.add('active');
-            console.log('[Workspace] Tab switched:', e.target.dataset.tab);
+            const tabType = e.target.dataset.tab;
+            console.log('[Workspace] Tab switched:', tabType);
+            loadJobs(tabType);
         });
     });
 
@@ -221,6 +223,151 @@ function renderFavorites(assets) {
 
     // Add remove from collection handlers
     setupCollectionRemoveHandlers(grid);
+}
+
+// =========================================
+// JOBS VIEW (Phase 4)
+// =========================================
+
+// Subscribe to view changes to load jobs
+Store.subscribe((state) => {
+    if (state.ui.activeView === 'jobs') {
+        // Load active jobs by default when entering jobs view
+        const activeTab = document.querySelector('.jobs-tab.active');
+        const tabType = activeTab ? activeTab.dataset.tab : 'active';
+        loadJobs(tabType);
+    }
+});
+
+let jobsPollingInterval = null;
+
+async function loadJobs(type = 'active') {
+    const list = document.getElementById('jobs-list');
+    if (!list) return;
+
+    try {
+        const endpoint = type === 'active' ? '/api/jobs/active' : '/api/jobs/recent';
+        const response = await fetch(endpoint);
+        const data = await response.json();
+
+        if (data.success) {
+            renderJobs(data.jobs, type);
+
+            // Start polling for active jobs
+            if (type === 'active') {
+                startJobsPolling();
+            } else {
+                stopJobsPolling();
+            }
+        }
+    } catch (error) {
+        console.error('[Workspace] Failed to load jobs:', error);
+        list.innerHTML = '<div class="empty-state"><p>Failed to load jobs</p></div>';
+    }
+}
+
+function startJobsPolling() {
+    stopJobsPolling();
+    jobsPollingInterval = setInterval(() => {
+        const activeView = Store.getState().ui.activeView;
+        const activeTab = document.querySelector('.tab.active');
+        if (activeView === 'jobs' && activeTab?.dataset.tab === 'active') {
+            loadJobs('active');
+        } else {
+            stopJobsPolling();
+        }
+    }, 3000); // Poll every 3 seconds
+}
+
+function stopJobsPolling() {
+    if (jobsPollingInterval) {
+        clearInterval(jobsPollingInterval);
+        jobsPollingInterval = null;
+    }
+}
+
+function renderJobs(jobs, type) {
+    const list = document.getElementById('jobs-list');
+    if (!list) return;
+
+    if (!jobs || jobs.length === 0) {
+        const emptyMsg = type === 'active'
+            ? 'No active jobs. Start a scrape or analysis to see progress here.'
+            : 'No recent jobs.';
+        list.innerHTML = `<div class="empty-state"><p>${emptyMsg}</p></div>`;
+        return;
+    }
+
+    list.innerHTML = jobs.map(job => renderJobCard(job, type)).join('');
+
+    // Add click handlers
+    list.querySelectorAll('.job-card').forEach(card => {
+        card.addEventListener('click', () => {
+            const jobId = card.dataset.jobId;
+            const jobType = card.dataset.jobType;
+            openJobDetail(jobId, jobType);
+        });
+    });
+}
+
+function renderJobCard(job, listType) {
+    const statusColors = {
+        'running': '#3B82F6',
+        'starting': '#3B82F6',
+        'complete': '#10B981',
+        'failed': '#F87171',
+        'error': '#F87171',
+        'partial': '#F59E0B',
+        'aborted': '#6B7280'
+    };
+
+    const typeIcons = {
+        'scrape': '📥',
+        'analysis': '🔬'
+    };
+
+    const statusColor = statusColors[job.status] || '#6B7280';
+    const typeIcon = typeIcons[job.type] || '📋';
+    const createdDate = job.created_at ? new Date(job.created_at).toLocaleString() : '';
+
+    // Progress bar for active jobs
+    const progressBar = listType === 'active' && job.progress_pct !== undefined ? `
+        <div class="job-progress-bar">
+            <div class="job-progress-fill" style="width: ${job.progress_pct}%"></div>
+        </div>
+    ` : '';
+
+    const progressText = job.progress || job.phase || '';
+
+    const isRunning = job.status === 'running' || job.status === 'starting';
+    const cardClass = `job-card${isRunning ? ' running' : ''}`;
+
+    return `
+        <div class="${cardClass}" data-job-id="${job.id}" data-job-type="${job.type}">
+            <div class="job-card-header">
+                <span class="job-type-icon">${typeIcon}</span>
+                <span class="job-title">${job.title}</span>
+                <span class="job-status" style="background: ${statusColor}20; color: ${statusColor}">
+                    ${job.status}
+                </span>
+            </div>
+            ${progressBar}
+            ${progressText ? `<p class="job-progress-text">${progressText}</p>` : ''}
+            <div class="job-meta">
+                <span class="job-date">${createdDate}</span>
+                ${job.platform ? `<span class="job-platform">${job.platform}</span>` : ''}
+            </div>
+        </div>
+    `;
+}
+
+function openJobDetail(jobId, jobType) {
+    console.log('[Workspace] Opening job:', jobId, jobType);
+    // TODO: Open job detail panel or navigate to results
+    // For now, could navigate to the existing report page
+    if (jobType === 'analysis') {
+        window.open(`/skeleton-ripper/report/${jobId}`, '_blank');
+    }
 }
 
 // Subscribe to store changes for filtering

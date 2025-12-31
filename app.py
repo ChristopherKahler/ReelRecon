@@ -358,6 +358,89 @@ def workspace_page():
     return render_template('workspace.html')
 
 
+# =========================================
+# V3 Unified Jobs API
+# =========================================
+
+@app.route('/api/jobs/active')
+def get_active_jobs():
+    """Get all active jobs (scrapes + skeleton ripper)"""
+    jobs = []
+
+    # Add active scrapes
+    for scrape_id, scrape in active_scrapes.items():
+        if scrape.get('status') in ('starting', 'running'):
+            jobs.append({
+                'id': scrape_id,
+                'type': 'scrape',
+                'title': f"@{scrape.get('username', 'unknown')}",
+                'platform': scrape.get('platform', 'instagram'),
+                'status': scrape.get('status', 'unknown'),
+                'progress': scrape.get('progress', ''),
+                'progress_pct': scrape.get('progress_pct', 0),
+                'phase': scrape.get('phase', ''),
+                'created_at': scrape.get('created_at', '')
+            })
+
+    # Add active skeleton ripper jobs
+    for job_id, job in active_skeleton_jobs.items():
+        if job.get('status') in ('running', 'starting'):
+            progress = job.get('progress', {})
+            jobs.append({
+                'id': job_id,
+                'type': 'analysis',
+                'title': f"Analysis: {', '.join(job.get('creators', [])[:2])}{'...' if len(job.get('creators', [])) > 2 else ''}",
+                'status': job.get('status', 'unknown'),
+                'progress': progress.get('message', ''),
+                'progress_pct': progress.get('overall', 0),
+                'phase': progress.get('phase', ''),
+                'created_at': job.get('created_at', '')
+            })
+
+    # Sort by created_at descending
+    jobs.sort(key=lambda j: j.get('created_at', ''), reverse=True)
+
+    return jsonify({'success': True, 'jobs': jobs})
+
+
+@app.route('/api/jobs/recent')
+def get_recent_jobs():
+    """Get recently completed jobs (scrapes + skeleton ripper)"""
+    jobs = []
+
+    # Get completed scrapes from state manager
+    scrape_jobs = state_manager.get_recent_jobs(limit=20)
+    for job in scrape_jobs:
+        if job.get('state') in ('complete', 'error', 'partial', 'aborted'):
+            jobs.append({
+                'id': job.get('id'),
+                'type': 'scrape',
+                'title': f"@{job.get('username', 'unknown')}",
+                'platform': job.get('platform', 'instagram'),
+                'status': job.get('state', 'unknown'),
+                'created_at': job.get('created_at', ''),
+                'completed_at': job.get('completed_at', ''),
+                'result': job.get('result')
+            })
+
+    # Get completed skeleton ripper jobs
+    for job_id, job in active_skeleton_jobs.items():
+        if job.get('status') in ('complete', 'failed'):
+            jobs.append({
+                'id': job_id,
+                'type': 'analysis',
+                'title': f"Analysis: {', '.join(job.get('creators', [])[:2])}{'...' if len(job.get('creators', [])) > 2 else ''}",
+                'status': job.get('status', 'unknown'),
+                'created_at': job.get('created_at', ''),
+                'result': job.get('result')
+            })
+
+    # Sort by created_at descending, take top 20
+    jobs.sort(key=lambda j: j.get('created_at', ''), reverse=True)
+
+    return jsonify({'success': True, 'jobs': jobs[:20]})
+
+
 @app.route('/api/scrape', methods=['POST'])
 def start_scrape():
     """Start a new scrape for Instagram or TikTok"""
