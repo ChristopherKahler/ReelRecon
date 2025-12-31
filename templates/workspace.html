@@ -34,15 +34,20 @@
             <!-- Navigation -->
             <nav class="sidebar-nav">
                 <a href="#library" class="nav-item active" data-nav="library">
-                    <span class="nav-icon">&#128218;</span>
+                    <span class="nav-icon">📚</span>
                     Library
                 </a>
+                <a href="#favorites" class="nav-item" data-nav="favorites">
+                    <span class="nav-icon">⭐</span>
+                    Favorites
+                    <span class="nav-count" id="favorites-count">0</span>
+                </a>
                 <a href="#jobs" class="nav-item" data-nav="jobs">
-                    <span class="nav-icon">&#9881;</span>
+                    <span class="nav-icon">⚙️</span>
                     Jobs
                 </a>
                 <a href="#settings" class="nav-item" data-nav="settings">
-                    <span class="nav-icon">&#9881;</span>
+                    <span class="nav-icon">🔧</span>
                     Settings
                 </a>
             </nav>
@@ -87,6 +92,31 @@
                     <!-- Populated by JS -->
                     <div class="empty-state">
                         <p>No assets yet. Start a scrape or analysis to populate your library.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Favorites View -->
+            <div data-view="favorites" class="view" style="display: none;">
+                <header class="view-header">
+                    <h1>Favorites</h1>
+                    <div class="search-bar">
+                        <input type="text" id="favorites-search-input" placeholder="Search favorites...">
+                    </div>
+                </header>
+
+                <div class="filter-bar">
+                    <button class="filter-chip active" data-filter-type="">All</button>
+                    <button class="filter-chip" data-filter-type="skeleton">Skeletons</button>
+                    <button class="filter-chip" data-filter-type="transcript">Transcripts</button>
+                    <button class="filter-chip" data-filter-type="scrape_report">Scrapes</button>
+                    <button class="filter-chip" data-filter-type="skeleton_report">Reports</button>
+                </div>
+
+                <div id="favorites-grid" class="asset-grid">
+                    <!-- Populated by JS -->
+                    <div class="empty-state">
+                        <p>No favorites yet. Star assets to see them here.</p>
                     </div>
                 </div>
             </div>

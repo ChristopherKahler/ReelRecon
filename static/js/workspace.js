@@ -169,10 +169,58 @@ async function loadInitialData() {
 
         // Update sidebar count
         updateAssetCount(assets.length);
+
+        // Update favorites count
+        const favoritesCount = assets.filter(a => a.starred).length;
+        updateFavoritesCount(favoritesCount);
     } catch (error) {
         console.warn('[Workspace] Failed to load initial data:', error.message);
         renderAssets([]); // Show empty state
     }
+}
+
+function updateFavoritesCount(count) {
+    const countEl = document.getElementById('favorites-count');
+    if (countEl) {
+        countEl.textContent = count;
+    }
+}
+
+// Subscribe to view changes to render favorites
+Store.subscribe((state) => {
+    if (state.ui.activeView === 'favorites') {
+        const favorites = state.assets.filter(a => a.starred);
+        renderFavorites(favorites);
+    }
+});
+
+function renderFavorites(assets) {
+    const grid = document.getElementById('favorites-grid');
+    if (!grid) return;
+
+    if (!assets || assets.length === 0) {
+        grid.innerHTML = `
+            <div class="empty-state">
+                <p>No favorites yet. Star assets to see them here.</p>
+            </div>
+        `;
+        return;
+    }
+
+    grid.innerHTML = assets.map(asset => renderAssetCard(asset)).join('');
+
+    // Add click handlers to cards
+    grid.querySelectorAll('.asset-card').forEach(card => {
+        card.addEventListener('click', (e) => {
+            // Don't open if clicking remove button
+            if (e.target.closest('.collection-remove')) return;
+            const assetId = card.dataset.assetId;
+            openAssetDetail(assetId);
+        });
+    });
+
+    // Add remove from collection handlers
+    setupCollectionRemoveHandlers(grid);
 }
 
 // Subscribe to store changes for filtering
@@ -217,9 +265,34 @@ function renderAssets(assets) {
 
     // Add click handlers to cards
     grid.querySelectorAll('.asset-card').forEach(card => {
-        card.addEventListener('click', () => {
+        card.addEventListener('click', (e) => {
+            // Don't open if clicking remove button
+            if (e.target.closest('.collection-remove')) return;
             const assetId = card.dataset.assetId;
             openAssetDetail(assetId);
+        });
+    });
+
+    // Add remove from collection handlers
+    setupCollectionRemoveHandlers(grid);
+}
+
+function setupCollectionRemoveHandlers(container) {
+    container.querySelectorAll('.collection-remove').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const tag = btn.closest('.collection-tag');
+            const assetId = tag.dataset.assetId;
+            const collectionId = tag.dataset.collectionId;
+
+            try {
+                await API.removeFromCollection(assetId, collectionId);
+                // Remove the tag from UI
+                tag.remove();
+                console.log('[Workspace] Removed from collection:', collectionId);
+            } catch (error) {
+                console.error('[Workspace] Failed to remove from collection:', error);
+            }
         });
     });
 }
@@ -246,11 +319,12 @@ function renderAssetCard(asset) {
     const preview = asset.preview ? asset.preview.substring(0, 120) + '...' : 'No preview available';
     const date = asset.created_at ? new Date(asset.created_at).toLocaleDateString() : '';
 
-    // Render collection tags
+    // Render collection tags with remove button
     const collections = asset.collections || [];
     const collectionTags = collections.map(col => `
-        <span class="collection-tag" style="background: ${col.color || '#6366f1'}20; color: ${col.color || '#6366f1'}; border-color: ${col.color || '#6366f1'}40">
+        <span class="collection-tag" style="background: ${col.color || '#6366f1'}20; color: ${col.color || '#6366f1'}; border-color: ${col.color || '#6366f1'}40" data-collection-id="${col.id}" data-asset-id="${asset.id}">
             ${col.name}
+            <button class="collection-remove" title="Remove from collection">×</button>
         </span>
     `).join('');
 

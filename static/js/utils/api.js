@@ -64,6 +64,10 @@ export const API = {
         return request('/api/collections', { method: 'POST', body: data });
     },
 
+    removeFromCollection(assetId, collectionId) {
+        return request(`/api/assets/${assetId}/collections/${collectionId}`, { method: 'DELETE' });
+    },
+
     // Jobs (unified)
     getActiveJobs() {
         return request('/api/jobs/active');

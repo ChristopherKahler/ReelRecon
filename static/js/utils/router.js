@@ -7,6 +7,7 @@ import { Store } from '../state/store.js';
 const routes = {
     '': 'library',
     'library': 'library',
+    'favorites': 'favorites',
     'jobs': 'jobs',
     'settings': 'settings'
 };
