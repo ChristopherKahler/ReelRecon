@@ -18,6 +18,9 @@ import shutil
 REPO_URL = "https://github.com/ChristopherKahler/ReelRecon.git"
 APP_NAME = "ReelRecon"
 
+# Subprocess options for clean execution (no terminal pop-ups)
+SUBPROCESS_OPTS = {'capture_output': True, 'start_new_session': True}
+
 
 def get_applications_path():
     """Get user's Applications folder"""
@@ -249,7 +252,7 @@ class InstallerApp:
         try:
             # Check for git
             self.update_status("Checking for Git...", 5)
-            result = subprocess.run(['git', '--version'], capture_output=True)
+            result = subprocess.run(['git', '--version'], **SUBPROCESS_OPTS)
             if result.returncode != 0:
                 messagebox.showerror("Error",
                     "Git is not installed.\n\n"
@@ -260,7 +263,7 @@ class InstallerApp:
 
             # Check for Python 3
             self.update_status("Checking for Python 3...", 10)
-            result = subprocess.run(['python3', '--version'], capture_output=True, text=True)
+            result = subprocess.run(['python3', '--version'], text=True, **SUBPROCESS_OPTS)
             if result.returncode != 0:
                 messagebox.showerror("Error",
                     "Python 3 is not installed.\n\n"
@@ -280,11 +283,9 @@ class InstallerApp:
             if os.path.exists(install_dir):
                 # Already exists - do git pull instead
                 self.update_status("Updating existing installation...", 25)
-                result = subprocess.run(['git', 'pull'], cwd=install_dir,
-                                       capture_output=True, text=True)
+                result = subprocess.run(['git', 'pull'], cwd=install_dir, text=True, **SUBPROCESS_OPTS)
             else:
-                result = subprocess.run(['git', 'clone', REPO_URL, install_dir],
-                                       capture_output=True, text=True)
+                result = subprocess.run(['git', 'clone', REPO_URL, install_dir], text=True, **SUBPROCESS_OPTS)
 
             if result.returncode != 0:
                 messagebox.showerror("Error", f"Git clone failed:\n{result.stderr}")
@@ -293,11 +294,10 @@ class InstallerApp:
 
             # Install dependencies
             self.update_status("Installing dependencies...", 50)
-            subprocess.run(['python3', '-m', 'pip', 'install', '--upgrade', 'pip', '-q'],
-                          capture_output=True)
+            subprocess.run(['python3', '-m', 'pip', 'install', '--upgrade', 'pip', '-q'], **SUBPROCESS_OPTS)
             subprocess.run(['python3', '-m', 'pip', 'install',
                           'flask', 'requests', 'pystray', 'Pillow', 'pywebview', 'pyobjc-framework-Cocoa', '-q'],
-                          cwd=install_dir, capture_output=True)
+                          cwd=install_dir, **SUBPROCESS_OPTS)
 
             # Create app bundle
             app_path = None

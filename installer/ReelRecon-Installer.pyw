@@ -1,4 +1,5 @@
-#!/usr/bin/env python3
+# ReelRecon Windows Installer
+# Run with: pythonw.exe ReelRecon-Installer.pyw
 """
 ReelRecon Windows Installer
 - Choose install location
@@ -17,6 +18,15 @@ import subprocess
 import tkinter as tk
 from tkinter import filedialog, messagebox
 import winreg
+
+# Ensure we're running without console - relaunch if needed
+if sys.executable.lower().endswith('python.exe'):
+    # We're running with python.exe, relaunch with pythonw.exe
+    pythonw = sys.executable.replace('python.exe', 'pythonw.exe')
+    if os.path.exists(pythonw):
+        import subprocess
+        subprocess.Popen([pythonw] + sys.argv)
+        sys.exit(0)
 
 REPO_URL = "https://github.com/ChristopherKahler/ReelRecon.git"
 APP_NAME = "ReelRecon"
