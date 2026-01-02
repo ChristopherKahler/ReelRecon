@@ -18,8 +18,11 @@ import tkinter as tk
 from tkinter import filedialog, messagebox
 import winreg
 
-REPO_URL = "https://github.com/ChristopherKahler/ReelRecon.git"  # Update this
+REPO_URL = "https://github.com/ChristopherKahler/ReelRecon.git"
 APP_NAME = "ReelRecon"
+
+# Hide console windows for all subprocess calls
+CREATE_NO_WINDOW = 0x08000000
 
 
 def get_desktop_path():
@@ -45,7 +48,8 @@ def find_pythonw():
         if os.path.exists(path):
             return path
     # Try to find in PATH
-    result = subprocess.run(['where', 'pythonw.exe'], capture_output=True, text=True)
+    result = subprocess.run(['where', 'pythonw.exe'], capture_output=True, text=True,
+                           creationflags=CREATE_NO_WINDOW)
     if result.returncode == 0:
         return result.stdout.strip().split('\n')[0]
     return None
@@ -80,7 +84,7 @@ $Shortcut.Description = "ReelRecon - Instagram Reel Research Tool"
     ps_script += '$Shortcut.Save()'
 
     result = subprocess.run(['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', ps_script],
-                           capture_output=True, text=True)
+                           capture_output=True, text=True, creationflags=CREATE_NO_WINDOW)
     if result.returncode != 0:
         print(f"Shortcut error: {result.stderr}")
     return result.returncode == 0
@@ -179,7 +183,8 @@ class InstallerApp:
         try:
             # Check for git
             self.update_status("Checking for Git...", 5)
-            result = subprocess.run(['git', '--version'], capture_output=True)
+            result = subprocess.run(['git', '--version'], capture_output=True,
+                                   creationflags=CREATE_NO_WINDOW)
             if result.returncode != 0:
                 messagebox.showerror("Error", "Git is not installed. Please install Git first.\nhttps://git-scm.com/download/win")
                 self.install_btn.configure(state='normal')
@@ -190,7 +195,8 @@ class InstallerApp:
             python_exe = r'C:\Python312\python.exe'
             if not os.path.exists(python_exe):
                 # Try to find Python
-                result = subprocess.run(['where', 'python'], capture_output=True, text=True)
+                result = subprocess.run(['where', 'python'], capture_output=True, text=True,
+                                       creationflags=CREATE_NO_WINDOW)
                 if result.returncode == 0:
                     python_exe = result.stdout.strip().split('\n')[0]
                 else:
@@ -209,10 +215,11 @@ class InstallerApp:
             if os.path.exists(install_dir):
                 # Already exists - do git pull instead
                 self.update_status("Updating existing installation...", 25)
-                result = subprocess.run(['git', 'pull'], cwd=install_dir, capture_output=True, text=True)
+                result = subprocess.run(['git', 'pull'], cwd=install_dir, capture_output=True, text=True,
+                                       creationflags=CREATE_NO_WINDOW)
             else:
                 result = subprocess.run(['git', 'clone', REPO_URL, install_dir],
-                                       capture_output=True, text=True)
+                                       capture_output=True, text=True, creationflags=CREATE_NO_WINDOW)
 
             if result.returncode != 0:
                 messagebox.showerror("Error", f"Git clone failed:\n{result.stderr}")
@@ -221,7 +228,8 @@ class InstallerApp:
 
             self.update_status("Installing dependencies...", 60)
             subprocess.run([python_exe, '-m', 'pip', 'install', 'flask', 'requests',
-                          'pystray', 'Pillow', 'pywebview', '-q'], cwd=install_dir, capture_output=True)
+                          'pystray', 'Pillow', 'pywebview', '-q'], cwd=install_dir, capture_output=True,
+                          creationflags=CREATE_NO_WINDOW)
 
             # Create desktop shortcut
             if self.create_shortcut_var.get():
@@ -240,10 +248,12 @@ class InstallerApp:
             if messagebox.askyesno("Launch", "Would you like to launch ReelRecon now?"):
                 pythonw = find_pythonw()
                 if pythonw:
-                    subprocess.Popen([pythonw, 'launcher.pyw'], cwd=install_dir)
+                    subprocess.Popen([pythonw, 'launcher.pyw'], cwd=install_dir,
+                                    creationflags=CREATE_NO_WINDOW)
                 else:
                     bat_path = os.path.join(install_dir, "ReelRecon.bat")
-                    subprocess.Popen(['cmd', '/c', bat_path], cwd=install_dir)
+                    subprocess.Popen(['cmd', '/c', bat_path], cwd=install_dir,
+                                    creationflags=CREATE_NO_WINDOW)
 
             self.root.quit()
 
