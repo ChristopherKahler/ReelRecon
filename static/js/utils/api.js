@@ -29,26 +29,107 @@ async function request(endpoint, options = {}) {
 }
 
 export const API = {
-    // Assets
-    getAssets(filters = {}) {
+    // Assets - merge from database AND history
+    async getAssets(filters = {}) {
+        // Build query params
         const params = new URLSearchParams();
         if (filters.type) params.set('type', filters.type);
         if (filters.collection) params.set('collection_id', filters.collection);
-        if (filters.starred) params.set('starred', '1');
+        if (filters.starred) params.set('starred', 'true');
         const query = params.toString();
-        return request(`/api/assets${query ? '?' + query : ''}`);
+
+        // Fetch from both sources in parallel
+        const [dbAssets, history] = await Promise.all([
+            request(`/api/assets${query ? '?' + query : ''}`).catch(() => []),
+            request('/api/history').catch(() => [])
+        ]);
+
+        // Transform history items to asset format
+        const historyAssets = (history || []).map(item => ({
+            id: item.id,
+            type: 'scrape_report',
+            title: `@${item.username || 'unknown'} - ${(item.platform || 'instagram').charAt(0).toUpperCase() + (item.platform || 'instagram').slice(1)}`,
+            username: item.username,
+            platform: item.platform || 'instagram',
+            created_at: item.timestamp,
+            status: item.status || 'complete',
+            reel_count: (item.top_reels || item.top_videos || []).length,
+            starred: item.starred || false,
+            collections: item.collections || [],
+            thumbnail: (item.top_reels || item.top_videos || [])[0]?.thumbnail_url || null,
+            preview: `${(item.top_reels || item.top_videos || []).length} reels scraped`
+        }));
+
+        // Merge: DB assets + history assets (avoid duplicates by ID)
+        const dbAssetIds = new Set((dbAssets || []).map(a => a.id));
+        const mergedAssets = [
+            ...(dbAssets || []),
+            ...historyAssets.filter(a => !dbAssetIds.has(a.id))
+        ];
+
+        // Apply filters to merged results
+        let assets = mergedAssets;
+        if (filters.starred) {
+            assets = assets.filter(a => a.starred);
+        }
+        if (filters.type) {
+            assets = assets.filter(a => a.type === filters.type);
+        }
+
+        // Sort by created_at descending
+        assets.sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
+
+        return { success: true, assets };
     },
 
-    getAsset(id) {
-        return request(`/api/assets/${id}`);
+    async getAsset(id) {
+        // Try database first, then history
+        try {
+            const dbAsset = await request(`/api/assets/${id}`);
+            if (dbAsset && !dbAsset.error) {
+                return dbAsset;
+            }
+        } catch (e) {
+            // DB asset not found, try history
+        }
+
+        // Fall back to history
+        const item = await request(`/api/history/${id}`);
+        if (!item || item.error) {
+            throw new Error(item?.error || 'Asset not found');
+        }
+        return {
+            id: item.id,
+            type: 'scrape_report',
+            title: `@${item.username || 'unknown'} - ${(item.platform || 'instagram').charAt(0).toUpperCase() + (item.platform || 'instagram').slice(1)}`,
+            username: item.username,
+            platform: item.platform || 'instagram',
+            created_at: item.timestamp,
+            status: item.status || 'complete',
+            reel_count: (item.top_reels || item.top_videos || []).length,
+            starred: item.starred || false,
+            collections: item.collections || [],
+            top_reels: item.top_reels || item.top_videos || [],
+            content: item  // Include full data for detail view
+        };
     },
 
-    deleteAsset(id) {
-        return request(`/api/assets/${id}`, { method: 'DELETE' });
+    async deleteAsset(id) {
+        // Try database first, then history
+        try {
+            return await request(`/api/assets/${id}`, { method: 'DELETE' });
+        } catch (e) {
+            return request(`/api/history/${id}`, { method: 'DELETE' });
+        }
     },
 
-    toggleStar(id) {
-        return request(`/api/assets/${id}/star`, { method: 'POST' });
+    async toggleStar(id) {
+        // Try database first, then history
+        try {
+            return await request(`/api/assets/${id}/star`, { method: 'POST' });
+        } catch (e) {
+            return request(`/api/history/${id}/star`, { method: 'POST' });
+        }
     },
 
     searchAssets(query) {
@@ -82,12 +163,32 @@ export const API = {
         return request('/api/scrape', { method: 'POST', body: data });
     },
 
+    startBatchScrape(data) {
+        return request('/api/scrape/batch', { method: 'POST', body: data });
+    },
+
+    startDirectScrape(data) {
+        return request('/api/scrape/direct', { method: 'POST', body: data });
+    },
+
     getScrapeStatus(id) {
         return request(`/api/scrape/${id}/status`);
     },
 
+    getBatchStatus(batchId) {
+        return request(`/api/scrape/batch/${batchId}/status`);
+    },
+
     abortScrape(id) {
         return request(`/api/scrape/${id}/abort`, { method: 'POST' });
+    },
+
+    abortBatch(batchId) {
+        return request(`/api/scrape/batch/${batchId}/abort`, { method: 'POST' });
+    },
+
+    abortAnalysis(id) {
+        return request(`/api/skeleton-ripper/${id}/abort`, { method: 'POST' });
     },
 
     // Skeleton Ripper

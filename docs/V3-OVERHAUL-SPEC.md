@@ -18,25 +18,24 @@
 
 | Field | Value |
 |-------|-------|
-| **Current Phase** | Phase 3 Complete + Enhancements, Ready for Phase 4 |
+| **Current Phase** | Phase 4 In Progress |
 | **Branch Created** | Yes - `feature/v3-workspace-overhaul` |
-| **Last Updated** | 2024-12-31 14:35 CST |
+| **Last Updated** | 2024-12-31 16:20 CST |
 | **Blocker** | None |
 
 ### Last Session Summary
 
-_2024-12-31: Phases 0-3 complete plus enhancements. Library view with multi-select filters, collection tags on cards, favorites view, collection removal via X button. Modals working for New Scrape and New Analysis. Ready for Phase 4 (Jobs View)._
+_2024-12-31 16:20: Phase 4 in progress. Jobs view has active/recent tabs, real-time polling (1s), job completion detection with green flash notification. Scrape modal redesigned with side-by-side inputs, conditional transcription config. Fixed multiple issues: job cards showing @unknown, library not merging database+history assets, max_reels parameter mismatch. Detail panel now shows full reel content with expandable accordion - each reel displays stats, URL, full caption, full transcript with copy buttons._
 
 ### Active Task
 
-None - Phase 3 complete. Ready to start Phase 4.
+Phase 4 Jobs View + Detail Panel Enhancement complete. Continue with Phase 4 endpoint cleanup.
 
 ### Next Actions
 
-1. Start Phase 4: Build Jobs view
-2. Add /api/jobs/active and /api/jobs/recent endpoints
-3. Create job cards with progress display
-4. Implement tabs for Active/Recent
+1. Test the new detail panel accordion with a real scrape
+2. Continue Phase 4: Verify /api/jobs/active and /api/jobs/recent work correctly
+3. Phase 5 prep: Port remaining features (rewrite panel, video playback)
 
 ### Session Notes
 

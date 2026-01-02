@@ -150,6 +150,73 @@ def scrape_tiktok_profile(username, cookies_file='tiktok_cookies.txt', max_video
     }
 
 
+def fetch_single_video(video_id, cookies_file, progress_callback=None):
+    """
+    Fetch a single TikTok video by its video ID.
+
+    Args:
+        video_id: The TikTok video ID (e.g., '7123456789012345678')
+        cookies_file: Path to cookies.txt file
+        progress_callback: Optional callback for progress updates
+
+    Returns:
+        tuple: (video_data, error_message)
+        - video_data: Dict with video info if successful, None if failed
+        - error_message: Error string if failed, None if successful
+    """
+    if not YT_DLP_AVAILABLE:
+        return None, 'yt-dlp not installed. Run: pip install yt-dlp'
+
+    if not os.path.exists(cookies_file):
+        return None, f'TikTok cookies file not found: {cookies_file}'
+
+    if progress_callback:
+        progress_callback(f"Fetching TikTok video {video_id}...")
+
+    # Construct the TikTok URL from video ID
+    video_url = f"https://www.tiktok.com/@unknown/video/{video_id}"
+
+    ydl_opts = {
+        'quiet': True,
+        'no_warnings': True,
+        'cookiefile': cookies_file,
+        'skip_download': True,  # Just get info, don't download yet
+        'extract_flat': False,
+    }
+
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(video_url, download=False)
+
+            if not info:
+                return None, f"Could not fetch video '{video_id}'. It may be private or deleted."
+
+            video = {
+                'video_id': video_id,
+                'shortcode': video_id,  # For compatibility with Instagram format
+                'url': info.get('webpage_url', video_url),
+                'views': info.get('view_count', 0),
+                'likes': info.get('like_count', 0),
+                'comments': info.get('comment_count', 0),
+                'caption': info.get('description', ''),
+                'video_url': info.get('url'),
+                'thumbnail_url': info.get('thumbnail'),
+                'owner': info.get('uploader', info.get('creator', 'unknown')),
+                'duration': info.get('duration', 0)
+            }
+
+            print(f"[TIKTOK] Successfully fetched video {video_id} from @{video['owner']}")
+            return video, None
+
+    except yt_dlp.utils.DownloadError as e:
+        error_str = str(e)
+        if 'Private video' in error_str or 'unavailable' in error_str.lower():
+            return None, f"Video '{video_id}' is private or unavailable."
+        return None, f"Failed to fetch video: {error_str}"
+    except Exception as e:
+        return None, f"Error fetching video: {str(e)}"
+
+
 def download_tiktok_video(video_url, output_path, cookies_file):
     """
     Download TikTok video using yt-dlp

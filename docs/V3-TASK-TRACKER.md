@@ -9,15 +9,24 @@
 ## Quick Status
 
 ```
-Phase 0: [x] Complete       Phase 3: [x] Complete
-Phase 1: [x] Complete       Phase 4: [ ] Not Started
-Phase 2: [x] Complete       Phase 5: [ ] Not Started
-                            Phase 6: [ ] Not Started
+Phase 0: [x] Complete       Phase 4: [~] In Progress      Phase 7:   [~] In Progress
+Phase 1: [x] Complete       Phase 5: [ ] Not Started      Phase 7.5: [x] Complete
+Phase 2: [x] Complete       Phase 6: [ ] Not Started      Phase 8:   [ ] Not Started
+Phase 3: [x] Complete
 ```
 
-**Current Phase:** Phase 3 Complete, Ready for Phase 4
-**Current Task:** None
-**Last Updated:** 2024-12-31 14:45 CST
+**Current Phase:** Phase 7 - Direct Reel Scrape (testing fixes)
+**Current Task:** Test direct reel scrape after refactoring to use get_reel_info()
+**Blocker:** Views showing 0 - fixed by using existing get_reel_info() instead of yt-dlp
+**Last Updated:** 2026-01-01 14:16 CST
+
+### Session Notes (2026-01-01)
+**Fixes Applied (need restart to test):**
+1. `scraper/core.py` - `fetch_single_reel()` now uses `get_reel_info()` (same as profile scrape)
+2. `scraper/core.py` - `download_video()` uses `sys.executable -m yt_dlp` (PATH fix)
+3. `app.py` - Added `/api/health` endpoint for auto-reconnect
+4. `workspace.js` - Added server heartbeat with auto-reconnect overlay
+5. `launcher.pyw` / `ReelRecon-Mac.py` - Restart skips browser open (already open)
 
 ---
 
@@ -177,7 +186,7 @@ Phase 2: [x] Complete       Phase 5: [ ] Not Started
 - [x] 2.36 Add slideout panel container
 - [x] 2.37 Add close button
 - [x] 2.38 Display full asset content based on type
-- [ ] 2.39 Add collection tags display (deferred)
+- [x] 2.39 Add collection tags display
 - [x] 2.40 Add action buttons (Star, Copy, Delete)
 - [x] 2.41 Style detail panel
 - [x] 2.42 Add animation for open/close
@@ -269,54 +278,74 @@ Phase 2: [x] Complete       Phase 5: [ ] Not Started
 - Add new sidemenu option like "Reports" for expanded multi-tab viewing
 - Consider tabbed interface within detail panel for full content access
 
+**2024-12-31 Session Note:** Significant progress made. Jobs view functional with real-time updates.
+Detail panel enhanced with full reel accordion showing stats, URL, caption, transcript.
+
 ### Backend Endpoints
-- [ ] 4.1 Add /api/jobs/active endpoint to app.py
+- [x] 4.1 Add /api/jobs/active endpoint to app.py
   - Combine active_scrapes + skeleton ripper jobs
   - Return unified structure
-- [ ] 4.2 Add /api/jobs/recent endpoint to app.py
+- [x] 4.2 Add /api/jobs/recent endpoint to app.py
   - Query from history + skeleton reports
   - Return last 20 completed jobs
-- [ ] 4.3 Test endpoints with curl/browser
-- [ ] 4.4 Update api.js with new endpoints
+- [x] 4.3 Test endpoints with curl/browser
+- [x] 4.4 Update api.js with new endpoints
 
 ### Job List Component
-- [ ] 4.5 Create JobList.js component
-- [ ] 4.6 Add tabs: Active / Recent
-- [ ] 4.7 Fetch active jobs on mount
-- [ ] 4.8 Fetch recent jobs on tab switch
-- [ ] 4.9 Handle empty states
+- [x] 4.5 Create JobList.js component
+- [x] 4.6 Add tabs: Active / Recent
+- [x] 4.7 Fetch active jobs on mount
+- [x] 4.8 Fetch recent jobs on tab switch
+- [x] 4.9 Handle empty states
 
 ### Job Card Component
-- [ ] 4.10 Create JobCard.js component
-- [ ] 4.11 Display job type (Scrape/Analysis)
-- [ ] 4.12 Display username(s)
-- [ ] 4.13 Display status (running/completed/failed)
-- [ ] 4.14 Display started time
-- [ ] 4.15 Add progress bar for active jobs
+- [x] 4.10 Create JobCard.js component
+- [x] 4.11 Display job type (Scrape/Analysis)
+- [x] 4.12 Display username(s) (fixed @unknown bug)
+- [x] 4.13 Display status (running/completed/failed)
+- [x] 4.14 Display started time
+- [x] 4.15 Add progress bar for active jobs
 - [ ] 4.16 Add click handler to expand detail
-- [ ] 4.17 Style card
+- [x] 4.17 Style card
 
 ### Job Progress (Active Jobs)
-- [ ] 4.18 Create JobProgress.js component
-- [ ] 4.19 Poll status endpoint every 2 seconds
-- [ ] 4.20 Update progress bar
-- [ ] 4.21 Display current phase/status text
-- [ ] 4.22 Handle job completion (move to recent)
-- [ ] 4.23 Handle job failure (show error)
-- [ ] 4.24 Add abort button for active jobs
-- [ ] 4.25 Wire abort to existing endpoints
+- [x] 4.18 Create JobProgress.js component
+- [x] 4.19 Poll status endpoint every 1 second (changed from 2s for responsiveness)
+- [x] 4.20 Update progress bar
+- [x] 4.21 Display current phase/status text
+- [x] 4.22 Handle job completion (green flash notification)
+- [x] 4.23 Handle job failure (show error)
+### Job Abort System
+- [x] 4.24 Add abort button to active job cards in Jobs view
+- [x] 4.25 Create comprehensive abort endpoint with cleanup:
+  - Stop all current processes (scrape thread, transcription)
+  - Delete any downloaded videos (if transcribe-only, videos are temp)
+  - Remove partial data from history/library
+  - Clean up any temp files created during the job
+  - Mark job as "aborted" in state manager
+- [x] 4.25a Handle batch abort (stop current + cancel all pending in batch)
+- [x] 4.25b Show aborted jobs in Recent tab with "aborted" status
+- [x] 4.25c Track files created during scrape for cleanup (temp video paths)
 
 ### Job Detail Expansion
 - [ ] 4.26 Add expandable section to JobCard
 - [ ] 4.27 Show full details when expanded
-- [ ] 4.28 For completed scrapes: show result count, link to assets
+- [x] 4.28 For completed scrapes: show result count, link to assets
 - [ ] 4.29 For completed analyses: show report link
 - [ ] 4.30 Add "View Results" button → navigate to library with filter
 
+### Detail Panel Enhancement (Added)
+- [x] 4.36 Reel accordion with expandable items
+- [x] 4.37 Stats row (views, likes, comments) per reel
+- [x] 4.38 Full caption display with copy
+- [x] 4.39 Full transcript display with copy
+- [x] 4.40 URL display with copy button
+- [x] 4.41 "Copy for AI" action per reel
+
 ### Phase 4 Exit
-- [ ] 4.31 Active jobs display (both types)
-- [ ] 4.32 Progress updates in real-time
-- [ ] 4.33 Completed jobs show in recent
+- [x] 4.31 Active jobs display (both types)
+- [x] 4.32 Progress updates in real-time
+- [x] 4.33 Completed jobs show in recent
 - [ ] 4.34 Can click through to results
 - [ ] 4.35 Commit: "feat(jobs): add unified jobs view"
 
@@ -334,12 +363,10 @@ Phase 2: [x] Complete       Phase 5: [ ] Not Started
 - [ ] 5.5 Test all ported features
 
 ### Bug Fixes
-- [ ] 5.6 Fix caption truncation in scraper/core.py
-  - Line 129: Remove [:200]
-  - Line 150: Store full caption
-  - Line 235: Remove [:200]
-  - Store full caption in metadata
-  - Only truncate for preview display
+- [x] 5.6 Fix caption truncation in scraper/core.py
+  - Line 129: Remove [:200] ✓
+  - Line 143: Remove regex limit ✓
+  - Line 235: Remove [:200] ✓
 - [ ] 5.7 Test caption fix with real scrape
 - [ ] 5.8 Fix any error auto-hide issues
 
@@ -424,6 +451,126 @@ Phase 2: [x] Complete       Phase 5: [ ] Not Started
 - [ ] 6.23 All regression tests pass
 - [ ] 6.24 Documentation updated
 - [ ] 6.25 Release tagged
+
+---
+
+## Phase 7: Batch Scraping & Direct Reel Capture
+
+**Goal:** Enable batch operations and individual reel scraping
+
+### Batch Creator Scrapes
+- [x] 7.1 Update New Scrape modal with multi-line textarea for usernames
+- [x] 7.2 Add "up to 5 creators" hint and validation
+- [x] 7.3 Parse multi-line input into array of usernames
+- [x] 7.4 Create /api/scrape/batch endpoint
+- [x] 7.5 Backend processes creators sequentially, same settings for all
+- [x] 7.6 Each creator creates separate asset in library
+- [x] 7.7 Support queueing multiple batches (different settings per batch)
+- [x] 7.8 Jobs view shows batch progress (creator 2/5, etc.)
+- [ ] 7.9 Test batch scrape end-to-end
+
+### Direct Reel Modal
+- [x] 7.10 Create "Direct Reel" modal (separate from New Scrape)
+- [x] 7.11 Add URL/ID toggle at top of modal
+- [x] 7.12 Add multi-line textarea for up to 5 reel URLs/IDs
+- [x] 7.13 Add extraction options (download, transcribe)
+- [x] 7.14 Create /api/scrape/direct endpoint
+- [x] 7.15 Backend parses URL to extract shortcode if URL mode
+- [x] 7.16 Backend uses ID directly if ID mode
+- [x] 7.17 Each reel creates separate asset in library
+- [x] 7.18 Add "Direct Reel" button to sidebar
+- [ ] 7.19 Test direct reel scrape end-to-end (views, download, transcription)
+- [x] 7.20 Implement fetch_single_reel() in scraper/core.py
+- [x] 7.21 Implement fetch_single_video() in scraper/tiktok.py
+
+### Direct Reel Bug Fixes (2026-01-01)
+- [x] 7.22 Fix yt-dlp PATH issue - use sys.executable -m yt_dlp in download_video()
+- [x] 7.23 Fix views=0 bug - fetch_single_reel() now uses get_reel_info() (same as profile scrape)
+- [ ] 7.24 Verify transcription works after download fix (needs testing)
+
+### Phase 7 Exit
+- [ ] 7.20 Batch creator scrape works with up to 5 creators
+- [ ] 7.21 Multiple batches can be queued with different settings
+- [ ] 7.22 Direct reel modal works with URL or ID input
+- [ ] 7.23 Up to 5 reels can be scraped directly
+- [ ] 7.24 All scrapes save as individual library assets
+- [ ] 7.25 Commit: "feat(scrape): add batch and direct reel scraping"
+
+---
+
+## Phase 7.5: Desktop Launcher & Installer
+
+**Goal:** Professional desktop app experience with splash screen, system tray, and installer
+
+### Windows Desktop Launcher
+- [x] 7.5.1 Create launcher.pyw with splash screen during startup
+- [x] 7.5.2 Add system tray icon with menu (pystray + Pillow)
+- [x] 7.5.3 System tray menu: Open ReelRecon, Server Running, Restart, Fetch Updates, Quit
+- [x] 7.5.4 Restart option kills server and relaunches with splash
+- [x] 7.5.5 Fetch Updates runs git pull then auto-restarts
+- [x] 7.5.6 Create ReelRecon.bat to launch pythonw.exe (no console window)
+- [x] 7.5.7 Server runs hidden in background (no terminal window)
+- [x] 7.5.8 Browser auto-opens after server ready
+
+### Mac Desktop Launcher
+- [x] 7.5.9 Create ReelRecon-Mac.py with splash screen and menu bar icon
+- [x] 7.5.10 Create ReelRecon.command for double-click launching
+- [x] 7.5.11 Make .command file executable (chmod +x)
+- [x] 7.5.12 Keep START-HERE.py as fallback
+
+### Windows Installer
+- [x] 7.5.13 Create installer/ReelRecon-Installer.pyw GUI wizard
+- [x] 7.5.14 Installer checks for Git and Python prerequisites
+- [x] 7.5.15 Folder picker for install location
+- [x] 7.5.16 Git clones repo to selected location
+- [x] 7.5.17 Installs dependencies automatically
+- [x] 7.5.18 Creates desktop shortcut option
+- [x] 7.5.19 Option to launch immediately after install
+- [x] 7.5.20 Create Install-ReelRecon.bat launcher
+- [x] 7.5.21 Build installer exe with PyInstaller (ReelRecon-Setup.exe)
+
+### Legacy Launcher Update
+- [x] 7.5.22 Update run_app.bat to auto-exit after launching server
+- [x] 7.5.23 Remove pause and terminal messages from run_app.bat
+
+### Launcher Enhancements (Added 2026-01-01)
+- [x] 7.5.28 Add "View Logs" menu option - opens server.log in Notepad/TextEdit
+- [x] 7.5.29 Server logs to file (server.log) for debugging
+- [x] 7.5.30 Restart option skips browser open (browser already open)
+- [x] 7.5.31 Add auto-reconnect to workspace.js (heartbeat + overlay + auto-refresh)
+- [x] 7.5.32 Add /api/health endpoint for reconnect detection
+
+### Phase 7.5 Exit
+- [x] 7.5.24 Windows: ReelRecon.bat launches splash → tray → browser
+- [x] 7.5.25 Mac: ReelRecon.command launches splash → menu bar → browser
+- [x] 7.5.26 Installer wizard works for fresh Windows installs
+- [ ] 7.5.27 Commit: "feat(launcher): add desktop launcher with splash and system tray"
+
+---
+
+## Phase 8: Asset Extraction Options
+
+**Goal:** Allow transcripts and skeletons to save as separate library assets
+
+### Transcript Asset Extraction
+- [ ] 8.1 Add checkbox to scrape modal: "Save transcripts as separate assets"
+- [ ] 8.2 Update scrape backend to create transcript assets when enabled
+- [ ] 8.3 Transcript assets linked to parent scrape job
+- [ ] 8.4 Transcript assets appear in library with type "transcript"
+- [ ] 8.5 Test transcript extraction with scrape
+
+### Skeleton Asset Extraction
+- [ ] 8.6 Add checkbox to analysis modal: "Save skeletons as separate assets"
+- [ ] 8.7 Update analysis backend to create skeleton assets when enabled
+- [ ] 8.8 Skeleton assets linked to parent analysis report
+- [ ] 8.9 Skeleton assets appear in library with type "skeleton"
+- [ ] 8.10 Test skeleton extraction with analysis
+
+### Phase 8 Exit
+- [ ] 8.11 Transcripts can optionally save as individual assets
+- [ ] 8.12 Skeletons can optionally save as individual assets
+- [ ] 8.13 Assets properly typed and filterable in library
+- [ ] 8.14 Commit: "feat(library): add transcript and skeleton asset extraction"
 
 ---
 

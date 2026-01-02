@@ -54,7 +54,12 @@ echo  Press Ctrl+C to stop
 echo ========================================
 echo.
 
-start http://localhost:5000
-C:\Python312\python.exe app.py
+REM Start Flask server in a new minimized window
+start "ReelRecon Server" /min C:\Python312\python.exe app.py
 
-pause
+REM Wait 3 seconds for server to start
+timeout /t 3 /nobreak >nul
+
+REM Open browser and exit (launcher window closes automatically)
+start http://localhost:5000/workspace
+exit

@@ -87,6 +87,9 @@ ORIGINAL ({views:,} views):
 # Now backed by persistent state_manager for crash recovery
 active_scrapes = {}
 
+# Active batch jobs (multiple creators in one batch)
+active_batches = {}
+
 # Cleanup handler for graceful shutdown
 def cleanup_on_exit():
     """Mark any running scrapes as interrupted on server shutdown"""
@@ -359,17 +362,75 @@ def workspace_page():
 
 
 # =========================================
+# Health Check (for auto-reconnect)
+# =========================================
+
+@app.route('/api/health')
+def health_check():
+    """Simple health check endpoint for frontend reconnect detection"""
+    return jsonify({'status': 'ok'})
+
+
+# =========================================
 # V3 Unified Jobs API
 # =========================================
 
 @app.route('/api/jobs/active')
 def get_active_jobs():
-    """Get all active jobs (scrapes + skeleton ripper)"""
+    """Get all active jobs (scrapes + batches + skeleton ripper)"""
     jobs = []
 
-    # Add active scrapes
+    # Add active batch jobs (these contain multiple scrapes)
+    for batch_id, batch in active_batches.items():
+        if batch.get('status') == 'running':
+            current_username = batch.get('current_username', '')
+            current_scrape_id = batch.get('current_scrape_id')
+            completed = batch.get('completed', 0)
+            total = batch.get('total', 1)
+
+            # Get granular progress from the current running scrape
+            current_progress = f"Starting batch..."
+            current_progress_pct = 0
+            current_phase = 'batch'
+
+            if current_scrape_id and current_scrape_id in active_scrapes:
+                current_scrape = active_scrapes[current_scrape_id]
+                # Use the actual granular progress from the scraper
+                scrape_progress = current_scrape.get('progress', '')
+                scrape_pct = current_scrape.get('progress_pct', 0)
+                current_phase = current_scrape.get('phase', 'processing')
+
+                # Combine batch context with granular scrape progress
+                current_progress = f"@{current_username} ({completed + 1}/{total}): {scrape_progress}"
+                # Calculate overall progress: completed batches + current scrape progress
+                current_progress_pct = int(((completed + (scrape_pct / 100)) / total) * 100)
+            elif current_username:
+                current_progress = f"Starting @{current_username} ({completed + 1}/{total})..."
+
+            jobs.append({
+                'id': batch_id,
+                'type': 'batch_scrape',
+                'title': f"Batch: {', '.join(batch.get('usernames', [])[:2])}{'...' if len(batch.get('usernames', [])) > 2 else ''}",
+                'platform': batch.get('platform', 'instagram'),
+                'status': 'running',
+                'progress': current_progress,
+                'progress_pct': current_progress_pct,
+                'phase': current_phase,
+                'created_at': batch.get('created_at', ''),
+                'batch_info': {
+                    'total': total,
+                    'completed': completed,
+                    'current_username': current_username,
+                    'usernames': batch.get('usernames', [])
+                }
+            })
+
+    # Add active scrapes (skip those that are part of a batch - they're tracked via batch)
     for scrape_id, scrape in active_scrapes.items():
         if scrape.get('status') in ('starting', 'running'):
+            # Skip scrapes that are part of an active batch
+            if scrape.get('batch_id') and scrape['batch_id'] in active_batches:
+                continue
             jobs.append({
                 'id': scrape_id,
                 'type': 'scrape',
@@ -492,7 +553,11 @@ def start_scrape():
         'phase': 'initializing',
         'result': None,
         'platform': platform,
-        'errors': []
+        'username': username,
+        'created_at': datetime.now().isoformat(),
+        'errors': [],
+        'temp_files': [],  # Track downloaded files for cleanup on abort
+        'abort_requested': False  # Flag to signal abort to running thread
     }
     logger.debug("SCRAPE", f"Active scrapes: {list(active_scrapes.keys())}")
 
@@ -590,6 +655,18 @@ def start_scrape():
             if accumulated_errors:
                 result['errors'] = accumulated_errors
 
+            # Track downloaded video files for potential cleanup on abort
+            reels = result.get('top_reels', []) or result.get('top_videos', [])
+            for reel in reels:
+                local_video = reel.get('local_video')
+                if local_video and Path(local_video).exists():
+                    active_scrapes[scrape_id]['temp_files'].append(local_video)
+
+            # Check if abort was requested during scrape
+            if active_scrapes[scrape_id].get('abort_requested'):
+                logger.info("SCRAPE", f"Scrape {scrape_id} was aborted during execution")
+                return  # Don't save to history, abort endpoint handles cleanup
+
             # Update in-memory state
             active_scrapes[scrape_id]['result'] = result
             active_scrapes[scrape_id]['status'] = result.get('status', 'complete')
@@ -647,6 +724,470 @@ def start_scrape():
     return jsonify({'scrape_id': scrape_id, 'platform': platform})
 
 
+@app.route('/api/scrape/batch', methods=['POST'])
+def start_batch_scrape():
+    """Start a batch scrape for multiple usernames"""
+    data = request.json
+    usernames = data.get('usernames', [])
+    platform = data.get('platform', 'instagram').lower()
+
+    # Clean usernames
+    usernames = [u.strip().lstrip('@') for u in usernames if u and u.strip()]
+
+    if not usernames:
+        return jsonify({'error': 'At least one username required'}), 400
+
+    if len(usernames) > 5:
+        return jsonify({'error': 'Maximum 5 usernames per batch'}), 400
+
+    # Check cookies based on platform
+    cookies_file = TIKTOK_COOKIES_FILE if platform == 'tiktok' else COOKIES_FILE
+    if not cookies_file.exists():
+        return jsonify({
+            'error': f'{platform.title()} cookies file not found ({cookies_file.name})'
+        }), 400
+
+    # Create batch ID
+    batch_id = str(uuid.uuid4())
+    logger.info("BATCH", f"Creating batch scrape for {len(usernames)} creators on {platform}", {
+        "batch_id": batch_id,
+        "usernames": usernames,
+        "platform": platform
+    })
+
+    # Track batch
+    active_batches[batch_id] = {
+        'status': 'running',
+        'platform': platform,
+        'usernames': usernames,
+        'total': len(usernames),
+        'completed': 0,
+        'current_username': None,
+        'current_scrape_id': None,
+        'scrape_ids': [],
+        'created_at': datetime.now().isoformat()
+    }
+
+    # Scrape config (same for all in batch)
+    scrape_config = {
+        'platform': platform,
+        'max_reels': data.get('max_reels', 100),
+        'top_n': data.get('top_n', 10),
+        'download': data.get('download', False),
+        'transcribe': data.get('transcribe', False),
+        'transcribe_provider': data.get('transcribe_provider', 'local'),
+        'whisper_model': data.get('whisper_model', 'small.en')
+    }
+
+    # Get transcription settings
+    openai_key = None
+    if scrape_config['transcribe_provider'] == 'openai':
+        config = load_config()
+        openai_key = config.get('openai_key')
+
+    def run_batch():
+        """Process each username sequentially"""
+        for i, username in enumerate(usernames):
+            # Check if batch was aborted
+            if active_batches[batch_id].get('status') == 'aborted':
+                logger.info("BATCH", f"Batch {batch_id} was aborted, stopping at creator {i+1}/{len(usernames)}")
+                break
+
+            scrape_id = str(uuid.uuid4())
+            active_batches[batch_id]['current_username'] = username
+            active_batches[batch_id]['current_scrape_id'] = scrape_id
+            active_batches[batch_id]['scrape_ids'].append(scrape_id)
+
+            logger.info("BATCH", f"Starting scrape {i+1}/{len(usernames)}: @{username}", {
+                "batch_id": batch_id,
+                "scrape_id": scrape_id
+            })
+
+            # Create scrape job
+            state_manager.create_job(scrape_id, username, platform, {**scrape_config, 'username': username})
+            active_scrapes[scrape_id] = {
+                'status': 'starting',
+                'progress': f'Initializing {platform.title()} scrape...',
+                'progress_pct': 0,
+                'phase': 'initializing',
+                'result': None,
+                'platform': platform,
+                'username': username,
+                'created_at': datetime.now().isoformat(),
+                'errors': [],
+                'batch_id': batch_id,
+                'temp_files': [],  # Track downloaded files for cleanup on abort
+                'abort_requested': False  # Flag to signal abort to running thread
+            }
+
+            accumulated_errors = []
+
+            def progress_callback(msg, phase=None, progress_pct=None):
+                try:
+                    active_scrapes[scrape_id]['progress'] = msg
+                    active_scrapes[scrape_id]['status'] = 'running'
+                    if phase:
+                        active_scrapes[scrape_id]['phase'] = phase
+                        state_manager.update_progress(
+                            scrape_id,
+                            ScrapePhase(phase) if isinstance(phase, str) else phase,
+                            progress_pct or 0,
+                            msg
+                        )
+                    elif progress_pct is not None:
+                        active_scrapes[scrape_id]['progress_pct'] = progress_pct
+                except Exception as e:
+                    logger.warning("BATCH", f"Progress callback error: {e}")
+
+            try:
+                if platform == 'tiktok':
+                    result = run_tiktok_scrape(
+                        username=username,
+                        cookies_path=str(TIKTOK_COOKIES_FILE),
+                        max_videos=scrape_config['max_reels'],
+                        top_n=scrape_config['top_n'],
+                        download=scrape_config['download'],
+                        transcribe=scrape_config['transcribe'],
+                        whisper_model=scrape_config['whisper_model'],
+                        transcribe_provider=scrape_config['transcribe_provider'],
+                        openai_key=openai_key,
+                        output_dir=str(get_output_directory('tiktok')),
+                        headless=True,
+                        progress_callback=progress_callback
+                    )
+                else:
+                    result = run_scrape(
+                        username=username,
+                        cookies_path=str(COOKIES_FILE),
+                        max_reels=scrape_config['max_reels'],
+                        top_n=scrape_config['top_n'],
+                        download=scrape_config['download'],
+                        transcribe=scrape_config['transcribe'],
+                        whisper_model=scrape_config['whisper_model'],
+                        transcribe_provider=scrape_config['transcribe_provider'],
+                        openai_key=openai_key,
+                        output_dir=str(get_output_directory('instagram')),
+                        progress_callback=progress_callback
+                    )
+
+                result['platform'] = platform
+                if accumulated_errors:
+                    result['errors'] = accumulated_errors
+
+                # Track downloaded video files for potential cleanup on abort
+                reels = result.get('top_reels', []) or result.get('top_videos', [])
+                for reel in reels:
+                    local_video = reel.get('local_video')
+                    if local_video and Path(local_video).exists():
+                        active_scrapes[scrape_id]['temp_files'].append(local_video)
+
+                # Check if abort was requested during scrape
+                if active_scrapes[scrape_id].get('abort_requested'):
+                    logger.info("BATCH", f"Scrape {scrape_id} was aborted during execution")
+                    continue  # Skip saving to history, move to next (which will also check batch abort)
+
+                active_scrapes[scrape_id]['result'] = result
+                active_scrapes[scrape_id]['status'] = result.get('status', 'complete')
+                active_scrapes[scrape_id]['progress_pct'] = 100
+
+                had_errors = len(accumulated_errors) > 0
+                if result.get('status') == 'error':
+                    state_manager.fail_job(scrape_id, result.get('error_code', 'UNKNOWN'),
+                                          result.get('error', 'Unknown error'))
+                else:
+                    state_manager.complete_job(scrape_id, result, had_errors)
+
+                add_to_history(result, include_errors=True)
+
+            except Exception as e:
+                error_msg = str(e)
+                prefix = "TIK" if platform == 'tiktok' else "IG"
+                error_code = logger.critical(prefix, f"Batch scrape failed: {error_msg}", {
+                    "batch_id": batch_id,
+                    "scrape_id": scrape_id,
+                    "username": username
+                }, exception=e)
+
+                active_scrapes[scrape_id]['status'] = 'error'
+                active_scrapes[scrape_id]['result'] = {
+                    'id': scrape_id,
+                    'status': 'error',
+                    'error': f'[{error_code}] {error_msg}',
+                    'error_code': error_code,
+                    'platform': platform,
+                    'username': username,
+                    'timestamp': datetime.now().isoformat()
+                }
+                state_manager.fail_job(scrape_id, error_code, error_msg)
+                add_to_history(active_scrapes[scrape_id]['result'], include_errors=True)
+
+            # Update batch progress
+            active_batches[batch_id]['completed'] = i + 1
+
+        # Batch complete
+        active_batches[batch_id]['status'] = 'complete'
+        active_batches[batch_id]['current_username'] = None
+        active_batches[batch_id]['current_scrape_id'] = None
+        logger.info("BATCH", f"Batch scrape completed: {len(usernames)} creators", {"batch_id": batch_id})
+
+    thread = Thread(target=run_batch, daemon=True)
+    thread.start()
+
+    return jsonify({'batch_id': batch_id, 'platform': platform, 'total': len(usernames)})
+
+
+@app.route('/api/scrape/batch/<batch_id>/status')
+def batch_status(batch_id):
+    """Get batch scrape status"""
+    if batch_id not in active_batches:
+        return jsonify({'error': 'Batch not found'}), 404
+
+    batch = active_batches[batch_id]
+
+    # Get current scrape status if one is running
+    current_scrape_status = None
+    if batch['current_scrape_id'] and batch['current_scrape_id'] in active_scrapes:
+        current = active_scrapes[batch['current_scrape_id']]
+        current_scrape_status = {
+            'username': batch['current_username'],
+            'progress': current.get('progress', ''),
+            'progress_pct': current.get('progress_pct', 0),
+            'phase': current.get('phase', 'processing')
+        }
+
+    return jsonify({
+        'status': batch['status'],
+        'platform': batch['platform'],
+        'total': batch['total'],
+        'completed': batch['completed'],
+        'current': current_scrape_status,
+        'scrape_ids': batch['scrape_ids']
+    })
+
+
+@app.route('/api/scrape/direct', methods=['POST'])
+def start_direct_scrape():
+    """Scrape specific reels by URL or ID"""
+    import re
+    data = request.json
+    platform = data.get('platform', 'instagram').lower()
+    input_type = data.get('input_type', 'url')  # 'url' or 'id'
+    inputs = data.get('inputs', [])
+
+    if not inputs:
+        return jsonify({'error': 'At least one reel URL or ID required'}), 400
+
+    if len(inputs) > 5:
+        return jsonify({'error': 'Maximum 5 reels per request'}), 400
+
+    # Check cookies
+    cookies_file = TIKTOK_COOKIES_FILE if platform == 'tiktok' else COOKIES_FILE
+    if not cookies_file.exists():
+        return jsonify({
+            'error': f'{platform.title()} cookies file not found ({cookies_file.name})'
+        }), 400
+
+    # Parse inputs to get shortcodes/IDs
+    reel_ids = []
+    for inp in inputs:
+        inp = inp.strip()
+        if not inp:
+            continue
+
+        if input_type == 'url':
+            # Extract shortcode from URL
+            if platform == 'instagram':
+                # Match patterns like /reel/ABC123/ or /p/ABC123/
+                match = re.search(r'/(reel|p)/([A-Za-z0-9_-]+)', inp)
+                if match:
+                    reel_ids.append(match.group(2))
+                else:
+                    reel_ids.append(inp)  # Fallback to raw input
+            else:  # tiktok
+                # Match patterns like /video/1234567890
+                match = re.search(r'/video/(\d+)', inp)
+                if match:
+                    reel_ids.append(match.group(1))
+                else:
+                    reel_ids.append(inp)
+        else:
+            # Direct ID input
+            reel_ids.append(inp)
+
+    if not reel_ids:
+        return jsonify({'error': 'Could not parse any valid reel IDs'}), 400
+
+    logger.info("DIRECT", f"Starting direct scrape for {len(reel_ids)} reels on {platform}", {
+        "reel_ids": reel_ids,
+        "platform": platform
+    })
+
+    # Scrape config
+    scrape_config = {
+        'platform': platform,
+        'download': data.get('download', False),
+        'transcribe': data.get('transcribe', False),
+        'transcribe_provider': data.get('transcribe_provider', 'local'),
+        'whisper_model': data.get('whisper_model', 'small.en')
+    }
+
+    # Get transcription settings
+    openai_key = None
+    if scrape_config['transcribe_provider'] == 'openai':
+        config = load_config()
+        openai_key = config.get('openai_key')
+
+    # Pre-generate scrape IDs so we can return them immediately
+    scrape_ids = [str(uuid.uuid4()) for _ in reel_ids]
+
+    def run_direct_scrapes():
+        """Process each reel individually"""
+        for i, reel_id in enumerate(reel_ids):
+            scrape_id = scrape_ids[i]
+
+            logger.info("DIRECT", f"Scraping reel: {reel_id}", {
+                "scrape_id": scrape_id,
+                "platform": platform
+            })
+
+            # Create scrape job
+            state_manager.create_job(scrape_id, f"reel:{reel_id}", platform, {**scrape_config, 'reel_id': reel_id})
+            active_scrapes[scrape_id] = {
+                'status': 'starting',
+                'progress': f'Fetching reel {reel_id}...',
+                'progress_pct': 0,
+                'phase': 'initializing',
+                'result': None,
+                'platform': platform,
+                'username': f'reel:{reel_id}',
+                'reel_id': reel_id,
+                'created_at': datetime.now().isoformat(),
+                'errors': [],
+                'temp_files': [],
+                'abort_requested': False
+            }
+
+            def progress_callback(msg, phase=None, progress_pct=None):
+                try:
+                    active_scrapes[scrape_id]['progress'] = msg
+                    active_scrapes[scrape_id]['status'] = 'running'
+                    if phase:
+                        active_scrapes[scrape_id]['phase'] = phase
+                    if progress_pct is not None:
+                        active_scrapes[scrape_id]['progress_pct'] = progress_pct
+                except Exception:
+                    pass
+
+            try:
+                # Step 1: Fetch reel metadata
+                if platform == 'instagram':
+                    from scraper.core import fetch_single_reel, download_video, transcribe_video_openai
+                    reel, error = fetch_single_reel(reel_id, str(COOKIES_FILE), progress_callback)
+                    cookies_path = str(COOKIES_FILE)
+                    output_dir = get_output_directory('instagram')
+                else:
+                    from scraper.tiktok import fetch_single_video, download_tiktok_video
+                    reel, error = fetch_single_video(reel_id, str(TIKTOK_COOKIES_FILE), progress_callback)
+                    cookies_path = str(TIKTOK_COOKIES_FILE)
+                    output_dir = get_output_directory('tiktok')
+
+                if error or not reel:
+                    raise Exception(error or "Failed to fetch reel metadata")
+
+                # Build result structure matching run_scrape output
+                result = {
+                    'id': scrape_id,
+                    'username': reel.get('owner', f'reel:{reel_id}'),
+                    'timestamp': datetime.now().isoformat(),
+                    'status': 'complete',
+                    'platform': platform,
+                    'total_reels': 1,
+                    'top_reels': [reel] if platform == 'instagram' else [],
+                    'top_videos': [reel] if platform == 'tiktok' else [],
+                    'output_dir': str(output_dir),
+                    'download_errors': [],
+                    'transcription_errors': []
+                }
+
+                # Step 2: Download video if requested (reuse existing logic from run_scrape)
+                if scrape_config['download'] or scrape_config['transcribe']:
+                    progress_callback(f"Downloading video...", phase='downloading', progress_pct=30)
+
+                    video_dir = output_dir / f"direct_{reel_id}"
+                    video_dir.mkdir(parents=True, exist_ok=True)
+                    filename = f"01_{reel.get('views', 0)}views_{reel_id}.mp4"
+                    filepath = video_dir / filename
+
+                    if platform == 'instagram':
+                        success = download_video(reel['url'], filepath, cookies_path, reel.get('video_url'))
+                    else:
+                        success = download_tiktok_video(reel['url'], str(filepath), cookies_path)
+
+                    if success:
+                        reel['local_video'] = str(filepath)
+                        active_scrapes[scrape_id]['temp_files'].append(str(filepath))
+                    else:
+                        reel['local_video'] = None
+                        result['download_errors'].append({'shortcode': reel_id, 'error': 'Download failed'})
+
+                # Step 3: Transcribe if requested
+                if scrape_config['transcribe'] and reel.get('local_video'):
+                    progress_callback(f"Transcribing video...", phase='transcribing', progress_pct=60)
+
+                    transcript_dir = video_dir / "transcripts"
+                    transcript_dir.mkdir(exist_ok=True)
+                    transcript_file = transcript_dir / f"01_{reel_id}.txt"
+
+                    try:
+                        if scrape_config['transcribe_provider'] == 'openai' and openai_key:
+                            transcript = transcribe_video_openai(reel['local_video'], openai_key, transcript_file)
+                        else:
+                            # Local whisper
+                            from scraper.core import transcribe_video, load_whisper_model
+                            model = load_whisper_model(scrape_config['whisper_model'])
+                            transcript = transcribe_video(reel['local_video'], model, transcript_file)
+
+                        reel['transcript'] = transcript
+                        reel['transcript_file'] = str(transcript_file) if transcript else None
+                    except Exception as e:
+                        reel['transcript'] = None
+                        result['transcription_errors'].append({'shortcode': reel_id, 'error': str(e)})
+
+                progress_callback(f"Complete", phase='complete', progress_pct=100)
+
+                active_scrapes[scrape_id]['result'] = result
+                active_scrapes[scrape_id]['status'] = 'complete'
+                active_scrapes[scrape_id]['progress_pct'] = 100
+
+                state_manager.complete_job(scrape_id, result, False)
+                add_to_history(result, include_errors=True)
+
+            except Exception as e:
+                error_msg = str(e)
+                error_code = logger.error("DIRECT", f"Direct scrape failed: {error_msg}", {
+                    "scrape_id": scrape_id,
+                    "reel_id": reel_id
+                })
+
+                active_scrapes[scrape_id]['status'] = 'error'
+                active_scrapes[scrape_id]['result'] = {
+                    'id': scrape_id,
+                    'status': 'error',
+                    'error': f'[{error_code}] {error_msg}',
+                    'error_code': error_code,
+                    'platform': platform,
+                    'username': f'reel:{reel_id}',
+                    'timestamp': datetime.now().isoformat()
+                }
+                state_manager.fail_job(scrape_id, error_code, error_msg)
+                add_to_history(active_scrapes[scrape_id]['result'], include_errors=True)
+
+    thread = Thread(target=run_direct_scrapes, daemon=True)
+    thread.start()
+
+    return jsonify({'scrape_ids': scrape_ids, 'platform': platform, 'total': len(reel_ids)})
+
+
 @app.route('/api/scrape/<scrape_id>/status')
 def scrape_status(scrape_id):
     """Get scrape status - checks memory first, then persistent state"""
@@ -686,14 +1227,111 @@ def scrape_status(scrape_id):
 
 @app.route('/api/scrape/<scrape_id>/abort', methods=['POST'])
 def abort_scrape(scrape_id):
-    """Abort a running scrape"""
-    if scrape_id in active_scrapes:
-        active_scrapes[scrape_id]['status'] = 'aborted'
-        state_manager.abort_job(scrape_id, "User cancelled")
-        logger.info("API", f"Scrape {scrape_id} aborted by user")
-        return jsonify({'success': True, 'message': 'Scrape aborted'})
+    """Abort a running scrape with comprehensive cleanup"""
+    if scrape_id not in active_scrapes:
+        return jsonify({'error': 'Scrape not found or already completed'}), 404
 
-    return jsonify({'error': 'Scrape not found or already completed'}), 404
+    scrape = active_scrapes[scrape_id]
+    username = scrape.get('username', 'unknown')
+    platform = scrape.get('platform', 'instagram')
+
+    logger.info("ABORT", f"Aborting scrape {scrape_id} (@{username})")
+
+    # 1. Set abort flag so running thread knows to stop
+    scrape['abort_requested'] = True
+    scrape['status'] = 'aborted'
+    scrape['progress'] = 'Aborted by user'
+
+    # 2. Update state manager
+    state_manager.abort_job(scrape_id, "User cancelled")
+
+    # 3. Clean up any downloaded temp files
+    temp_files = scrape.get('temp_files', [])
+    files_deleted = 0
+    for file_path in temp_files:
+        try:
+            if Path(file_path).exists():
+                Path(file_path).unlink()
+                files_deleted += 1
+                logger.debug("ABORT", f"Deleted temp file: {file_path}")
+        except Exception as e:
+            logger.warning("ABORT", f"Failed to delete temp file {file_path}: {e}")
+
+    # 4. Remove any partial data from history (if it was saved)
+    history = load_history()
+    original_len = len(history)
+    history = [h for h in history if h.get('id') != scrape_id]
+    if len(history) < original_len:
+        save_history(history)
+        logger.debug("ABORT", f"Removed partial data from history for {scrape_id}")
+
+    logger.info("ABORT", f"Scrape {scrape_id} aborted successfully", {
+        "files_deleted": files_deleted,
+        "history_cleaned": len(history) < original_len
+    })
+
+    return jsonify({
+        'success': True,
+        'message': 'Scrape aborted',
+        'files_cleaned': files_deleted
+    })
+
+
+@app.route('/api/scrape/batch/<batch_id>/abort', methods=['POST'])
+def abort_batch(batch_id):
+    """Abort a batch scrape - stops current and cancels pending"""
+    if batch_id not in active_batches:
+        return jsonify({'error': 'Batch not found or already completed'}), 404
+
+    batch = active_batches[batch_id]
+    logger.info("ABORT", f"Aborting batch {batch_id}", {
+        "total": batch.get('total', 0),
+        "completed": batch.get('completed', 0)
+    })
+
+    # 1. Mark batch as aborted
+    batch['status'] = 'aborted'
+
+    # 2. Abort the current running scrape if any
+    current_scrape_id = batch.get('current_scrape_id')
+    files_cleaned = 0
+    if current_scrape_id and current_scrape_id in active_scrapes:
+        # Abort the current scrape (this cleans up its files)
+        scrape = active_scrapes[current_scrape_id]
+        scrape['abort_requested'] = True
+        scrape['status'] = 'aborted'
+        state_manager.abort_job(current_scrape_id, "Batch cancelled")
+
+        # Clean up temp files
+        for file_path in scrape.get('temp_files', []):
+            try:
+                if Path(file_path).exists():
+                    Path(file_path).unlink()
+                    files_cleaned += 1
+            except Exception as e:
+                logger.warning("ABORT", f"Failed to delete temp file {file_path}: {e}")
+
+        # Remove from history
+        history = load_history()
+        history = [h for h in history if h.get('id') != current_scrape_id]
+        save_history(history)
+
+    # 3. Pending scrapes are never started, so just clear the batch
+    batch['current_username'] = None
+    batch['current_scrape_id'] = None
+
+    logger.info("ABORT", f"Batch {batch_id} aborted successfully", {
+        "scrapes_cancelled": batch.get('total', 0) - batch.get('completed', 0),
+        "files_cleaned": files_cleaned
+    })
+
+    return jsonify({
+        'success': True,
+        'message': 'Batch aborted',
+        'completed_before_abort': batch.get('completed', 0),
+        'total': batch.get('total', 0),
+        'files_cleaned': files_cleaned
+    })
 
 
 @app.route('/api/errors/<error_code>')
@@ -739,6 +1377,16 @@ def get_history():
     return jsonify(load_history())
 
 
+@app.route('/api/history/<scrape_id>', methods=['GET'])
+def get_history_item(scrape_id):
+    """Get a specific history item"""
+    history = load_history()
+    item = next((h for h in history if h.get('id') == scrape_id), None)
+    if not item:
+        return jsonify({'error': 'Not found'}), 404
+    return jsonify(item)
+
+
 @app.route('/api/history/<scrape_id>', methods=['DELETE'])
 def delete_history_item(scrape_id):
     """Delete a history item"""
@@ -746,6 +1394,18 @@ def delete_history_item(scrape_id):
     history = [h for h in history if h.get('id') != scrape_id]
     save_history(history)
     return jsonify({'success': True})
+
+
+@app.route('/api/history/<scrape_id>/star', methods=['POST'])
+def toggle_history_star(scrape_id):
+    """Toggle starred status of a history item"""
+    history = load_history()
+    for item in history:
+        if item.get('id') == scrape_id:
+            item['starred'] = not item.get('starred', False)
+            save_history(history)
+            return jsonify({'success': True, 'starred': item['starred']})
+    return jsonify({'error': 'Not found'}), 404
 
 
 @app.route('/api/history/clear', methods=['POST'])

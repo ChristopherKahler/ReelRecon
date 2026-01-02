@@ -126,7 +126,7 @@ def get_reel_info(session, shortcode):
                     'views': item.get('play_count', 0) or item.get('view_count', 0),
                     'likes': item.get('like_count', 0),
                     'comments': item.get('comment_count', 0),
-                    'caption': (item.get('caption', {}) or {}).get('text', '')[:200],
+                    'caption': (item.get('caption', {}) or {}).get('text', ''),
                     'video_url': item.get('video_versions', [{}])[0].get('url') if item.get('video_versions') else None
                 }
     except:
@@ -140,7 +140,7 @@ def get_reel_info(session, shortcode):
 
         views_match = re.search(r'"play_count":\s*(\d+)', html) or re.search(r'"video_view_count":\s*(\d+)', html)
         likes_match = re.search(r'"like_count":\s*(\d+)', html)
-        caption_match = re.search(r'"text":\s*"([^"]{0,200})', html)
+        caption_match = re.search(r'"text":\s*"([^"]*)', html)
 
         return {
             'shortcode': shortcode,
@@ -232,7 +232,7 @@ def get_user_reels(session, username, max_reels=50, progress_callback=None):
                     'views': media.get('play_count', 0),
                     'likes': media.get('like_count', 0),
                     'comments': media.get('comment_count', 0),
-                    'caption': (media.get('caption', {}) or {}).get('text', '')[:200],
+                    'caption': (media.get('caption', {}) or {}).get('text', ''),
                     'video_url': media.get('video_versions', [{}])[0].get('url') if media.get('video_versions') else None
                 }
                 reels.append(reel)
@@ -254,6 +254,48 @@ def get_user_reels(session, username, max_reels=50, progress_callback=None):
             break
 
     return reels, profile, None
+
+
+def fetch_single_reel(shortcode, cookies_path, progress_callback=None):
+    """
+    Fetch a single Instagram reel by its shortcode using yt-dlp.
+
+    Args:
+        shortcode: The reel shortcode (e.g., 'DQ4Y454kUoa' from instagram.com/reel/DQ4Y454kUoa/)
+        cookies_path: Path to cookies.txt file
+        progress_callback: Optional callback for progress updates
+
+    Returns:
+        tuple: (reel_data, error_message)
+        - reel_data: Dict with reel info if successful, None if failed
+        - error_message: Error string if failed, None if successful
+    """
+    logger.info("REEL", f"Fetching single reel: {shortcode}")
+
+    if progress_callback:
+        progress_callback(f"Fetching reel {shortcode}...")
+
+    reel_url = f"https://www.instagram.com/reel/{shortcode}/"
+
+    try:
+        # Use the same method that works for profile scrapes - get_reel_info()
+        session = create_session(cookies_path)
+        reel = get_reel_info(session, shortcode)
+
+        if reel:
+            # Add owner field (get_reel_info doesn't include it, but we can leave it as unknown)
+            reel['owner'] = reel.get('owner', 'unknown')
+            logger.info("REEL", f"Successfully fetched reel {shortcode}", {
+                "views": reel.get('views', 0),
+                "likes": reel.get('likes', 0)
+            })
+            return reel, None
+        else:
+            return None, f"Could not fetch reel '{shortcode}'. It may be private, deleted, or the shortcode is invalid."
+
+    except Exception as e:
+        logger.warning("REEL", f"Failed to fetch reel {shortcode}: {e}")
+        return None, f"Failed to fetch reel: {e}"
 
 
 def download_video(reel_url, output_path, cookies_file, video_url=None, max_retries=3):
@@ -309,13 +351,13 @@ def download_video(reel_url, output_path, cookies_file, video_url=None, max_retr
                 if attempt < max_retries - 1:
                     time.sleep(1)
 
-    # Fallback to yt-dlp
+    # Fallback to yt-dlp (use python -m yt_dlp to avoid PATH issues on Windows)
     logger.debug("DOWNLOAD", f"Trying yt-dlp fallback for {shortcode}")
     for attempt in range(max_retries):
         try:
             import subprocess
             result = subprocess.run([
-                'yt-dlp',
+                sys.executable, '-m', 'yt_dlp',
                 '--cookies', cookies_file,
                 '-o', str(output_path),
                 '--quiet',

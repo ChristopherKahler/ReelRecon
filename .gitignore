@@ -72,3 +72,12 @@ ehthumbs.db
 
 # Cache directory
 cache/
+
+# PyInstaller build artifacts
+installer/build/
+installer/dist/
+*.exe
+*.spec
+
+# Windows shortcuts (user-generated)
+*.lnk

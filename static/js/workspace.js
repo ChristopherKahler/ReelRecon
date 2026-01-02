@@ -23,18 +23,29 @@ document.addEventListener('DOMContentLoaded', () => {
     // Load initial data (non-blocking)
     loadInitialData();
 
+    // Start server heartbeat (for auto-reconnect on restart)
+    startServerHeartbeat();
+
     console.log('[Workspace] Ready.');
 });
 
 function setupEventListeners() {
     // Quick action buttons
     const newScrapeBtn = document.getElementById('btn-new-scrape');
+    const directReelBtn = document.getElementById('btn-direct-reel');
     const newAnalysisBtn = document.getElementById('btn-new-analysis');
 
     if (newScrapeBtn) {
         newScrapeBtn.addEventListener('click', () => {
             console.log('[Workspace] New Scrape clicked');
             openModal('new-scrape');
+        });
+    }
+
+    if (directReelBtn) {
+        directReelBtn.addEventListener('click', () => {
+            console.log('[Workspace] Direct Reel clicked');
+            openModal('direct-reel');
         });
     }
 
@@ -142,13 +153,21 @@ function setupEventListeners() {
         }
     });
 
-    // Close modal when clicking overlay
+    // Close modal when clicking overlay (but not on drag)
     const modalOverlay = document.getElementById('modal-overlay');
     if (modalOverlay) {
-        modalOverlay.addEventListener('click', (e) => {
-            if (e.target === modalOverlay) {
+        let mouseDownTarget = null;
+
+        modalOverlay.addEventListener('mousedown', (e) => {
+            mouseDownTarget = e.target;
+        });
+
+        modalOverlay.addEventListener('mouseup', (e) => {
+            // Only close if both mousedown AND mouseup were on the overlay itself
+            if (e.target === modalOverlay && mouseDownTarget === modalOverlay) {
                 closeModal();
             }
+            mouseDownTarget = null;
         });
     }
 }
@@ -240,6 +259,7 @@ Store.subscribe((state) => {
 });
 
 let jobsPollingInterval = null;
+let trackedActiveJobs = new Set(); // Track job IDs to detect completion
 
 async function loadJobs(type = 'active') {
     const list = document.getElementById('jobs-list');
@@ -251,11 +271,27 @@ async function loadJobs(type = 'active') {
         const data = await response.json();
 
         if (data.success) {
+            if (type === 'active') {
+                // Check for completed jobs (were tracked but no longer in active list)
+                const currentJobIds = new Set(data.jobs.map(j => j.id));
+                for (const trackedId of trackedActiveJobs) {
+                    if (!currentJobIds.has(trackedId)) {
+                        // Job finished! Notify user
+                        showJobCompletionNotification(trackedId);
+                        trackedActiveJobs.delete(trackedId);
+                    }
+                }
+                // Update tracked jobs
+                data.jobs.forEach(j => trackedActiveJobs.add(j.id));
+            }
+
             renderJobs(data.jobs, type);
 
             // Start polling for active jobs
-            if (type === 'active') {
+            if (type === 'active' && data.jobs.length > 0) {
                 startJobsPolling();
+            } else if (type === 'active' && data.jobs.length === 0) {
+                stopJobsPolling();
             } else {
                 stopJobsPolling();
             }
@@ -266,17 +302,67 @@ async function loadJobs(type = 'active') {
     }
 }
 
+function showJobCompletionNotification(jobId) {
+    console.log('[Workspace] Job completed:', jobId);
+
+    // Flash the nav items to indicate completion
+    const jobsNav = document.querySelector('[data-nav="jobs"]');
+    const libraryNav = document.querySelector('[data-nav="library"]');
+
+    if (jobsNav) {
+        jobsNav.classList.add('job-completed');
+        setTimeout(() => jobsNav.classList.remove('job-completed'), 3000);
+    }
+    if (libraryNav) {
+        libraryNav.classList.add('job-completed');
+        setTimeout(() => libraryNav.classList.remove('job-completed'), 3000);
+    }
+
+    // Reload library to show new assets
+    reloadAssets();
+
+    // If on jobs view, refresh to show updated state
+    if (Store.getState().ui.activeView === 'jobs') {
+        loadJobs('active');
+    }
+}
+
 function startJobsPolling() {
     stopJobsPolling();
+    // Poll every 1 second like the original scraper
     jobsPollingInterval = setInterval(() => {
         const activeView = Store.getState().ui.activeView;
-        const activeTab = document.querySelector('.tab.active');
+        const activeTab = document.querySelector('.jobs-tab.active');
         if (activeView === 'jobs' && activeTab?.dataset.tab === 'active') {
             loadJobs('active');
+        } else if (trackedActiveJobs.size > 0) {
+            // Keep polling even if not on jobs view, to detect completion
+            pollActiveJobsBackground();
         } else {
             stopJobsPolling();
         }
-    }, 3000); // Poll every 3 seconds
+    }, 1000); // Poll every 1 second
+}
+
+async function pollActiveJobsBackground() {
+    try {
+        const response = await fetch('/api/jobs/active');
+        const data = await response.json();
+        if (data.success) {
+            const currentJobIds = new Set(data.jobs.map(j => j.id));
+            for (const trackedId of trackedActiveJobs) {
+                if (!currentJobIds.has(trackedId)) {
+                    showJobCompletionNotification(trackedId);
+                    trackedActiveJobs.delete(trackedId);
+                }
+            }
+            if (trackedActiveJobs.size === 0) {
+                stopJobsPolling();
+            }
+        }
+    } catch (e) {
+        console.error('[Workspace] Background poll failed:', e);
+    }
 }
 
 function stopJobsPolling() {
@@ -329,21 +415,27 @@ function renderJobCard(job, listType) {
     const statusColor = statusColors[job.status] || '#6B7280';
     const typeIcon = typeIcons[job.type] || '📋';
     const createdDate = job.created_at ? new Date(job.created_at).toLocaleString() : '';
+    const isRunning = job.status === 'running' || job.status === 'starting';
+    const progressPct = job.progress_pct || 0;
 
-    // Progress bar for active jobs
-    const progressBar = listType === 'active' && job.progress_pct !== undefined ? `
-        <div class="job-progress-bar">
-            <div class="job-progress-fill" style="width: ${job.progress_pct}%"></div>
+    // Always show progress bar for active jobs (use existing progress-bar styles with pulse)
+    const progressBar = listType === 'active' ? `
+        <div class="progress-bar" style="margin: var(--space-sm) 0;">
+            <div class="progress-fill" style="width: ${progressPct}%"></div>
         </div>
     ` : '';
 
     const progressText = job.progress || job.phase || '';
 
-    const isRunning = job.status === 'running' || job.status === 'starting';
-    const cardClass = `job-card${isRunning ? ' running' : ''}`;
+    // Abort button for active jobs
+    const abortButton = listType === 'active' ? `
+        <button class="btn btn-abort" onclick="abortJob('${job.id}', '${job.type}', '${job.batch_id || ''}'); event.stopPropagation();">
+            Abort
+        </button>
+    ` : '';
 
     return `
-        <div class="${cardClass}" data-job-id="${job.id}" data-job-type="${job.type}">
+        <div class="job-card${isRunning ? ' running' : ''}" data-job-id="${job.id}" data-job-type="${job.type}">
             <div class="job-card-header">
                 <span class="job-type-icon">${typeIcon}</span>
                 <span class="job-title">${job.title}</span>
@@ -357,6 +449,7 @@ function renderJobCard(job, listType) {
                 <span class="job-date">${createdDate}</span>
                 ${job.platform ? `<span class="job-platform">${job.platform}</span>` : ''}
             </div>
+            ${abortButton}
         </div>
     `;
 }
@@ -367,6 +460,39 @@ function openJobDetail(jobId, jobType) {
     // For now, could navigate to the existing report page
     if (jobType === 'analysis') {
         window.open(`/skeleton-ripper/report/${jobId}`, '_blank');
+    }
+}
+
+async function abortJob(jobId, jobType, batchId) {
+    console.log('[Workspace] Aborting job:', jobId, jobType, batchId ? `(batch: ${batchId})` : '');
+
+    // Confirm with user
+    const confirmMessage = batchId
+        ? 'Abort this batch? This will stop the current scrape and cancel all pending items.'
+        : 'Abort this job? Any partial data will be cleaned up.';
+
+    if (!confirm(confirmMessage)) {
+        return;
+    }
+
+    try {
+        let result;
+        if (batchId) {
+            // Abort entire batch
+            result = await API.abortBatch(batchId);
+        } else if (jobType === 'scrape') {
+            result = await API.abortScrape(jobId);
+        } else if (jobType === 'analysis') {
+            result = await API.abortAnalysis(jobId);
+        }
+
+        console.log('[Workspace] Abort result:', result);
+
+        // Refresh jobs list
+        loadJobs('active');
+    } catch (error) {
+        console.error('[Workspace] Abort failed:', error);
+        alert('Failed to abort job: ' + error.message);
     }
 }
 
@@ -547,6 +673,9 @@ async function openAssetDetail(assetId) {
     const panel = document.getElementById('detail-panel');
     const content = document.getElementById('detail-panel-content');
 
+    // Store the assetId immediately so delete works even if load fails
+    content.dataset.assetId = assetId;
+
     // Show loading state
     content.innerHTML = '<div class="detail-loading">Loading...</div>';
     panel.classList.add('open');
@@ -557,7 +686,13 @@ async function openAssetDetail(assetId) {
         renderDetailPanel(asset);
     } catch (error) {
         console.error('[Workspace] Failed to load asset:', error);
-        content.innerHTML = '<div class="detail-loading">Failed to load asset</div>';
+        // Show error state but keep assetId so delete still works
+        content.innerHTML = `
+            <div class="detail-error">
+                <p>Failed to load asset</p>
+                <p class="detail-error-hint">You can still delete this item using the trash icon above.</p>
+            </div>
+        `;
     }
 }
 
@@ -627,7 +762,7 @@ function renderDetailPanel(asset) {
         <div class="detail-section">
             <div class="detail-section-title">Content</div>
             <div class="detail-body-content">
-                <div class="detail-body">${escapeHtml(asset.content || asset.preview || 'No content available')}</div>
+                ${renderAssetContent(asset)}
             </div>
         </div>
 
@@ -642,7 +777,176 @@ function renderDetailPanel(asset) {
     `;
 }
 
+function renderAssetContent(asset) {
+    // Handle scrape reports - show full reel details like v2 modal
+    if (asset.type === 'scrape_report' && asset.top_reels && asset.top_reels.length > 0) {
+        return `
+            <div class="scrape-results">
+                <div class="scrape-summary">
+                    <strong>${asset.top_reels.length} reels</strong> from @${asset.username}
+                </div>
+                <div class="reels-accordion">
+                    ${asset.top_reels.map((reel, i) => renderReelAccordionItem(reel, i, asset.id)).join('')}
+                </div>
+            </div>
+        `;
+    }
+
+    // Handle other asset types with text content
+    if (typeof asset.content === 'string') {
+        return `<div class="detail-body">${escapeHtml(asset.content)}</div>`;
+    }
+
+    // Fallback
+    return `<div class="detail-body">${escapeHtml(asset.preview || 'No content available')}</div>`;
+}
+
+function renderReelAccordionItem(reel, index, scrapeId) {
+    const views = reel.play_count || reel.plays || reel.views || 0;
+    const likes = reel.like_count || reel.likes || 0;
+    const comments = reel.comment_count || reel.comments || 0;
+    const caption = reel.caption || 'No caption';
+    const transcript = reel.transcript || null;
+    const url = reel.url || reel.video_url || '';
+    const shortcode = reel.shortcode || reel.id || '';
+
+    return `
+        <div class="reel-accordion-item" data-index="${index}">
+            <div class="reel-accordion-header" onclick="toggleReelAccordion(${index})">
+                <div class="reel-header-left">
+                    <span class="reel-index">#${index + 1}</span>
+                    <span class="reel-header-caption">${escapeHtml(caption.substring(0, 60))}${caption.length > 60 ? '...' : ''}</span>
+                </div>
+                <div class="reel-header-right">
+                    <span class="reel-stat-mini">${formatNumber(views)} views</span>
+                    ${transcript ? '<span class="reel-has-transcript">📝</span>' : ''}
+                    <span class="reel-accordion-arrow">▼</span>
+                </div>
+            </div>
+            <div class="reel-accordion-body" id="reel-body-${index}" style="display: none;">
+                <!-- Stats Row -->
+                <div class="reel-stats-row">
+                    <div class="reel-stat">
+                        <span class="reel-stat-value">${formatNumber(views)}</span>
+                        <span class="reel-stat-label">VIEWS</span>
+                    </div>
+                    <div class="reel-stat">
+                        <span class="reel-stat-value">${formatNumber(likes)}</span>
+                        <span class="reel-stat-label">LIKES</span>
+                    </div>
+                    <div class="reel-stat">
+                        <span class="reel-stat-value">${formatNumber(comments)}</span>
+                        <span class="reel-stat-label">COMMENTS</span>
+                    </div>
+                </div>
+
+                <!-- URL -->
+                ${url ? `
+                <div class="reel-section">
+                    <div class="reel-section-title">URL</div>
+                    <div class="reel-url-row">
+                        <code class="reel-url">${escapeHtml(url)}</code>
+                        <button class="btn-copy-sm" onclick="copyUrlFromReel(${index})">COPY</button>
+                    </div>
+                </div>
+                ` : ''}
+
+                <!-- Caption -->
+                <div class="reel-section">
+                    <div class="reel-section-title">CAPTION / HOOK</div>
+                    <div class="reel-caption-full">${escapeHtml(caption)}</div>
+                </div>
+
+                <!-- Transcript -->
+                ${transcript ? `
+                <div class="reel-section">
+                    <div class="reel-section-title">TRANSCRIPT</div>
+                    <div class="reel-transcript">${escapeHtml(transcript)}</div>
+                    <button class="btn-copy-sm" onclick="copyTranscriptFromReel(${index})">COPY TRANSCRIPT</button>
+                </div>
+                ` : `
+                <div class="reel-section reel-no-transcript">
+                    <div class="reel-section-title">TRANSCRIPT</div>
+                    <div class="reel-transcript-empty">No transcript available</div>
+                </div>
+                `}
+
+                <!-- Actions -->
+                <div class="reel-actions">
+                    ${url ? `<a href="${escapeHtml(url)}" target="_blank" class="btn btn-secondary btn-sm">OPEN IN IG</a>` : ''}
+                    <button class="btn btn-secondary btn-sm" onclick="copyReelForAI(${index})">COPY FOR AI</button>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function toggleReelAccordion(index) {
+    const body = document.getElementById(`reel-body-${index}`);
+    const item = body.closest('.reel-accordion-item');
+    const arrow = item.querySelector('.reel-accordion-arrow');
+
+    if (body.style.display === 'none') {
+        body.style.display = 'block';
+        item.classList.add('expanded');
+        arrow.textContent = '▲';
+    } else {
+        body.style.display = 'none';
+        item.classList.remove('expanded');
+        arrow.textContent = '▼';
+    }
+}
+
+function copyToClipboard(text, btn) {
+    navigator.clipboard.writeText(text).then(() => {
+        if (btn) {
+            const original = btn.textContent;
+            btn.textContent = '✓ COPIED';
+            setTimeout(() => btn.textContent = original, 1500);
+        }
+    });
+}
+
+function copyReelForAI(index) {
+    const item = document.querySelector(`.reel-accordion-item[data-index="${index}"]`);
+    if (!item) return;
+
+    const caption = item.querySelector('.reel-caption-full')?.textContent || '';
+    const transcript = item.querySelector('.reel-transcript')?.textContent || '';
+
+    let text = '';
+    if (caption) text += `CAPTION:\n${caption}\n\n`;
+    if (transcript) text += `TRANSCRIPT:\n${transcript}`;
+
+    copyToClipboard(text.trim(), item.querySelector('.reel-actions .btn:last-child'));
+}
+
+function copyTranscriptFromReel(index) {
+    const item = document.querySelector(`.reel-accordion-item[data-index="${index}"]`);
+    if (!item) return;
+
+    const transcript = item.querySelector('.reel-transcript')?.textContent || '';
+    const btn = item.querySelector('.reel-section .btn-copy-sm');
+    copyToClipboard(transcript, btn);
+}
+
+function copyUrlFromReel(index) {
+    const item = document.querySelector(`.reel-accordion-item[data-index="${index}"]`);
+    if (!item) return;
+
+    const url = item.querySelector('.reel-url')?.textContent || '';
+    const btn = item.querySelector('.reel-url-row .btn-copy-sm');
+    copyToClipboard(url, btn);
+}
+
+function formatNumber(num) {
+    if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+    if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+    return num.toString();
+}
+
 function escapeHtml(text) {
+    if (typeof text !== 'string') return '';
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
@@ -694,11 +998,16 @@ async function copyAssetContent() {
 async function deleteAsset() {
     const content = document.getElementById('detail-panel-content');
     const assetId = content.dataset.assetId;
-    if (!assetId) return;
 
-    if (!confirm('Are you sure you want to delete this asset?')) return;
+    console.log('[Workspace] Delete requested for asset:', assetId);
+
+    if (!assetId) {
+        console.error('[Workspace] No asset ID found in detail panel');
+        return;
+    }
 
     try {
+        console.log('[Workspace] Sending delete request for:', assetId);
         await API.deleteAsset(assetId);
         closeAssetDetail();
         // Remove from store
@@ -706,10 +1015,12 @@ async function deleteAsset() {
         const assets = state.assets.filter(a => a.id !== assetId);
         Store.dispatch({ type: 'SET_ASSETS', payload: assets });
         updateAssetCount(assets.length);
-        console.log('[Workspace] Asset deleted:', assetId);
+        console.log('[Workspace] Asset deleted successfully:', assetId);
+
+        // Reload assets to ensure UI is in sync
+        loadInitialData();
     } catch (error) {
         console.error('[Workspace] Failed to delete:', error);
-        alert('Failed to delete asset');
     }
 }
 
@@ -735,6 +1046,9 @@ function openModal(modalType) {
     if (modalType === 'new-scrape') {
         content.innerHTML = renderNewScrapeModal();
         setupNewScrapeModal();
+    } else if (modalType === 'direct-reel') {
+        content.innerHTML = renderDirectReelModal();
+        setupDirectReelModal();
     } else if (modalType === 'new-analysis') {
         content.innerHTML = renderNewAnalysisModal();
         setupNewAnalysisModal();
@@ -770,34 +1084,55 @@ function renderNewScrapeModal() {
             </div>
 
             <div class="form-group">
-                <label class="form-label">Username</label>
-                <input type="text" id="scrape-username" class="form-input" placeholder="@username or profile URL">
-                <p class="form-hint">Enter username without @ or paste profile URL</p>
+                <label class="form-label">Target Creators</label>
+                <textarea id="scrape-usernames" class="form-input form-textarea" rows="3" placeholder="garyvee&#10;hormozi&#10;nathanbarry"></textarea>
+                <p class="form-hint">One username per line (up to 5 creators). No @ needed.</p>
             </div>
 
-            <div class="form-group">
-                <label class="form-label">Number of Reels</label>
-                <div class="number-input-group">
-                    <input type="number" id="scrape-count" class="form-input" value="5" min="1" max="20">
-                    <span class="form-hint">Max 20</span>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Max Reels</label>
+                    <input type="number" id="scrape-max-reels" class="form-input" value="100" min="1" max="500">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Top N</label>
+                    <input type="number" id="scrape-top-n" class="form-input" value="10" min="1" max="100">
+                    <p class="form-hint">Filter to top performing</p>
                 </div>
             </div>
 
             <div class="form-group">
-                <label class="form-label">Date Range</label>
-                <select id="scrape-date-range" class="form-select">
-                    <option value="">All time</option>
-                    <option value="30">Last 30 days</option>
-                    <option value="60">Last 60 days</option>
-                    <option value="90">Last 90 days</option>
-                </select>
+                <label class="form-label">Extraction Options</label>
+                <div class="checkbox-stack">
+                    <label class="checkbox-group">
+                        <input type="checkbox" id="scrape-download-videos">
+                        <span>Download Videos</span>
+                    </label>
+                    <label class="checkbox-group">
+                        <input type="checkbox" id="scrape-transcribe">
+                        <span>Transcribe</span>
+                    </label>
+                </div>
             </div>
 
-            <div class="form-group">
-                <label class="checkbox-group">
-                    <input type="checkbox" id="scrape-transcribe" checked>
-                    <span>Transcribe audio with Whisper</span>
-                </label>
+            <div id="transcription-config" class="form-group conditional-section" style="display: none;">
+                <label class="form-label">Transcription Method</label>
+                <select id="scrape-transcription-method" class="form-select">
+                    <option value="local">Local (Whisper)</option>
+                    <option value="openai">OpenAI API</option>
+                </select>
+                <p class="form-hint" id="transcription-method-hint">Uses local Whisper model (free, requires download)</p>
+
+                <div id="local-model-config" class="form-group" style="margin-top: var(--space-md);">
+                    <label class="form-label">Local Model</label>
+                    <select id="scrape-local-model" class="form-select">
+                        <option value="tiny.en">tiny.en (39MB, fastest)</option>
+                        <option value="base.en">base.en (74MB, fast)</option>
+                        <option value="small.en" selected>small.en (244MB, recommended)</option>
+                        <option value="medium.en">medium.en (769MB, accurate)</option>
+                        <option value="large">large (1.5GB, most accurate)</option>
+                    </select>
+                </div>
             </div>
         </div>
         <div class="modal-footer">
@@ -820,6 +1155,27 @@ function setupNewScrapeModal() {
         });
     });
 
+    // Transcribe checkbox → show/hide transcription config
+    const transcribeCheckbox = document.getElementById('scrape-transcribe');
+    const transcriptionConfig = document.getElementById('transcription-config');
+
+    transcribeCheckbox.addEventListener('change', () => {
+        transcriptionConfig.style.display = transcribeCheckbox.checked ? 'block' : 'none';
+    });
+
+    // Transcription method → show/hide local model config
+    const methodSelect = document.getElementById('scrape-transcription-method');
+    const localModelConfig = document.getElementById('local-model-config');
+    const methodHint = document.getElementById('transcription-method-hint');
+
+    methodSelect.addEventListener('change', () => {
+        const isLocal = methodSelect.value === 'local';
+        localModelConfig.style.display = isLocal ? 'block' : 'none';
+        methodHint.textContent = isLocal
+            ? 'Uses local Whisper model (free, requires download)'
+            : 'Uses OpenAI Whisper API (requires API key, fast)';
+    });
+
     // Start scrape
     document.getElementById('btn-start-scrape').addEventListener('click', startScrape);
 }
@@ -830,14 +1186,29 @@ async function startScrape() {
 
     // Get form values
     const platform = document.querySelector('.toggle-btn[data-platform].active').dataset.platform;
-    const username = document.getElementById('scrape-username').value.trim();
-    const count = parseInt(document.getElementById('scrape-count').value) || 5;
-    const dateRange = document.getElementById('scrape-date-range').value;
+    const usernamesRaw = document.getElementById('scrape-usernames').value.trim();
+    const maxReels = parseInt(document.getElementById('scrape-max-reels').value) || 100;
+    const topN = parseInt(document.getElementById('scrape-top-n').value) || 10;
+    const downloadVideos = document.getElementById('scrape-download-videos').checked;
     const transcribe = document.getElementById('scrape-transcribe').checked;
+    const transcriptionMethod = document.getElementById('scrape-transcription-method').value;
+    const localModel = document.getElementById('scrape-local-model').value;
+
+    // Parse usernames (one per line, clean up)
+    const usernames = usernamesRaw
+        .split('\n')
+        .map(u => u.trim().replace('@', '').replace(/^https?:\/\/(www\.)?(instagram|tiktok)\.com\//, '').replace(/\/$/, ''))
+        .filter(u => u.length > 0);
 
     // Validate
-    if (!username) {
-        errorEl.textContent = 'Please enter a username';
+    if (usernames.length === 0) {
+        errorEl.textContent = 'Please enter at least one username';
+        errorEl.style.display = 'block';
+        return;
+    }
+
+    if (usernames.length > 5) {
+        errorEl.textContent = 'Maximum 5 creators per batch';
         errorEl.style.display = 'block';
         return;
     }
@@ -848,15 +1219,25 @@ async function startScrape() {
     errorEl.style.display = 'none';
 
     try {
-        const result = await API.startScrape({
+        const result = await API.startBatchScrape({
             platform,
-            username: username.replace('@', ''),
-            count,
-            date_range_days: dateRange ? parseInt(dateRange) : null,
-            transcribe
+            usernames,
+            max_reels: maxReels,
+            top_n: topN,
+            download: downloadVideos,
+            transcribe,
+            transcribe_provider: transcribe ? transcriptionMethod : null,
+            whisper_model: transcribe && transcriptionMethod === 'local' ? localModel : null
         });
 
-        console.log('[Workspace] Scrape started:', result);
+        console.log('[Workspace] Batch scrape started:', result);
+
+        // Track batch job for completion detection
+        if (result.batch_id) {
+            trackedActiveJobs.add(result.batch_id);
+            startJobsPolling();
+        }
+
         closeModal();
 
         // Navigate to jobs view
@@ -867,6 +1248,220 @@ async function startScrape() {
         errorEl.style.display = 'block';
         submitBtn.disabled = false;
         submitBtn.textContent = 'Start Scrape';
+    }
+}
+
+// Direct Reel Modal
+function renderDirectReelModal() {
+    return `
+        <div class="modal-header">
+            <h2 class="modal-title">Direct Reel</h2>
+            <button class="btn-icon" id="btn-close-modal">×</button>
+        </div>
+        <div class="modal-body">
+            <div id="modal-error" class="modal-error" style="display: none;"></div>
+
+            <div class="form-group">
+                <label class="form-label">Platform</label>
+                <div class="toggle-group">
+                    <button type="button" class="toggle-btn active" data-platform="instagram">Instagram</button>
+                    <button type="button" class="toggle-btn" data-platform="tiktok">TikTok</button>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Input Type</label>
+                <div class="toggle-group">
+                    <button type="button" class="toggle-btn active" data-input-type="url">URL</button>
+                    <button type="button" class="toggle-btn" data-input-type="id">ID</button>
+                </div>
+                <p class="form-hint" id="input-type-hint">Paste full reel/video URLs</p>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Reels</label>
+                <textarea id="direct-reel-inputs" class="form-input form-textarea" rows="5" placeholder="https://instagram.com/reel/ABC123&#10;https://instagram.com/reel/XYZ789"></textarea>
+                <p class="form-hint">One per line (up to 5 reels)</p>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Extraction Options</label>
+                <div class="checkbox-stack">
+                    <label class="checkbox-group">
+                        <input type="checkbox" id="direct-download-videos">
+                        <span>Download Videos</span>
+                    </label>
+                    <label class="checkbox-group">
+                        <input type="checkbox" id="direct-transcribe">
+                        <span>Transcribe</span>
+                    </label>
+                </div>
+            </div>
+
+            <div id="direct-transcription-config" class="form-group conditional-section" style="display: none;">
+                <label class="form-label">Transcription Method</label>
+                <select id="direct-transcription-method" class="form-select">
+                    <option value="local">Local (Whisper)</option>
+                    <option value="openai">OpenAI API</option>
+                </select>
+                <p class="form-hint" id="direct-transcription-hint">Uses local Whisper model (free, requires download)</p>
+
+                <div id="direct-local-model-config" class="form-group" style="margin-top: var(--space-md);">
+                    <label class="form-label">Local Model</label>
+                    <select id="direct-local-model" class="form-select">
+                        <option value="tiny.en">tiny.en (39MB, fastest)</option>
+                        <option value="base.en">base.en (74MB, fast)</option>
+                        <option value="small.en" selected>small.en (244MB, recommended)</option>
+                        <option value="medium.en">medium.en (769MB, accurate)</option>
+                        <option value="large">large (1.5GB, most accurate)</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" id="btn-cancel-direct">Cancel</button>
+            <button class="btn btn-primary" id="btn-start-direct">Grab Reels</button>
+        </div>
+    `;
+}
+
+function setupDirectReelModal() {
+    // Close buttons
+    document.getElementById('btn-close-modal').addEventListener('click', closeModal);
+    document.getElementById('btn-cancel-direct').addEventListener('click', closeModal);
+
+    // Platform toggle
+    document.querySelectorAll('.toggle-btn[data-platform]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            document.querySelectorAll('.toggle-btn[data-platform]').forEach(b => b.classList.remove('active'));
+            e.target.classList.add('active');
+            updateDirectReelPlaceholder();
+        });
+    });
+
+    // Input type toggle (URL/ID)
+    document.querySelectorAll('.toggle-btn[data-input-type]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            document.querySelectorAll('.toggle-btn[data-input-type]').forEach(b => b.classList.remove('active'));
+            e.target.classList.add('active');
+            updateDirectReelPlaceholder();
+        });
+    });
+
+    // Transcribe checkbox → show/hide config
+    const transcribeCheckbox = document.getElementById('direct-transcribe');
+    const transcriptionConfig = document.getElementById('direct-transcription-config');
+
+    transcribeCheckbox.addEventListener('change', () => {
+        transcriptionConfig.style.display = transcribeCheckbox.checked ? 'block' : 'none';
+    });
+
+    // Transcription method toggle
+    const methodSelect = document.getElementById('direct-transcription-method');
+    const localModelConfig = document.getElementById('direct-local-model-config');
+    const methodHint = document.getElementById('direct-transcription-hint');
+
+    methodSelect.addEventListener('change', () => {
+        const isLocal = methodSelect.value === 'local';
+        localModelConfig.style.display = isLocal ? 'block' : 'none';
+        methodHint.textContent = isLocal
+            ? 'Uses local Whisper model (free, requires download)'
+            : 'Uses OpenAI Whisper API (requires API key, fast)';
+    });
+
+    // Start button
+    document.getElementById('btn-start-direct').addEventListener('click', startDirectScrape);
+}
+
+function updateDirectReelPlaceholder() {
+    const platform = document.querySelector('.toggle-btn[data-platform].active')?.dataset.platform || 'instagram';
+    const inputType = document.querySelector('.toggle-btn[data-input-type].active')?.dataset.inputType || 'url';
+    const textarea = document.getElementById('direct-reel-inputs');
+    const hint = document.getElementById('input-type-hint');
+
+    if (inputType === 'url') {
+        hint.textContent = 'Paste full reel/video URLs';
+        if (platform === 'instagram') {
+            textarea.placeholder = 'https://instagram.com/reel/ABC123\nhttps://instagram.com/reel/XYZ789';
+        } else {
+            textarea.placeholder = 'https://tiktok.com/@user/video/123456\nhttps://tiktok.com/@user/video/789012';
+        }
+    } else {
+        hint.textContent = 'Enter reel/video shortcodes or IDs';
+        if (platform === 'instagram') {
+            textarea.placeholder = 'ABC123\nXYZ789';
+        } else {
+            textarea.placeholder = '123456789\n987654321';
+        }
+    }
+}
+
+async function startDirectScrape() {
+    const errorEl = document.getElementById('modal-error');
+    const submitBtn = document.getElementById('btn-start-direct');
+
+    // Get form values
+    const platform = document.querySelector('.toggle-btn[data-platform].active').dataset.platform;
+    const inputType = document.querySelector('.toggle-btn[data-input-type].active').dataset.inputType;
+    const inputsRaw = document.getElementById('direct-reel-inputs').value.trim();
+    const downloadVideos = document.getElementById('direct-download-videos').checked;
+    const transcribe = document.getElementById('direct-transcribe').checked;
+    const transcriptionMethod = document.getElementById('direct-transcription-method').value;
+    const localModel = document.getElementById('direct-local-model').value;
+
+    // Parse inputs (one per line)
+    const inputs = inputsRaw
+        .split('\n')
+        .map(i => i.trim())
+        .filter(i => i.length > 0);
+
+    // Validate
+    if (inputs.length === 0) {
+        errorEl.textContent = 'Please enter at least one reel URL or ID';
+        errorEl.style.display = 'block';
+        return;
+    }
+
+    if (inputs.length > 5) {
+        errorEl.textContent = 'Maximum 5 reels per request';
+        errorEl.style.display = 'block';
+        return;
+    }
+
+    // Show loading
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span class="spinner"></span> Starting...';
+    errorEl.style.display = 'none';
+
+    try {
+        const result = await API.startDirectScrape({
+            platform,
+            input_type: inputType,
+            inputs,
+            download: downloadVideos,
+            transcribe,
+            transcribe_provider: transcribe ? transcriptionMethod : null,
+            whisper_model: transcribe && transcriptionMethod === 'local' ? localModel : null
+        });
+
+        console.log('[Workspace] Direct scrape started:', result);
+
+        // Track jobs
+        if (result.scrape_ids) {
+            result.scrape_ids.forEach(id => {
+                trackedActiveJobs.add(id);
+            });
+            startJobsPolling();
+        }
+
+        closeModal();
+        window.location.hash = '#jobs';
+    } catch (error) {
+        console.error('[Workspace] Failed to start direct scrape:', error);
+        errorEl.textContent = error.message || 'Failed to start scrape';
+        errorEl.style.display = 'block';
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Grab Reels';
     }
 }
 
@@ -887,8 +1482,10 @@ function renderNewAnalysisModal() {
                         <input type="text" class="form-input creator-input" placeholder="@username">
                     </div>
                 </div>
-                <button type="button" id="btn-add-creator" class="btn-add-row">+ Add Creator</button>
-                <p class="form-hint">Up to 5 creators</p>
+                <div class="add-row-container">
+                    <button type="button" id="btn-add-creator" class="btn-add-row">+ Add Creator</button>
+                    <span class="form-hint">Up to 5 creators</span>
+                </div>
             </div>
 
             <div class="form-group">
@@ -932,10 +1529,12 @@ async function setupNewAnalysisModal() {
         if (rows.length >= 5) return;
 
         const row = document.createElement('div');
-        row.className = 'multi-input-row';
+        row.className = 'multi-input-row has-remove';
         row.innerHTML = `
-            <input type="text" class="form-input creator-input" placeholder="@username">
-            <button type="button" class="btn-remove-row">×</button>
+            <div class="input-with-remove">
+                <input type="text" class="form-input creator-input" placeholder="@username">
+                <button type="button" class="btn-remove-row">×</button>
+            </div>
         `;
         list.appendChild(row);
 
@@ -1029,5 +1628,118 @@ async function startAnalysis() {
     }
 }
 
+// =========================================
+// SERVER HEARTBEAT (Auto-reconnect)
+// =========================================
+
+let heartbeatInterval = null;
+let serverWasDown = false;
+let reconnectOverlay = null;
+
+function startServerHeartbeat() {
+    // Check server every 3 seconds
+    heartbeatInterval = setInterval(checkServerHealth, 3000);
+}
+
+async function checkServerHealth() {
+    try {
+        const response = await fetch('/api/health', {
+            method: 'GET',
+            cache: 'no-store',
+            signal: AbortSignal.timeout(2000) // 2 second timeout
+        });
+
+        if (response.ok) {
+            if (serverWasDown) {
+                // Server came back! Auto-refresh
+                console.log('[Workspace] Server reconnected - refreshing...');
+                hideReconnectOverlay();
+                window.location.reload();
+            }
+        } else {
+            handleServerDown();
+        }
+    } catch (error) {
+        handleServerDown();
+    }
+}
+
+function handleServerDown() {
+    if (!serverWasDown) {
+        console.log('[Workspace] Server connection lost - showing reconnect overlay');
+        serverWasDown = true;
+        showReconnectOverlay();
+    }
+}
+
+function showReconnectOverlay() {
+    if (reconnectOverlay) return;
+
+    reconnectOverlay = document.createElement('div');
+    reconnectOverlay.id = 'reconnect-overlay';
+    reconnectOverlay.innerHTML = `
+        <div class="reconnect-content">
+            <div class="reconnect-spinner"></div>
+            <h3>Reconnecting...</h3>
+            <p>Server restarting. Will auto-refresh when ready.</p>
+        </div>
+    `;
+    reconnectOverlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(24, 24, 27, 0.95);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10000;
+    `;
+
+    const content = reconnectOverlay.querySelector('.reconnect-content');
+    content.style.cssText = `
+        text-align: center;
+        color: #fafafa;
+    `;
+
+    const spinner = reconnectOverlay.querySelector('.reconnect-spinner');
+    spinner.style.cssText = `
+        width: 48px;
+        height: 48px;
+        border: 4px solid #27272a;
+        border-top-color: #10b981;
+        border-radius: 50%;
+        margin: 0 auto 16px;
+        animation: spin 1s linear infinite;
+    `;
+
+    // Add keyframes for spinner
+    if (!document.getElementById('reconnect-styles')) {
+        const style = document.createElement('style');
+        style.id = 'reconnect-styles';
+        style.textContent = `@keyframes spin { to { transform: rotate(360deg); } }`;
+        document.head.appendChild(style);
+    }
+
+    document.body.appendChild(reconnectOverlay);
+}
+
+function hideReconnectOverlay() {
+    if (reconnectOverlay) {
+        reconnectOverlay.remove();
+        reconnectOverlay = null;
+    }
+    serverWasDown = false;
+}
+
 // Export for debugging
 window.ReelRecon = { Store, Router, API };
+
+// Expose accordion functions globally for onclick handlers
+window.toggleReelAccordion = toggleReelAccordion;
+window.copyToClipboard = copyToClipboard;
+window.copyReelForAI = copyReelForAI;
+window.copyTranscriptFromReel = copyTranscriptFromReel;
+window.copyUrlFromReel = copyUrlFromReel;
+window.abortJob = abortJob;
