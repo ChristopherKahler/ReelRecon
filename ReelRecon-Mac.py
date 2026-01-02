@@ -196,9 +196,6 @@ def open_webview_window():
     try:
         import webview
 
-        # Get icon path for macOS
-        icon_path = os.path.join(SCRIPT_DIR, 'ReelRecon.png')
-
         webview_window = webview.create_window(
             'ReelRecon',
             SERVER_URL,
@@ -217,6 +214,20 @@ def start_webview():
     if webview_window:
         try:
             import webview
+            # On Mac, try to set dock icon via PyObjC if available
+            try:
+                from AppKit import NSApplication, NSImage
+                icon_path = os.path.join(SCRIPT_DIR, 'ReelRecon.png')
+                if os.path.exists(icon_path):
+                    app = NSApplication.sharedApplication()
+                    icon = NSImage.alloc().initWithContentsOfFile_(icon_path)
+                    if icon:
+                        app.setApplicationIconImage_(icon)
+            except ImportError:
+                pass  # PyObjC not installed, icon won't change
+            except Exception as e:
+                print(f"[ICON] Failed to set dock icon: {e}")
+
             webview.start()
         except Exception as e:
             print(f"[WEBVIEW] Failed to start: {e}")

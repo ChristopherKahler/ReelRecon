@@ -296,7 +296,7 @@ class InstallerApp:
             subprocess.run(['python3', '-m', 'pip', 'install', '--upgrade', 'pip', '-q'],
                           capture_output=True)
             subprocess.run(['python3', '-m', 'pip', 'install',
-                          'flask', 'requests', 'pystray', 'Pillow', 'pywebview', '-q'],
+                          'flask', 'requests', 'pystray', 'Pillow', 'pywebview', 'pyobjc-framework-Cocoa', '-q'],
                           cwd=install_dir, capture_output=True)
 
             # Create app bundle
