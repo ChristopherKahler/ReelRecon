@@ -6,7 +6,7 @@ Set fso = CreateObject("Scripting.FileSystemObject")
 
 ' Get the directory where this script lives
 scriptPath = fso.GetParentFolderName(WScript.ScriptFullName)
-installerPath = scriptPath & "\ReelRecon-Installer.pyw"
+installerPath = scriptPath & "\lib\ReelRecon-Installer.pyw"
 
 ' Find pythonw.exe
 pythonwPath = ""

@@ -4,7 +4,7 @@
 
 # Get the directory where this script lives
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-INSTALLER="$SCRIPT_DIR/ReelRecon-Installer-Mac.py"
+INSTALLER="$SCRIPT_DIR/lib/ReelRecon-Installer-Mac.py"
 
 # Check for Python 3
 if ! command -v python3 &> /dev/null; then
