@@ -10,18 +10,19 @@ MAC USERS:
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-REQUIREMENTS:
-  • Python 3.10 or later (https://python.org/downloads)
-  • Git (https://git-scm.com/downloads)
-
 WHAT THE INSTALLER DOES:
-  1. Downloads ReelRecon from GitHub
-  2. Installs required Python packages
-  3. Creates a desktop shortcut (Windows) or app (Mac)
+  1. Checks for Python and Git
+  2. If missing, offers to download and install them automatically
+  3. Downloads ReelRecon from GitHub
+  4. Installs required Python packages
+  5. Creates a desktop shortcut (Windows) or app (Mac)
+
+NO PREREQUISITES REQUIRED!
+  The installer will guide you through installing everything needed.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 FILES:
-  Install-ReelRecon.vbs        ← Windows installer (click this)
+  Install-ReelRecon.vbs         ← Windows installer (click this)
   Install-ReelRecon-Mac.command ← Mac installer (click this)
-  lib/                         ← Installer code (don't modify)
+  lib/                          ← Installer code (don't modify)
