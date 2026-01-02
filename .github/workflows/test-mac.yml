@@ -30,7 +30,7 @@ jobs:
       run: |
         echo "Checking for Mac launcher..."
         test -f ReelRecon-Mac.py && echo "✓ ReelRecon-Mac.py exists" || exit 1
-        test -f installer/ReelRecon-Installer-Mac.py && echo "✓ Mac installer exists" || exit 1
+        test -f installer/lib/ReelRecon-Installer-Mac.py && echo "✓ Mac installer exists" || exit 1
 
     - name: Verify icons exist
       run: |
@@ -42,7 +42,7 @@ jobs:
       run: |
         echo "Checking Python syntax..."
         python -m py_compile ReelRecon-Mac.py
-        python -m py_compile installer/ReelRecon-Installer-Mac.py
+        python -m py_compile installer/lib/ReelRecon-Installer-Mac.py
         echo "✓ All Python files have valid syntax"
 
     - name: Test imports
