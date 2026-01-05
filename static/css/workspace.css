@@ -785,7 +785,7 @@ select.form-input {
     border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
     width: 90%;
-    max-width: 600px;
+    max-width: 90vw;
     max-height: 80vh;
     overflow: hidden;
 }
@@ -6966,4 +6966,128 @@ input[type="number"].form-input::-webkit-inner-spin-button {
 .inline-title-input:focus {
     outline: none;
     box-shadow: 0 0 0 2px var(--color-accent-dim);
+}
+
+/* =====================
+   REWRITE MODAL OVERRIDE
+   ===================== */
+#rewriteModal .modal-content {
+    max-width: 800px;
+    width: 95%;
+}
+
+/* Responsive modal body with scroll */
+#rewriteModal .modal-body {
+    overflow: auto;
+    max-height: calc(100% - 60px); /* Account for header */
+    flex: 1;
+}
+
+#rewriteModal .rewrite-layout {
+    min-width: 0; /* Allow flex children to shrink */
+}
+
+#rewriteModal .rewrite-wizard,
+#rewriteModal .rewrite-result-panel {
+    min-width: 280px;
+    overflow-y: auto;
+}
+
+/* =====================
+   MODAL DRAG & RESIZE
+   ===================== */
+
+/* Container for resize handles */
+.modal-resize-handles {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+    z-index: 10;
+}
+
+/* Base resize handle */
+.modal-resize-handle {
+    position: absolute;
+    pointer-events: auto;
+}
+
+/* Corner handles */
+.modal-resize-nw,
+.modal-resize-ne,
+.modal-resize-sw,
+.modal-resize-se {
+    width: 16px;
+    height: 16px;
+}
+
+.modal-resize-nw { top: -4px; left: -4px; cursor: nwse-resize; }
+.modal-resize-ne { top: -4px; right: -4px; cursor: nesw-resize; }
+.modal-resize-sw { bottom: -4px; left: -4px; cursor: nesw-resize; }
+.modal-resize-se { bottom: -4px; right: -4px; cursor: nwse-resize; }
+
+/* Edge handles */
+.modal-resize-n,
+.modal-resize-s {
+    height: 8px;
+    left: 16px;
+    right: 16px;
+}
+
+.modal-resize-n { top: -4px; cursor: ns-resize; }
+.modal-resize-s { bottom: -4px; cursor: ns-resize; }
+
+.modal-resize-e,
+.modal-resize-w {
+    width: 8px;
+    top: 16px;
+    bottom: 16px;
+}
+
+.modal-resize-e { right: -4px; cursor: ew-resize; }
+.modal-resize-w { left: -4px; cursor: ew-resize; }
+
+/* Drag handle styling */
+.modal-drag-handle {
+    cursor: move;
+}
+
+/* Active states */
+.modal-draggable-resizable {
+    /* Ready for manual positioning */
+}
+
+.modal-dragging {
+    opacity: 0.95;
+    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.5);
+}
+
+.modal-resizing {
+    opacity: 0.95;
+}
+
+/* Visual feedback on resize handles (optional - hover effect) */
+.modal-resize-handle:hover {
+    background: rgba(16, 185, 129, 0.1);
+}
+
+.modal-resize-nw:hover,
+.modal-resize-ne:hover,
+.modal-resize-sw:hover,
+.modal-resize-se:hover {
+    border-radius: 4px;
+}
+
+/* Ensure modal content fills available space when resized */
+.modal-draggable-resizable {
+    display: flex;
+    flex-direction: column;
+}
+
+.modal-draggable-resizable .modal-body {
+    flex: 1;
+    overflow: auto;
+    min-height: 0; /* Allow shrinking in flex */
 }

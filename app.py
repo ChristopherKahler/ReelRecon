@@ -2001,6 +2001,41 @@ def update_settings():
     return jsonify({'success': True})
 
 
+@app.route('/api/modal-bounds/<key>', methods=['GET'])
+def get_modal_bounds(key):
+    """Get saved modal bounds for a specific modal"""
+    config = load_config()
+    modal_bounds = config.get('modal_bounds', {})
+    bounds = modal_bounds.get(key)
+    return jsonify({'bounds': bounds})
+
+
+@app.route('/api/modal-bounds', methods=['POST'])
+def save_modal_bounds():
+    """Save modal bounds for persistence"""
+    data = request.json
+    key = data.get('key')
+    bounds = data.get('bounds')
+
+    if not key:
+        return jsonify({'error': 'Key is required'}), 400
+
+    config = load_config()
+
+    # Initialize modal_bounds dict if not exists
+    if 'modal_bounds' not in config:
+        config['modal_bounds'] = {}
+
+    # Save or remove bounds
+    if bounds:
+        config['modal_bounds'][key] = bounds
+    elif key in config['modal_bounds']:
+        del config['modal_bounds'][key]
+
+    save_config(config)
+    return jsonify({'success': True})
+
+
 # ============================================================================
 # UPDATE ENDPOINTS
 # ============================================================================

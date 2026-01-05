@@ -4190,6 +4190,16 @@ setTimeout(() => {
 
     // Load starred jobs count
     initStarredJobsCount();
+
+    // Initialize rewrite modal as draggable and resizable
+    if (typeof ModalUtils !== 'undefined') {
+        ModalUtils.makeDraggableResizable('#rewriteModal', {
+            persistKey: 'rewriteModalBounds',
+            minWidth: 500,
+            minHeight: 400,
+            dragHandle: '.modal-header'
+        });
+    }
 }, 100);
 
 // Export for debugging
