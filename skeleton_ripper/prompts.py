@@ -256,7 +256,7 @@ REQUIRED_SKELETON_FIELDS = [
 ]
 
 VALID_HOOK_TECHNIQUES = {'curiosity', 'contrast', 'result', 'question', 'story', 'shock'}
-VALID_VALUE_STRUCTURES = {'steps', 'single_insight', 'framework', 'story', 'listicle', 'transformation'}
+VALID_VALUE_STRUCTURES = {'steps', 'single_insight', 'framework', 'story', 'listicle', 'transformation', 'none'}
 VALID_CTA_TYPES = {'follow', 'comment', 'share', 'link', 'none'}
 
 

@@ -109,28 +109,57 @@ def create_session(cookies_path):
     return session
 
 
+def shortcode_to_media_id(shortcode):
+    """Convert Instagram shortcode to numeric media ID"""
+    alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'
+    media_id = 0
+    for char in shortcode:
+        media_id = media_id * 64 + alphabet.index(char)
+    return str(media_id)
+
+
 def get_reel_info(session, shortcode):
     """Get view count and details for a single reel"""
-    url = f"https://www.instagram.com/api/v1/media/{shortcode}/info/"
+    # Convert shortcode to numeric media_id - the API requires numeric ID, not shortcode
+    media_id = shortcode_to_media_id(shortcode)
+    url = f"https://www.instagram.com/api/v1/media/{media_id}/info/"
+
+    logger.debug("REEL_INFO", f"Fetching reel info for {shortcode}", {
+        "media_id": media_id,
+        "url": url
+    })
 
     try:
         resp = session.get(url)
+        logger.debug("REEL_INFO", f"API response status: {resp.status_code}")
+
         if resp.status_code == 200:
             data = resp.json()
             items = data.get('items', [])
             if items:
                 item = items[0]
+                views = item.get('play_count', 0) or item.get('view_count', 0)
+                likes = item.get('like_count', 0)
+                # Get owner username from user object
+                user = item.get('user', {}) or item.get('owner', {}) or {}
+                owner = user.get('username', 'unknown')
+                logger.debug("REEL_INFO", f"Got reel data: views={views}, likes={likes}, owner={owner}")
                 return {
                     'shortcode': shortcode,
                     'url': f"https://www.instagram.com/reel/{shortcode}/",
-                    'views': item.get('play_count', 0) or item.get('view_count', 0),
-                    'likes': item.get('like_count', 0),
+                    'views': views,
+                    'likes': likes,
                     'comments': item.get('comment_count', 0),
                     'caption': (item.get('caption', {}) or {}).get('text', ''),
-                    'video_url': item.get('video_versions', [{}])[0].get('url') if item.get('video_versions') else None
+                    'video_url': item.get('video_versions', [{}])[0].get('url') if item.get('video_versions') else None,
+                    'owner': owner
                 }
-    except:
-        pass
+            else:
+                logger.debug("REEL_INFO", "No items in API response")
+        else:
+            logger.debug("REEL_INFO", f"API returned non-200: {resp.status_code}")
+    except Exception as e:
+        logger.debug("REEL_INFO", f"API call failed: {e}")
 
     # Fallback: scrape from page
     try:
@@ -141,6 +170,8 @@ def get_reel_info(session, shortcode):
         views_match = re.search(r'"play_count":\s*(\d+)', html) or re.search(r'"video_view_count":\s*(\d+)', html)
         likes_match = re.search(r'"like_count":\s*(\d+)', html)
         caption_match = re.search(r'"text":\s*"([^"]*)', html)
+        # Try to extract owner username from page
+        owner_match = re.search(r'"username":\s*"([^"]+)"', html)
 
         return {
             'shortcode': shortcode,
@@ -148,7 +179,8 @@ def get_reel_info(session, shortcode):
             'views': int(views_match.group(1)) if views_match else 0,
             'likes': int(likes_match.group(1)) if likes_match else 0,
             'caption': caption_match.group(1) if caption_match else '',
-            'video_url': None
+            'video_url': None,
+            'owner': owner_match.group(1) if owner_match else 'unknown'
         }
     except:
         return None
@@ -238,7 +270,8 @@ def get_user_reels(session, username, max_reels=50, progress_callback=None):
                 reels.append(reel)
 
                 if progress_callback:
-                    progress_callback(f"Found {len(reels)} reels...")
+                    fetch_pct = 10 + int(min(len(reels) / max_reels, 1.0) * 5)  # 10-15% range
+                    progress_callback(f"Found {len(reels)} reels...", phase='fetching_profile', progress_pct=fetch_pct)
 
             if len(reels) >= max_reels:
                 break
@@ -273,7 +306,7 @@ def fetch_single_reel(shortcode, cookies_path, progress_callback=None):
     logger.info("REEL", f"Fetching single reel: {shortcode}")
 
     if progress_callback:
-        progress_callback(f"Fetching reel {shortcode}...")
+        progress_callback(f"Fetching reel {shortcode}...", phase='fetching_profile', progress_pct=10)
 
     reel_url = f"https://www.instagram.com/reel/{shortcode}/"
 
@@ -417,8 +450,10 @@ def transcribe_video(video_path, model, output_path=None, progress_callback=None
                 tick += 1
                 elapsed = int(time.time() - start_time)
                 prefix = f"{video_index}/{total_videos}" if video_index and total_videos else ""
+                # Calculate progress: 45-95% range based on video index
+                base_pct = 45 + int(((video_index - 1) / total_videos) * 50) if video_index and total_videos else 50
                 if progress_callback:
-                    progress_callback(f"Transcribing {prefix} - {elapsed}s elapsed (processing audio)...")
+                    progress_callback(f"Transcribing {prefix} - {elapsed}s elapsed (processing audio)...", phase='transcribing', progress_pct=base_pct)
                 logger.debug("TRANSCRIBE", f"Heartbeat: {video_name} - {elapsed}s elapsed")
 
     heartbeat_thread = None
@@ -451,80 +486,110 @@ def transcribe_video(video_path, model, output_path=None, progress_callback=None
             heartbeat_thread.join(timeout=1)
 
 
-def transcribe_video_openai(video_path, api_key, output_path=None, max_retries=3):
-    """Transcribe video using OpenAI Whisper API with retry logic."""
+def transcribe_video_openai(video_path, api_key, output_path=None, max_retries=3, progress_callback=None, video_index=None, total_videos=None):
+    """Transcribe video using OpenAI Whisper API with retry logic and heartbeat updates."""
+    import threading
+
     video_name = os.path.basename(str(video_path))
     url = "https://api.openai.com/v1/audio/transcriptions"
 
     logger.debug("TRANSCRIBE", f"Starting OpenAI transcription: {video_name}")
 
-    for attempt in range(max_retries):
-        try:
-            # Read the video file
-            with open(video_path, 'rb') as audio_file:
-                files = {
-                    'file': (os.path.basename(video_path), audio_file, 'video/mp4')
-                }
-                data = {
-                    'model': 'whisper-1',
-                    'language': 'en',
-                    'response_format': 'text'
-                }
-                headers = {
-                    'Authorization': f'Bearer {api_key}'
-                }
+    # Heartbeat mechanism to show progress during API call
+    stop_heartbeat = threading.Event()
+    start_time = time.time()
 
-                response = requests.post(url, headers=headers, files=files, data=data, timeout=300)
+    def heartbeat():
+        """Send periodic updates while transcription is running"""
+        while not stop_heartbeat.is_set():
+            stop_heartbeat.wait(5)  # Update every 5 seconds
+            if not stop_heartbeat.is_set():
+                elapsed = int(time.time() - start_time)
+                prefix = f"{video_index}/{total_videos}" if video_index and total_videos else ""
+                # Calculate progress: 40-95% range based on video index
+                base_pct = 40 + int(((video_index - 1) / total_videos) * 55) if video_index and total_videos else 50
+                if progress_callback:
+                    progress_callback(f"Transcribing {prefix} - {elapsed}s elapsed (OpenAI API)...", phase='transcribing', progress_pct=base_pct)
+                logger.debug("TRANSCRIBE", f"Heartbeat: {video_name} - {elapsed}s elapsed")
 
-                if response.status_code == 200:
-                    transcript = response.text.strip()
-                    logger.info("TRANSCRIBE", f"OpenAI transcription complete: {video_name}", {
-                        "transcript_length": len(transcript),
-                        "attempts": attempt + 1
-                    })
+    heartbeat_thread = None
+    if progress_callback:
+        heartbeat_thread = threading.Thread(target=heartbeat, daemon=True)
+        heartbeat_thread.start()
 
-                    # Save transcript if output path provided
-                    if output_path and transcript:
-                        with open(output_path, 'w', encoding='utf-8') as f:
-                            f.write(transcript)
+    try:
+        for attempt in range(max_retries):
+            try:
+                # Read the video file
+                with open(video_path, 'rb') as audio_file:
+                    files = {
+                        'file': (os.path.basename(video_path), audio_file, 'video/mp4')
+                    }
+                    data = {
+                        'model': 'whisper-1',
+                        'language': 'en',
+                        'response_format': 'text'
+                    }
+                    headers = {
+                        'Authorization': f'Bearer {api_key}'
+                    }
 
-                    return transcript
+                    response = requests.post(url, headers=headers, files=files, data=data, timeout=300)
 
-                elif response.status_code == 429:
-                    # Rate limited - wait and retry
-                    logger.warning("TRANSCRIBE", f"OpenAI rate limited for {video_name}, waiting...", {
-                        "attempt": attempt + 1
-                    })
-                    time.sleep(5 * (attempt + 1))  # Longer wait for rate limits
+                    if response.status_code == 200:
+                        transcript = response.text.strip()
+                        logger.info("TRANSCRIBE", f"OpenAI transcription complete: {video_name}", {
+                            "transcript_length": len(transcript),
+                            "attempts": attempt + 1
+                        })
 
-                elif response.status_code >= 500:
-                    # Server error - retry
-                    logger.warning("TRANSCRIBE", f"OpenAI server error {response.status_code}", {
-                        "video": video_name,
-                        "attempt": attempt + 1
-                    })
+                        # Save transcript if output path provided
+                        if output_path and transcript:
+                            with open(output_path, 'w', encoding='utf-8') as f:
+                                f.write(transcript)
+
+                        return transcript
+
+                    elif response.status_code == 429:
+                        # Rate limited - wait and retry
+                        logger.warning("TRANSCRIBE", f"OpenAI rate limited for {video_name}, waiting...", {
+                            "attempt": attempt + 1
+                        })
+                        time.sleep(5 * (attempt + 1))  # Longer wait for rate limits
+
+                    elif response.status_code >= 500:
+                        # Server error - retry
+                        logger.warning("TRANSCRIBE", f"OpenAI server error {response.status_code}", {
+                            "video": video_name,
+                            "attempt": attempt + 1
+                        })
+                        time.sleep(2 ** attempt)
+
+                    else:
+                        # Client error - don't retry
+                        logger.error("TRANSCRIBE", f"OpenAI API error for {video_name}", {
+                            "status_code": response.status_code,
+                            "response": response.text[:200] if response.text else None
+                        })
+                        return None
+
+            except requests.exceptions.Timeout:
+                logger.warning("TRANSCRIBE", f"OpenAI timeout for {video_name} (attempt {attempt + 1})")
+                if attempt < max_retries - 1:
                     time.sleep(2 ** attempt)
 
-                else:
-                    # Client error - don't retry
-                    logger.error("TRANSCRIBE", f"OpenAI API error for {video_name}", {
-                        "status_code": response.status_code,
-                        "response": response.text[:200] if response.text else None
-                    })
-                    return None
+            except Exception as e:
+                logger.error("TRANSCRIBE", f"OpenAI exception for {video_name}", exception=e)
+                if attempt < max_retries - 1:
+                    time.sleep(2)
 
-        except requests.exceptions.Timeout:
-            logger.warning("TRANSCRIBE", f"OpenAI timeout for {video_name} (attempt {attempt + 1})")
-            if attempt < max_retries - 1:
-                time.sleep(2 ** attempt)
+        logger.error("TRANSCRIBE", f"OpenAI transcription failed after {max_retries} attempts: {video_name}")
+        return None
 
-        except Exception as e:
-            logger.error("TRANSCRIBE", f"OpenAI exception for {video_name}", exception=e)
-            if attempt < max_retries - 1:
-                time.sleep(2)
-
-    logger.error("TRANSCRIBE", f"OpenAI transcription failed after {max_retries} attempts: {video_name}")
-    return None
+    finally:
+        stop_heartbeat.set()
+        if heartbeat_thread:
+            heartbeat_thread.join(timeout=1)
 
 
 def get_whisper_cache_dir():
@@ -554,7 +619,7 @@ def load_whisper_model(model_name='small.en', max_retries=3, progress_callback=N
     for attempt in range(max_retries):
         try:
             if progress_callback and attempt > 0:
-                progress_callback(f"Loading Whisper model ({model_name}) - retry {attempt + 1}/{max_retries}...")
+                progress_callback(f"Loading Whisper model ({model_name}) - retry {attempt + 1}/{max_retries}...", phase='transcribing', progress_pct=42)
 
             # Force CPU to avoid CUDA issues in WSL
             model = whisper.load_model(model_name, device=device, download_root=cache_dir)
@@ -648,7 +713,7 @@ def run_scrape(username, cookies_path, max_reels=100, top_n=10, download=False,
 
     # Create session
     if progress_callback:
-        progress_callback("Creating authenticated session...")
+        progress_callback("Creating authenticated session...", phase='initializing', progress_pct=5)
     try:
         session = create_session(cookies_path)
     except Exception as e:
@@ -660,7 +725,7 @@ def run_scrape(username, cookies_path, max_reels=100, top_n=10, download=False,
 
     # Get reels
     if progress_callback:
-        progress_callback(f"Fetching reels from @{username}...")
+        progress_callback(f"Fetching reels from @{username}...", phase='fetching_profile', progress_pct=10)
 
     logger.debug("SCRAPE", f"Fetching reels for @{username}")
     reels, profile, error = get_user_reels(session, username, max_reels, progress_callback)
@@ -711,7 +776,7 @@ def run_scrape(username, cookies_path, max_reels=100, top_n=10, download=False,
         })
 
         if progress_callback:
-            progress_callback("Downloading videos...")
+            progress_callback("Downloading videos...", phase='downloading', progress_pct=15)
 
         video_dir = output_dir / "videos"
         video_dir.mkdir(exist_ok=True)
@@ -720,7 +785,8 @@ def run_scrape(username, cookies_path, max_reels=100, top_n=10, download=False,
 
         for i, reel in enumerate(top_reels, 1):
             if progress_callback:
-                progress_callback(f"Downloading video {i}/{len(top_reels)}...")
+                download_pct = 15 + int((i / len(top_reels)) * 25)  # 15-40% range
+                progress_callback(f"Downloading video {i}/{len(top_reels)}...", phase='downloading', progress_pct=download_pct)
 
             filename = f"{i:02d}_{reel['views']}views_{reel['shortcode']}.mp4"
             filepath = video_dir / filename
@@ -757,12 +823,13 @@ def run_scrape(username, cookies_path, max_reels=100, top_n=10, download=False,
         if transcribe_provider == 'openai' and openai_key:
             logger.debug("SCRAPE", "Using OpenAI Whisper API for transcription")
             if progress_callback:
-                progress_callback("Transcribing with OpenAI Whisper API...")
+                progress_callback("Transcribing with OpenAI Whisper API...", phase='transcribing', progress_pct=40)
 
             transcription_success = 0
             for i, reel in enumerate(top_reels, 1):
                 if progress_callback:
-                    progress_callback(f"Transcribing {i}/{len(top_reels)} (OpenAI API)...")
+                    trans_pct = 40 + int((i / len(top_reels)) * 55)  # 40-95% range
+                    progress_callback(f"Transcribing {i}/{len(top_reels)} (OpenAI API)...", phase='transcribing', progress_pct=trans_pct)
 
                 try:
                     video_path = reel.get('local_video')
@@ -786,13 +853,14 @@ def run_scrape(username, cookies_path, max_reels=100, top_n=10, download=False,
                     })
                     logger.warning("SCRAPE", f"Transcription failed for {reel.get('shortcode')}", exception=e)
                     if progress_callback:
-                        progress_callback(f"Transcription failed for {reel.get('shortcode')}, continuing...")
+                        trans_pct = 40 + int((i / len(top_reels)) * 55)
+                        progress_callback(f"Transcription failed for {reel.get('shortcode')}, continuing...", phase='transcribing', progress_pct=trans_pct)
 
         # Use local Whisper model
         elif transcribe_provider == 'local' and WHISPER_AVAILABLE:
             logger.debug("SCRAPE", f"Using local Whisper with model: {whisper_model}")
             if progress_callback:
-                progress_callback(f"Loading Whisper model ({whisper_model})...")
+                progress_callback(f"Loading Whisper model ({whisper_model})...", phase='transcribing', progress_pct=40)
 
             try:
                 model = load_whisper_model(whisper_model, max_retries=3, progress_callback=progress_callback)
@@ -800,13 +868,14 @@ def run_scrape(username, cookies_path, max_reels=100, top_n=10, download=False,
                 model = None
                 logger.error("SCRAPE", f"Exception during Whisper model load", exception=e)
                 if progress_callback:
-                    progress_callback(f"Failed to load Whisper model: {e}")
+                    progress_callback(f"Failed to load Whisper model: {e}", phase='transcribing', progress_pct=40)
 
             if model:
                 transcription_success = 0
                 for i, reel in enumerate(top_reels, 1):
                     if progress_callback:
-                        progress_callback(f"Transcribing {i}/{len(top_reels)} (Local)...")
+                        trans_pct = 45 + int((i / len(top_reels)) * 50)  # 45-95% range
+                        progress_callback(f"Transcribing {i}/{len(top_reels)} (Local)...", phase='transcribing', progress_pct=trans_pct)
 
                     try:
                         video_path = reel.get('local_video')
@@ -835,7 +904,8 @@ def run_scrape(username, cookies_path, max_reels=100, top_n=10, download=False,
                             'error': str(e)
                         })
                         if progress_callback:
-                            progress_callback(f"Transcription failed for {reel.get('shortcode')}, continuing...")
+                            trans_pct = 45 + int((i / len(top_reels)) * 50)
+                            progress_callback(f"Transcription failed for {reel.get('shortcode')}, continuing...", phase='transcribing', progress_pct=trans_pct)
 
                 logger.info("SCRAPE", f"Local transcriptions complete for @{username}", {
                     "success": transcription_success,
@@ -862,7 +932,7 @@ def run_scrape(username, cookies_path, max_reels=100, top_n=10, download=False,
         if not download:
             logger.debug("SCRAPE", "Cleaning up temporary video files")
             if progress_callback:
-                progress_callback("Cleaning up temporary videos...")
+                progress_callback("Cleaning up temporary videos...", phase='processing', progress_pct=97)
             for reel in top_reels:
                 video_path = reel.get('local_video')
                 if video_path and os.path.exists(video_path):

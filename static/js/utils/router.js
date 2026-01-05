@@ -9,6 +9,7 @@ const routes = {
     'library': 'library',
     'favorites': 'favorites',
     'jobs': 'jobs',
+    'starred-jobs': 'starred-jobs',
     'settings': 'settings'
 };
 

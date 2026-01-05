@@ -59,13 +59,19 @@ SERVER_URL = f"http://localhost:{PORT}/workspace"
 server_process = None
 tray_icon = None
 
+# Set to True to use system browser instead of PyWebView (enables text selection)
+USE_BROWSER = False
+
 
 def install_dependencies():
     """Install required packages for launcher"""
-    packages = ['pystray', 'Pillow', 'pywebview']
+    packages = ['pystray', 'Pillow', 'pywebview', 'pythonnet']
     for pkg in packages:
         try:
-            __import__(pkg.lower().replace('-', '_').split('[')[0])
+            pkg_import = pkg.lower().replace('-', '_')
+            if pkg_import == 'pythonnet':
+                pkg_import = 'clr'  # pythonnet imports as 'clr'
+            __import__(pkg_import)
         except ImportError:
             subprocess.run([sys.executable, '-m', 'pip', 'install', pkg, '-q'],
                          capture_output=True)
@@ -255,25 +261,49 @@ def stop_server():
 
 webview_window = None
 
+def refresh_window():
+    """Refresh the webview window"""
+    global webview_window
+    if webview_window:
+        try:
+            webview_window.load_url(SERVER_URL)
+        except Exception as e:
+            print(f"[WEBVIEW] Failed to refresh: {e}")
+
+
 def open_browser():
     """Open the app in a native window using PyWebView"""
     global webview_window
+
+    # If window already exists, try to bring it to focus
+    if webview_window:
+        try:
+            webview_window.show()
+            webview_window.restore()  # Restore if minimized
+            return
+        except:
+            pass  # Window might be closed, create new one
+
     try:
         import webview
 
-        # Create native window (will be started later in main)
+        # Create native window (menu is added in start_webview)
         webview_window = webview.create_window(
             'ReelRecon',
             SERVER_URL,
             width=1400,
             height=900,
-            min_size=(800, 600)
+            min_size=(800, 600),
+            text_select=True,
+            easy_drag=False,
+            zoomable=True,
+            maximized=True
         )
 
     except Exception as e:
         print(f"[WEBVIEW] Failed to create window: {e}")
-        # Fallback to default browser
-        webbrowser.open(SERVER_URL)
+        # Don't fallback to browser - just log the error
+        print(f"[WEBVIEW] Window creation failed, please restart the app")
 
 
 def set_window_icon():
@@ -314,12 +344,21 @@ def set_window_icon():
         print(f"[ICON] Failed to set icon: {e}")
 
 
+def log_to_file(msg):
+    """Log message to server.log"""
+    log_file = os.path.join(SCRIPT_DIR, 'server.log')
+    with open(log_file, 'a') as f:
+        f.write(f"[LAUNCHER] {msg}\n")
+
+
 def start_webview():
     """Start the webview (blocking call)"""
     global webview_window
     if webview_window:
         try:
             import webview
+
+            log_to_file(f"PyWebView version: {webview.__version__ if hasattr(webview, '__version__') else 'unknown'}")
 
             # Set icon after window is shown
             def on_shown():
@@ -329,9 +368,19 @@ def start_webview():
             icon_thread = threading.Thread(target=on_shown, daemon=True)
             icon_thread.start()
 
-            webview.start()
+            # Use EdgeChromium backend on Windows (WebView2) - requires pythonnet
+            if IS_WINDOWS:
+                try:
+                    log_to_file("Attempting to start with edgechromium backend...")
+                    webview.start(gui='edgechromium')
+                    log_to_file("edgechromium started successfully")
+                except Exception as e:
+                    log_to_file(f"edgechromium failed: {e}, using default...")
+                    webview.start()
+            else:
+                webview.start()
         except Exception as e:
-            print(f"[WEBVIEW] Failed to start: {e}")
+            log_to_file(f"Failed to start webview: {e}")
 
 
 def view_logs(icon=None, item=None):
@@ -351,17 +400,25 @@ def view_logs(icon=None, item=None):
 
 def restart_app(icon=None, item=None):
     """Restart the application"""
-    global tray_icon
+    global tray_icon, webview_window
+
+    # Close PyWebView window first
+    if webview_window:
+        try:
+            webview_window.destroy()
+        except:
+            pass
+
     stop_server()
     if tray_icon:
         tray_icon.stop()
 
-    # Relaunch the launcher with --no-browser flag (browser already open)
+    # Relaunch the launcher (fresh start with PyWebView)
     if IS_WINDOWS:
-        subprocess.Popen(['C:\\Python312\\pythonw.exe', os.path.join(SCRIPT_DIR, 'launcher.pyw'), '--no-browser'],
+        subprocess.Popen(['C:\\Python312\\pythonw.exe', os.path.join(SCRIPT_DIR, 'launcher.pyw')],
                         cwd=SCRIPT_DIR)
     else:
-        subprocess.Popen([sys.executable, os.path.join(SCRIPT_DIR, 'launcher.pyw'), '--no-browser'],
+        subprocess.Popen([sys.executable, os.path.join(SCRIPT_DIR, 'launcher.pyw')],
                         cwd=SCRIPT_DIR)
     sys.exit(0)
 
@@ -381,7 +438,15 @@ def fetch_updates(icon=None, item=None):
 
 def quit_app(icon=None, item=None):
     """Quit the application"""
-    global tray_icon
+    global tray_icon, webview_window
+
+    # Close PyWebView window if it exists
+    if webview_window:
+        try:
+            webview_window.destroy()
+        except:
+            pass
+
     stop_server()
     if tray_icon:
         tray_icon.stop()
@@ -394,6 +459,20 @@ def quit_app(icon=None, item=None):
     except:
         pass
     sys.exit(0)
+
+
+def focus_window(icon=None, item=None):
+    """Bring PyWebView window to focus and maximize (tray action)"""
+    global webview_window
+    if webview_window:
+        try:
+            webview_window.show()
+            webview_window.maximize()
+            # On Windows, also try to bring to front
+            webview_window.on_top = True
+            webview_window.on_top = False
+        except Exception as e:
+            print(f"[TRAY] Failed to focus window: {e}")
 
 
 def setup_tray():
@@ -410,7 +489,7 @@ def setup_tray():
     icon_image = create_icon_image()
 
     menu = pystray.Menu(
-        item('Open ReelRecon', lambda: open_browser(), default=True),
+        item('Open ReelRecon', focus_window, default=True),
         item('Server Running', lambda: None, enabled=False),
         pystray.Menu.SEPARATOR,
         item('Restart', restart_app),
@@ -420,12 +499,20 @@ def setup_tray():
         item('Quit', quit_app)
     )
 
+    # Create icon with single-click handler to focus window
     tray_icon = pystray.Icon(
         'ReelRecon',
         icon_image,
         'ReelRecon Server',
         menu
     )
+
+    # Set up left-click to focus window (in addition to double-click default)
+    def on_click(icon, item):
+        focus_window()
+
+    # Note: pystray doesn't have a direct single-click handler on Windows,
+    # but double-click on the icon or single-click on menu item works
 
     return tray_icon
 
@@ -498,27 +585,54 @@ def main():
 
     # Open window (skip on restart - window already open)
     if not skip_browser:
-        open_browser()
-        # Start webview (this blocks until window closed)
-        start_webview()
-        # When webview closes, quit the app
-        quit_app()
-    else:
-        # On restart, just open browser normally and run tray
-        webbrowser.open(SERVER_URL)
-        if tray_icon:
-            tray_icon.run()
+        if USE_BROWSER:
+            # Use system browser (full functionality, text selection works)
+            webbrowser.open(SERVER_URL)
+            if tray_icon:
+                tray_icon.run()
+            else:
+                try:
+                    while server_process and server_process.poll() is None:
+                        time.sleep(1)
+                except KeyboardInterrupt:
+                    pass
+                finally:
+                    stop_server()
         else:
-            print(f"Server running at {SERVER_URL}")
-            print("Press Ctrl+C to stop")
-            try:
-                while server_process and server_process.poll() is None:
-                    time.sleep(1)
-            except KeyboardInterrupt:
-                pass
-            finally:
-                stop_server()
+            # Use PyWebView (native window)
+            open_browser()
+            start_webview()
+            quit_app()
+    else:
+        # --no-browser flag: skip splash but still open PyWebView window
+        if USE_BROWSER:
+            webbrowser.open(SERVER_URL)
+            if tray_icon:
+                tray_icon.run()
+            else:
+                try:
+                    while server_process and server_process.poll() is None:
+                        time.sleep(1)
+                except KeyboardInterrupt:
+                    pass
+                finally:
+                    stop_server()
+        else:
+            # Use PyWebView (native window)
+            open_browser()
+            start_webview()
+            quit_app()
 
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except Exception as e:
+        # Log crash to file since pythonw.exe hides console
+        import traceback
+        crash_log = os.path.join(SCRIPT_DIR, 'launcher_crash.log')
+        with open(crash_log, 'w') as f:
+            f.write(f"Launcher crashed at {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+            f.write(f"Error: {e}\n\n")
+            f.write(traceback.format_exc())
+        raise

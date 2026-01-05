@@ -113,6 +113,83 @@ function setupEventListeners() {
         });
     });
 
+    // Jobs view mode toggle (list, grid-2, grid-3) - synced between Jobs and Starred Jobs panels
+    document.querySelectorAll('#jobs-view-toggle .view-toggle-btn, #starred-jobs-view-toggle .view-toggle-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const mode = e.currentTarget.dataset.viewMode;
+            if (mode) {
+                currentJobsViewMode = mode;
+
+                // Save to server (like panel resize does)
+                API.updateSettings({ jobs_view_mode: mode }).catch(err => {
+                    console.warn('[Workspace] Failed to save jobs view mode:', err);
+                });
+
+                // Update jobs toggle buttons across both panels to sync state
+                document.querySelectorAll('#jobs-view-toggle .view-toggle-btn, #starred-jobs-view-toggle .view-toggle-btn').forEach(b => {
+                    b.classList.toggle('active', b.dataset.viewMode === mode);
+                });
+
+                // Apply to main jobs list
+                const jobsList = document.getElementById('jobs-list');
+                if (jobsList) {
+                    jobsList.classList.remove('view-list', 'view-grid-2', 'view-grid-3');
+                    jobsList.classList.add(`view-${mode}`);
+                }
+
+                // Apply to starred jobs list (keep them synced)
+                const starredJobsList = document.getElementById('starred-jobs-list');
+                if (starredJobsList) {
+                    starredJobsList.classList.remove('view-list', 'view-grid-2', 'view-grid-3');
+                    starredJobsList.classList.add(`view-${mode}`);
+                }
+            }
+        });
+    });
+
+    // Asset view toggle click handlers
+    document.querySelectorAll('#library-view-toggle .view-toggle-btn, #favorites-view-toggle .view-toggle-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const mode = e.currentTarget.dataset.viewMode;
+            if (mode) {
+                currentAssetViewMode = mode;
+
+                // Save to server (like panel resize does)
+                API.updateSettings({ asset_view_mode: mode }).catch(err => {
+                    console.warn('[Workspace] Failed to save asset view mode:', err);
+                });
+
+                // Update ALL asset toggle buttons across both panels to sync state
+                document.querySelectorAll('#library-view-toggle .view-toggle-btn, #favorites-view-toggle .view-toggle-btn').forEach(b => {
+                    b.classList.toggle('active', b.dataset.viewMode === mode);
+                });
+
+                // Apply to library asset grid
+                const assetGrid = document.getElementById('asset-grid');
+                if (assetGrid) {
+                    assetGrid.classList.remove('view-list', 'view-grid-2', 'view-grid-3', 'view-grid-4');
+                    assetGrid.classList.add(`view-${mode}`);
+                }
+
+                // Apply to favorites asset grid (keep them synced)
+                const favoritesGrid = document.getElementById('favorites-grid');
+                if (favoritesGrid) {
+                    favoritesGrid.classList.remove('view-list', 'view-grid-2', 'view-grid-3', 'view-grid-4');
+                    favoritesGrid.classList.add(`view-${mode}`);
+                }
+            }
+        });
+    });
+
+    // Load view preferences from server and apply them
+    loadViewPreferences();
+
+    // Clear All Jobs button
+    const clearAllJobsBtn = document.getElementById('btn-clear-all-jobs');
+    if (clearAllJobsBtn) {
+        clearAllJobsBtn.addEventListener('click', clearAllJobs);
+    }
+
     // Detail panel controls
     const closeDetailBtn = document.getElementById('btn-close-detail');
     const starAssetBtn = document.getElementById('btn-star-asset');
@@ -152,6 +229,12 @@ function setupEventListeners() {
             }
         }
     });
+
+    // Custom right-click context menu for PyWebView compatibility
+    setupContextMenu();
+
+    // Setup resizable detail panel
+    setupPanelResize();
 
     // Close modal when clicking overlay (but not on drag)
     const modalOverlay = document.getElementById('modal-overlay');
@@ -219,6 +302,10 @@ function renderFavorites(assets) {
     const grid = document.getElementById('favorites-grid');
     if (!grid) return;
 
+    // Apply current view mode (persisted from server settings)
+    grid.classList.remove('view-list', 'view-grid-2', 'view-grid-3', 'view-grid-4');
+    grid.classList.add(`view-${currentAssetViewMode}`);
+
     if (!assets || assets.length === 0) {
         grid.innerHTML = `
             <div class="empty-state">
@@ -260,40 +347,100 @@ Store.subscribe((state) => {
 
 let jobsPollingInterval = null;
 let trackedActiveJobs = new Set(); // Track job IDs to detect completion
+let currentJobsViewMode = 'list'; // list, grid-2, grid-3 (loaded from server settings)
+let currentAssetViewMode = 'grid-4'; // list, grid-2, grid-3, grid-4 (loaded from server settings)
 
-async function loadJobs(type = 'active') {
+// Load view preferences from server and apply them (called on page load)
+async function loadViewPreferences() {
+    try {
+        const settings = await API.getSettings();
+
+        // Apply jobs view mode
+        if (settings.jobs_view_mode) {
+            currentJobsViewMode = settings.jobs_view_mode;
+
+            // Update button states
+            document.querySelectorAll('#jobs-view-toggle .view-toggle-btn, #starred-jobs-view-toggle .view-toggle-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.viewMode === currentJobsViewMode);
+            });
+
+            // Apply to job lists
+            const jobsList = document.getElementById('jobs-list');
+            const starredJobsList = document.getElementById('starred-jobs-list');
+            if (jobsList) {
+                jobsList.classList.remove('view-list', 'view-grid-2', 'view-grid-3');
+                jobsList.classList.add(`view-${currentJobsViewMode}`);
+            }
+            if (starredJobsList) {
+                starredJobsList.classList.remove('view-list', 'view-grid-2', 'view-grid-3');
+                starredJobsList.classList.add(`view-${currentJobsViewMode}`);
+            }
+        }
+
+        // Apply asset view mode
+        if (settings.asset_view_mode) {
+            currentAssetViewMode = settings.asset_view_mode;
+
+            // Update button states
+            document.querySelectorAll('#library-view-toggle .view-toggle-btn, #favorites-view-toggle .view-toggle-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.viewMode === currentAssetViewMode);
+            });
+
+            // Apply to asset grids
+            const assetGrid = document.getElementById('asset-grid');
+            const favoritesGrid = document.getElementById('favorites-grid');
+            if (assetGrid) {
+                assetGrid.classList.remove('view-list', 'view-grid-2', 'view-grid-3', 'view-grid-4');
+                assetGrid.classList.add(`view-${currentAssetViewMode}`);
+            }
+            if (favoritesGrid) {
+                favoritesGrid.classList.remove('view-list', 'view-grid-2', 'view-grid-3', 'view-grid-4');
+                favoritesGrid.classList.add(`view-${currentAssetViewMode}`);
+            }
+        }
+
+        console.log('[Workspace] Loaded view preferences:', { jobs: currentJobsViewMode, assets: currentAssetViewMode });
+    } catch (err) {
+        console.warn('[Workspace] Failed to load view preferences:', err);
+    }
+}
+
+async function loadJobs(type = 'recent') {
     const list = document.getElementById('jobs-list');
     if (!list) return;
 
+    // Apply current view mode
+    list.classList.remove('view-list', 'view-grid-2', 'view-grid-3');
+    list.classList.add(`view-${currentJobsViewMode}`);
+
+    // Show/hide Clear All button only on Recent tab
+    const clearAllBtn = document.getElementById('btn-clear-all-jobs');
+    if (clearAllBtn) {
+        clearAllBtn.style.display = type === 'recent' ? 'block' : 'none';
+    }
+
     try {
-        const endpoint = type === 'active' ? '/api/jobs/active' : '/api/jobs/recent';
+        let endpoint;
+        if (type === 'active') {
+            endpoint = '/api/jobs/active';
+        } else if (type === 'archived') {
+            endpoint = '/api/jobs/archived';
+        } else {
+            endpoint = '/api/jobs/recent';
+        }
+
         const response = await fetch(endpoint);
         const data = await response.json();
 
         if (data.success) {
-            if (type === 'active') {
-                // Check for completed jobs (were tracked but no longer in active list)
-                const currentJobIds = new Set(data.jobs.map(j => j.id));
-                for (const trackedId of trackedActiveJobs) {
-                    if (!currentJobIds.has(trackedId)) {
-                        // Job finished! Notify user
-                        showJobCompletionNotification(trackedId);
-                        trackedActiveJobs.delete(trackedId);
-                    }
-                }
-                // Update tracked jobs
-                data.jobs.forEach(j => trackedActiveJobs.add(j.id));
-            }
-
             renderJobs(data.jobs, type);
 
-            // Start polling for active jobs
-            if (type === 'active' && data.jobs.length > 0) {
-                startJobsPolling();
-            } else if (type === 'active' && data.jobs.length === 0) {
-                stopJobsPolling();
-            } else {
-                stopJobsPolling();
+            // For active jobs, track IDs and start polling if needed
+            if (type === 'active') {
+                data.jobs.forEach(j => trackedActiveJobs.add(j.id));
+                if (trackedActiveJobs.size > 0) {
+                    startJobsPolling();
+                }
             }
         }
     } catch (error) {
@@ -328,46 +475,83 @@ function showJobCompletionNotification(jobId) {
 }
 
 function startJobsPolling() {
-    stopJobsPolling();
-    // Poll every 1 second like the original scraper
-    jobsPollingInterval = setInterval(() => {
-        const activeView = Store.getState().ui.activeView;
-        const activeTab = document.querySelector('.jobs-tab.active');
-        if (activeView === 'jobs' && activeTab?.dataset.tab === 'active') {
-            loadJobs('active');
-        } else if (trackedActiveJobs.size > 0) {
-            // Keep polling even if not on jobs view, to detect completion
-            pollActiveJobsBackground();
-        } else {
-            stopJobsPolling();
-        }
-    }, 1000); // Poll every 1 second
+    if (jobsPollingInterval) return; // Already polling
+    pollActiveJobsOnce(); // Start immediately
 }
 
-async function pollActiveJobsBackground() {
+async function pollActiveJobsOnce() {
+    if (trackedActiveJobs.size === 0) {
+        stopJobsPolling();
+        return;
+    }
+
+    // Poll each tracked job individually (like original scraper)
+    for (const jobId of trackedActiveJobs) {
+        await pollSingleJob(jobId);
+    }
+
+    // Schedule next poll
+    jobsPollingInterval = setTimeout(pollActiveJobsOnce, 1000);
+}
+
+async function pollSingleJob(jobId) {
     try {
-        const response = await fetch('/api/jobs/active');
-        const data = await response.json();
-        if (data.success) {
-            const currentJobIds = new Set(data.jobs.map(j => j.id));
-            for (const trackedId of trackedActiveJobs) {
-                if (!currentJobIds.has(trackedId)) {
-                    showJobCompletionNotification(trackedId);
-                    trackedActiveJobs.delete(trackedId);
-                }
+        // Determine job type from ID prefix
+        const isAnalysis = jobId.startsWith('sr_');
+        const isBatch = jobId.startsWith('batch_');
+
+        let endpoint;
+        if (isAnalysis) {
+            endpoint = `/api/skeleton-ripper/status/${jobId}`;
+        } else if (isBatch) {
+            endpoint = `/api/scrape/batch/${jobId}/status`;
+        } else {
+            endpoint = `/api/scrape/${jobId}/status`;
+        }
+
+        const response = await fetch(endpoint);
+        if (!response.ok) {
+            if (response.status === 404) {
+                // Job gone - mark complete
+                showJobCompletionNotification(jobId);
+                trackedActiveJobs.delete(jobId);
             }
-            if (trackedActiveJobs.size === 0) {
-                stopJobsPolling();
+            return;
+        }
+
+        const data = await response.json();
+
+        // Check if job is finished
+        if (['complete', 'failed', 'error', 'partial', 'aborted'].includes(data.status)) {
+            showJobCompletionNotification(jobId);
+            trackedActiveJobs.delete(jobId);
+            return;
+        }
+
+        // Update the job card in the DOM directly
+        const card = document.querySelector(`.job-card[data-job-id="${jobId}"]`);
+        if (card) {
+            // Update progress bar (backend calculates progress_pct)
+            const progressFill = card.querySelector('.progress-fill');
+            if (progressFill && data.progress_pct !== undefined) {
+                progressFill.style.width = `${data.progress_pct}%`;
+            }
+
+            // Update progress text with message from progress
+            const progressText = card.querySelector('.job-progress-text');
+            if (progressText) {
+                const text = data.progress?.message || data.progress?.phase || '';
+                progressText.textContent = text;
             }
         }
     } catch (e) {
-        console.error('[Workspace] Background poll failed:', e);
+        console.error(`[Workspace] Poll failed for ${jobId}:`, e);
     }
 }
 
 function stopJobsPolling() {
     if (jobsPollingInterval) {
-        clearInterval(jobsPollingInterval);
+        clearTimeout(jobsPollingInterval);
         jobsPollingInterval = null;
     }
 }
@@ -376,24 +560,96 @@ function renderJobs(jobs, type) {
     const list = document.getElementById('jobs-list');
     if (!list) return;
 
+    // Apply current view mode (persisted from localStorage)
+    list.classList.remove('view-list', 'view-grid-2', 'view-grid-3');
+    list.classList.add(`view-${currentJobsViewMode}`);
+
     if (!jobs || jobs.length === 0) {
-        const emptyMsg = type === 'active'
-            ? 'No active jobs. Start a scrape or analysis to see progress here.'
-            : 'No recent jobs.';
+        let emptyMsg;
+        if (type === 'active') {
+            emptyMsg = 'No active jobs. Start a scrape or analysis to see progress here.';
+        } else if (type === 'archived') {
+            emptyMsg = 'No archived jobs. Deleted jobs will appear here.';
+        } else {
+            emptyMsg = 'No recent jobs.';
+        }
         list.innerHTML = `<div class="empty-state"><p>${emptyMsg}</p></div>`;
         return;
     }
 
-    list.innerHTML = jobs.map(job => renderJobCard(job, type)).join('');
+    // For active jobs, update in-place to prevent flashing during polling
+    if (type === 'active') {
+        const currentIds = new Set(jobs.map(j => j.id));
+        const existingCards = list.querySelectorAll('.job-card');
+        const existingIds = new Set();
 
-    // Add click handlers
-    list.querySelectorAll('.job-card').forEach(card => {
-        card.addEventListener('click', () => {
-            const jobId = card.dataset.jobId;
-            const jobType = card.dataset.jobType;
-            openJobDetail(jobId, jobType);
+        // Update existing cards or remove stale ones
+        existingCards.forEach(card => {
+            const cardId = card.dataset.jobId;
+            existingIds.add(cardId);
+
+            if (!currentIds.has(cardId)) {
+                // Job no longer active, remove card
+                card.remove();
+            } else {
+                // Update existing card in-place
+                const job = jobs.find(j => j.id === cardId);
+                if (job) {
+                    updateJobCardInPlace(card, job);
+                }
+            }
         });
-    });
+
+        // Add new cards that don't exist yet
+        jobs.forEach(job => {
+            if (!existingIds.has(job.id)) {
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = renderJobCard(job, type);
+                const newCard = tempDiv.firstElementChild;
+                list.appendChild(newCard);
+                // Add click handler
+                newCard.addEventListener('click', () => {
+                    openJobDetail(job.id, job.type);
+                });
+            }
+        });
+    } else {
+        // For recent/archived, full replace is fine (not polling)
+        list.innerHTML = jobs.map(job => renderJobCard(job, type)).join('');
+
+        // Add click handlers (not for archived jobs)
+        if (type !== 'archived') {
+            list.querySelectorAll('.job-card').forEach(card => {
+                card.addEventListener('click', () => {
+                    // Use assetFilterId for library filtering (matches history/asset IDs)
+                    const assetFilterId = card.dataset.assetFilterId;
+                    const jobType = card.dataset.jobType;
+                    openJobDetail(assetFilterId, jobType);
+                });
+            });
+        }
+    }
+}
+
+// Update job card elements in-place without replacing DOM
+function updateJobCardInPlace(card, job) {
+    // Update progress bar
+    const progressFill = card.querySelector('.progress-fill');
+    if (progressFill) {
+        progressFill.style.width = `${job.progress_pct || 0}%`;
+    }
+
+    // Update progress text
+    const progressText = card.querySelector('.job-progress-text');
+    if (progressText) {
+        progressText.textContent = job.progress || job.phase || '';
+    }
+
+    // Update phase text
+    const phaseText = card.querySelector('.job-phase');
+    if (phaseText) {
+        phaseText.textContent = job.phase || '';
+    }
 }
 
 function renderJobCard(job, listType) {
@@ -407,16 +663,36 @@ function renderJobCard(job, listType) {
         'aborted': '#6B7280'
     };
 
-    const typeIcons = {
-        'scrape': '📥',
-        'analysis': '🔬'
+    // Job type colors matching library asset badges
+    const typeColors = {
+        'scrape': '#F59E0B',      // Yellow/amber for scrapes
+        'analysis': '#10B981',    // Green for analysis
+        'batch_scrape': '#F59E0B'
+    };
+
+    const typeLabels = {
+        'scrape': 'SCRAPE',
+        'analysis': 'ANALYSIS',
+        'batch_scrape': 'BATCH'
     };
 
     const statusColor = statusColors[job.status] || '#6B7280';
-    const typeIcon = typeIcons[job.type] || '📋';
+    const typeColor = typeColors[job.type] || '#6B7280';
+    const typeLabel = typeLabels[job.type] || job.type.toUpperCase();
     const createdDate = job.created_at ? new Date(job.created_at).toLocaleString() : '';
     const isRunning = job.status === 'running' || job.status === 'starting';
     const progressPct = job.progress_pct || 0;
+    const isCompleted = ['complete', 'failed', 'error', 'partial'].includes(job.status);
+
+    // Extract creator names from title (remove "Scrape: " or "Analysis: " prefix)
+    let creatorNames = job.title || '';
+    if (creatorNames.startsWith('Scrape: ')) {
+        creatorNames = creatorNames.replace('Scrape: ', '');
+    } else if (creatorNames.startsWith('Analysis: ')) {
+        creatorNames = creatorNames.replace('Analysis: ', '');
+    } else if (creatorNames.startsWith('Batch: ')) {
+        creatorNames = creatorNames.replace('Batch: ', '');
+    }
 
     // Always show progress bar for active jobs (use existing progress-bar styles with pulse)
     const progressBar = listType === 'active' ? `
@@ -434,11 +710,59 @@ function renderJobCard(job, listType) {
         </button>
     ` : '';
 
+    // Star button for recent/starred jobs (not archived)
+    const starButton = listType !== 'active' && listType !== 'archived' ? `
+        <button class="btn-icon job-star${job.starred ? ' starred' : ''}"
+                onclick="toggleJobStar('${job.id}'); event.stopPropagation();"
+                title="${job.starred ? 'Unfavorite' : 'Favorite'}">
+            ${job.starred ? '★' : '☆'}
+        </button>
+    ` : '';
+
+    // View assets button for completed jobs (not archived)
+    // Use result.id for scrape jobs since that's what's stored in history
+    const assetFilterId = job.result?.id || job.id;
+    const viewAssetsButton = isCompleted && listType !== 'archived' ? `
+        <button class="btn btn-view-assets" onclick="filterLibraryByJob('${assetFilterId}'); event.stopPropagation();" title="View job assets in library">
+            VIEW ASSETS
+        </button>
+    ` : '';
+
+    // Delete button for recent jobs (archives them)
+    const deleteButton = listType === 'recent' ? `
+        <button class="btn btn-delete-job" onclick="archiveJob('${job.id}'); event.stopPropagation();" title="Delete job">
+            DELETE
+        </button>
+    ` : '';
+
+    // Rerun button for completed recent jobs (scrape and analysis)
+    const rerunButton = listType === 'recent' && isCompleted && (job.type === 'scrape' || job.type === 'analysis') ? `
+        <button class="btn btn-rerun-job" onclick="rerunJob('${job.id}', '${job.type}'); event.stopPropagation();" title="Rerun job">
+            RERUN
+        </button>
+    ` : '';
+
+    // Restore button for archived jobs
+    const restoreButton = listType === 'archived' ? `
+        <button class="btn btn-restore-job" onclick="restoreJob('${job.id}'); event.stopPropagation();" title="Restore job">
+            RESTORE
+        </button>
+    ` : '';
+
+    // Archived date for archived jobs
+    const archivedDate = job.archived_at ? new Date(job.archived_at).toLocaleString() : '';
+    const dateDisplay = listType === 'archived' && archivedDate
+        ? `<span class="job-date">Archived: ${archivedDate}</span>`
+        : `<span class="job-date">${createdDate}</span>`;
+
     return `
-        <div class="job-card${isRunning ? ' running' : ''}" data-job-id="${job.id}" data-job-type="${job.type}">
+        <div class="job-card${isRunning ? ' running' : ''}${listType === 'archived' ? ' archived' : ''}" data-job-id="${job.id}" data-job-type="${job.type}" data-asset-filter-id="${assetFilterId}">
             <div class="job-card-header">
-                <span class="job-type-icon">${typeIcon}</span>
-                <span class="job-title">${job.title}</span>
+                <span class="job-type-badge" style="background: ${typeColor}20; color: ${typeColor}">
+                    ${typeLabel}
+                </span>
+                <span class="job-title">${creatorNames}</span>
+                ${starButton}
                 <span class="job-status" style="background: ${statusColor}20; color: ${statusColor}">
                     ${job.status}
                 </span>
@@ -446,21 +770,254 @@ function renderJobCard(job, listType) {
             ${progressBar}
             ${progressText ? `<p class="job-progress-text">${progressText}</p>` : ''}
             <div class="job-meta">
-                <span class="job-date">${createdDate}</span>
-                ${job.platform ? `<span class="job-platform">${job.platform}</span>` : ''}
+                ${dateDisplay}
+                ${job.platform ? `<span class="job-platform">${job.platform.toUpperCase()}</span>` : ''}
             </div>
-            ${abortButton}
+            <div class="job-actions">
+                ${viewAssetsButton}
+                ${rerunButton}
+                ${deleteButton}
+                ${restoreButton}
+                ${abortButton}
+            </div>
         </div>
     `;
 }
 
+// Toggle job star status
+async function toggleJobStar(jobId) {
+    console.log('[Workspace] Toggling star for job:', jobId);
+    try {
+        const response = await fetch(`/api/jobs/${jobId}/star`, { method: 'POST' });
+        const result = await response.json();
+        console.log('[Workspace] Star toggle response:', result);
+        if (result.success) {
+            // Refresh the jobs list
+            const currentTab = document.querySelector('.jobs-tab.active')?.dataset.tab || 'recent';
+            loadJobs(currentTab);
+            updateStarredJobsCount();
+        } else {
+            console.error('[Workspace] Star toggle failed:', result.error);
+        }
+    } catch (error) {
+        console.error('[Workspace] Failed to toggle job star:', error);
+    }
+}
+
+// Archive (soft delete) a job
+async function archiveJob(jobId) {
+    try {
+        const response = await fetch(`/api/jobs/${jobId}/archive`, { method: 'POST' });
+        const result = await response.json();
+        if (result.success) {
+            console.log('[Workspace] Job archived:', jobId);
+            // Refresh the jobs list
+            loadJobs('recent');
+            updateStarredJobsCount();
+        } else {
+            console.error('[Workspace] Failed to archive job:', result.error);
+        }
+    } catch (error) {
+        console.error('[Workspace] Failed to archive job:', error);
+    }
+}
+
+// Restore a job from archive
+async function restoreJob(jobId) {
+    try {
+        const response = await fetch(`/api/jobs/${jobId}/restore`, { method: 'POST' });
+        const result = await response.json();
+        if (result.success) {
+            console.log('[Workspace] Job restored:', jobId);
+            // Refresh the archived list
+            loadJobs('archived');
+            updateStarredJobsCount();
+        } else {
+            console.error('[Workspace] Failed to restore job:', result.error);
+        }
+    } catch (error) {
+        console.error('[Workspace] Failed to restore job:', error);
+    }
+}
+
+// Clear all recent jobs (archive them all)
+async function clearAllJobs() {
+    if (!confirm('Archive all recent jobs? They can be restored from the Archived tab.')) {
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/jobs/clear-all', { method: 'POST' });
+        const result = await response.json();
+        if (result.success) {
+            console.log('[Workspace] Archived', result.archived_count, 'jobs');
+            // Refresh the jobs list
+            loadJobs('recent');
+            updateStarredJobsCount();
+        } else {
+            console.error('[Workspace] Failed to clear jobs:', result.error);
+        }
+    } catch (error) {
+        console.error('[Workspace] Failed to clear jobs:', error);
+    }
+}
+
+// Rerun a job with the same parameters
+async function rerunJob(jobId, jobType) {
+    try {
+        // Get the job details to get original config
+        let config;
+
+        if (jobType === 'scrape') {
+            // Fetch job details from recent jobs
+            const response = await fetch('/api/jobs/recent');
+            const data = await response.json();
+            const job = data.jobs?.find(j => j.id === jobId);
+
+            if (!job || !job.result) {
+                console.error('[Workspace] Could not find job config for rerun');
+                alert('Could not find job configuration. Try starting a new scrape.');
+                return;
+            }
+
+            // Get original config from result
+            const result = job.result;
+            config = {
+                username: result.username || job.title?.replace('@', ''),
+                platform: job.platform || 'instagram',
+                max_reels: result.max_reels || 100,
+                top_n: result.top_n || 10,
+                download: result.download || false,
+                transcribe: result.transcribe || false,
+                transcribe_provider: result.transcribe_provider || 'local',
+                whisper_model: result.whisper_model || 'small.en'
+            };
+
+            // Start new scrape with same config
+            const scrapeResponse = await fetch('/api/scrape', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(config)
+            });
+
+            const scrapeResult = await scrapeResponse.json();
+            if (scrapeResult.scrape_id) {
+                console.log('[Workspace] Rerun scrape started:', scrapeResult.scrape_id);
+                // Switch to active jobs
+                document.querySelector('.jobs-tab[data-tab="active"]')?.click();
+                loadJobs('active');
+            } else {
+                alert('Failed to start scrape: ' + (scrapeResult.error || 'Unknown error'));
+            }
+        } else if (jobType === 'analysis') {
+            // Fetch job details from recent jobs
+            const response = await fetch('/api/jobs/recent');
+            const data = await response.json();
+            const job = data.jobs?.find(j => j.id === jobId);
+
+            if (!job) {
+                console.error('[Workspace] Could not find job config for rerun');
+                alert('Could not find job configuration. Try starting a new analysis.');
+                return;
+            }
+
+            // Get original config - analysis jobs store creators and settings
+            const creators = job.creators || [];
+            const platform = job.platform || 'instagram';
+
+            if (creators.length === 0) {
+                alert('Could not find creators for this analysis. Try starting a new analysis.');
+                return;
+            }
+
+            // Get current AI settings
+            const settingsResponse = await fetch('/api/settings');
+            const settings = await settingsResponse.json();
+
+            // Build analysis config
+            const analysisConfig = {
+                usernames: creators,
+                platform: platform,
+                videos_per_creator: job.videos_per_creator || 3,
+                llm_provider: settings.llm_provider || 'openai',
+                llm_model: settings.llm_model || 'gpt-4o-mini'
+            };
+
+            // Start new analysis with same config
+            const analysisResponse = await fetch('/api/skeleton-ripper/start', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(analysisConfig)
+            });
+
+            const analysisResult = await analysisResponse.json();
+            if (analysisResult.job_id) {
+                console.log('[Workspace] Rerun analysis started:', analysisResult.job_id);
+                // Track the job and switch to active tab
+                trackedActiveJobs.add(analysisResult.job_id);
+                startJobsPolling();
+                document.querySelector('.jobs-tab[data-tab="active"]')?.click();
+                setTimeout(() => loadJobs('active'), 100);
+            } else {
+                alert('Failed to start analysis: ' + (analysisResult.error || 'Unknown error'));
+            }
+        } else {
+            alert('Rerun is not available for this job type.');
+        }
+    } catch (error) {
+        console.error('[Workspace] Failed to rerun job:', error);
+        alert('Failed to rerun job. See console for details.');
+    }
+}
+
+// Navigate to library filtered by job
+function filterLibraryByJob(jobId) {
+    // Switch to library view
+    switchView('library');
+    // Reload assets with job filter
+    reloadAssets({ job_id: jobId });
+    // Update UI to show filter is active
+    showJobFilter(jobId);
+}
+
+// Show job filter indicator in library
+function showJobFilter(jobId) {
+    const filterBar = document.querySelector('.filter-bar');
+    if (!filterBar) return;
+
+    // Remove existing job filter chip
+    filterBar.querySelector('.job-filter-chip')?.remove();
+
+    // Add job filter chip
+    const chip = document.createElement('button');
+    chip.className = 'filter-chip job-filter-chip active';
+    chip.innerHTML = `Job: ${jobId.substring(0, 8)}... <span class="remove-filter">×</span>`;
+    chip.onclick = (e) => {
+        if (e.target.classList.contains('remove-filter')) {
+            chip.remove();
+            reloadAssets({});
+        }
+    };
+    filterBar.appendChild(chip);
+}
+
+// Update starred jobs count in sidebar
+async function updateStarredJobsCount() {
+    try {
+        const response = await fetch('/api/jobs/starred');
+        const result = await response.json();
+        const count = result.jobs?.length || 0;
+        const countEl = document.getElementById('starred-jobs-count');
+        if (countEl) countEl.textContent = count;
+    } catch (error) {
+        console.error('[Workspace] Failed to get starred jobs count:', error);
+    }
+}
+
 function openJobDetail(jobId, jobType) {
     console.log('[Workspace] Opening job:', jobId, jobType);
-    // TODO: Open job detail panel or navigate to results
-    // For now, could navigate to the existing report page
-    if (jobType === 'analysis') {
-        window.open(`/skeleton-ripper/report/${jobId}`, '_blank');
-    }
+    // Navigate to library filtered by this job's assets
+    filterLibraryByJob(jobId);
 }
 
 async function abortJob(jobId, jobType, batchId) {
@@ -525,6 +1082,10 @@ function renderAssets(assets) {
     const grid = document.getElementById('asset-grid');
     if (!grid) return;
 
+    // Apply current view mode (persisted from server settings)
+    grid.classList.remove('view-list', 'view-grid-2', 'view-grid-3', 'view-grid-4');
+    grid.classList.add(`view-${currentAssetViewMode}`);
+
     if (!assets || assets.length === 0) {
         grid.innerHTML = `
             <div class="empty-state">
@@ -562,6 +1123,8 @@ function setupCollectionRemoveHandlers(container) {
                 await API.removeFromCollection(assetId, collectionId);
                 // Remove the tag from UI
                 tag.remove();
+                // Refresh sidebar collections to update counts
+                loadCollections();
                 console.log('[Workspace] Removed from collection:', collectionId);
             } catch (error) {
                 console.error('[Workspace] Failed to remove from collection:', error);
@@ -589,8 +1152,23 @@ function renderAssetCard(asset) {
 
     const typeLabel = typeLabels[asset.type] || asset.type;
     const typeColor = typeColors[asset.type] || '#6B7280';
-    const preview = asset.preview ? asset.preview.substring(0, 120) + '...' : 'No preview available';
     const date = asset.created_at ? new Date(asset.created_at).toLocaleDateString() : '';
+
+    // Generate clean preview based on asset type (avoiding redundancy with badges)
+    let preview = '';
+    if (asset.type === 'skeleton_report') {
+        // Show creator handles only - counts are shown in badges
+        const meta = asset.metadata || {};
+        const creators = meta.creators || [];
+        if (creators.length > 0) {
+            preview = creators.slice(0, 4).map(c => `@${c}`).join(', ') + (creators.length > 4 ? ` +${creators.length - 4}` : '');
+        }
+    } else if (asset.type === 'scrape_report') {
+        // No preview text - badges show TXT/VID/reel count, title has username
+        preview = '';
+    } else if (asset.preview) {
+        preview = asset.preview.substring(0, 120) + (asset.preview.length > 120 ? '...' : '');
+    }
 
     // Render collection tags with remove button
     const collections = asset.collections || [];
@@ -601,20 +1179,125 @@ function renderAssetCard(asset) {
         </span>
     `).join('');
 
+    // Always show collections area with + button
+    const addCollectionBtn = `
+        <button class="collection-add-btn" onclick="openAddCollectionModal('${asset.id}'); event.stopPropagation();" title="Add to collection">
+            +
+        </button>
+    `;
+
+    // Calculate metadata badges based on asset type
+    let metadataBadges = '';
+    if (asset.type === 'scrape_report') {
+        // Use pre-computed counts if available, otherwise calculate from top_reels
+        const totalReels = asset.reel_count || (asset.top_reels ? asset.top_reels.length : 0);
+        const transcriptCount = asset.transcript_count ?? (asset.top_reels ? asset.top_reels.filter(r => r.transcript).length : 0);
+        const videoCount = asset.video_count ?? (asset.top_reels ? asset.top_reels.filter(r => r.local_video).length : 0);
+
+        if (totalReels > 0) {
+            const hasTranscripts = transcriptCount > 0;
+            const hasVideos = videoCount > 0;
+
+            metadataBadges = `
+                <div class="asset-metadata-badges">
+                    <div class="asset-indicator ${hasTranscripts ? 'active' : ''}" title="${hasTranscripts ? `${transcriptCount}/${totalReels} transcript${transcriptCount === 1 ? '' : 's'}` : 'No transcripts'}">
+                        <span class="indicator-dot"></span>
+                        <span class="indicator-label">${transcriptCount} Transcript${transcriptCount === 1 ? '' : 's'}</span>
+                    </div>
+                    <div class="asset-indicator ${hasVideos ? 'active' : ''}" title="${hasVideos ? `${videoCount}/${totalReels} video${videoCount === 1 ? '' : 's'}` : 'No videos'}">
+                        <span class="indicator-dot"></span>
+                        <span class="indicator-label">${videoCount} Video${videoCount === 1 ? '' : 's'}</span>
+                    </div>
+                    <span class="asset-reel-count">${totalReels} reel${totalReels === 1 ? '' : 's'}</span>
+                </div>
+            `;
+        }
+    } else if (asset.type === 'skeleton_report') {
+        // Show skeleton count and creator count for analysis reports
+        const meta = asset.metadata || {};
+        const skeletonCount = meta.skeletons_count || meta.video_count || 0;
+        const creators = meta.creators || [];
+
+        metadataBadges = `
+            <div class="asset-metadata-badges skeleton-report-badges">
+                <div class="asset-indicator active" title="${skeletonCount} skeleton${skeletonCount === 1 ? '' : 's'} extracted">
+                    <span class="indicator-dot"></span>
+                    <span class="indicator-label">${skeletonCount} Skeleton${skeletonCount === 1 ? '' : 's'}</span>
+                </div>
+                <div class="asset-indicator ${creators.length > 0 ? 'active' : ''}" title="${creators.length} creator${creators.length === 1 ? '' : 's'} analyzed">
+                    <span class="indicator-dot"></span>
+                    <span class="indicator-label">${creators.length} Creator${creators.length === 1 ? '' : 's'}</span>
+                </div>
+            </div>
+        `;
+    }
+
+    // Only show preview if not empty
+    const previewHtml = preview ? `<p class="asset-preview">${preview}</p>` : '';
+
+    // Generate stats line based on asset type
+    let statsLine = '';
+    if (asset.type === 'scrape_report') {
+        const totalViews = asset.total_views || 0;
+        const totalLikes = asset.total_likes || 0;
+        const totalComments = asset.total_comments || 0;
+        if (totalViews > 0 || totalLikes > 0 || totalComments > 0) {
+            statsLine = `
+                <div class="asset-stats-line">
+                    <span class="stat-item"><span class="stat-num">${formatNumber(totalViews)}</span> views</span>
+                    <span class="stat-item"><span class="stat-num">${formatNumber(totalLikes)}</span> likes</span>
+                    <span class="stat-item"><span class="stat-num">${formatNumber(totalComments)}</span> comments</span>
+                </div>
+            `;
+        }
+    } else if (asset.type === 'skeleton_report') {
+        const meta = asset.metadata || {};
+        const totalViews = meta.total_views || 0;
+        const avgViews = meta.avg_views || 0;
+        const avgHookWords = meta.avg_hook_words || 0;
+        if (totalViews > 0 || avgViews > 0) {
+            statsLine = `
+                <div class="asset-stats-line">
+                    <span class="stat-item"><span class="stat-num">${formatNumber(totalViews)}</span> views</span>
+                    <span class="stat-item"><span class="stat-num">${formatNumber(avgViews)}</span> avg</span>
+                    <span class="stat-item"><span class="stat-num">${avgHookWords}</span> hook words</span>
+                </div>
+            `;
+        }
+    }
+
     return `
         <div class="asset-card" data-asset-id="${asset.id}">
             <div class="asset-card-header">
-                <span class="asset-type-badge" style="background: ${typeColor}20; color: ${typeColor}">
-                    ${typeLabel}
-                </span>
-                ${asset.starred ? '<span class="asset-starred">★</span>' : ''}
+                <div class="asset-card-header-left">
+                    <span class="asset-type-badge" style="background: ${typeColor}20; color: ${typeColor}">
+                        ${typeLabel}
+                    </span>
+                    <span class="asset-date">${date}</span>
+                </div>
+                <div class="asset-card-actions">
+                    <button class="btn-icon asset-star${asset.starred ? ' starred' : ''}"
+                            onclick="toggleAssetStar('${asset.id}'); event.stopPropagation();"
+                            title="${asset.starred ? 'Unfavorite' : 'Favorite'}">
+                        ${asset.starred ? '★' : '☆'}
+                    </button>
+                </div>
             </div>
-            <h3 class="asset-title">${asset.title || 'Untitled'}</h3>
-            <p class="asset-preview">${preview}</p>
-            <div class="asset-meta">
-                <span class="asset-date">${date}</span>
+            ${statsLine}
+            <div class="asset-card-body">
+                <div class="asset-title-row">
+                    <h3 class="asset-title" data-asset-id="${asset.id}">${asset.title || 'Untitled'}</h3>
+                    <button class="btn-edit-title" onclick="startInlineEdit('${asset.id}'); event.stopPropagation();" title="Rename">✏️</button>
+                </div>
+                ${previewHtml}
             </div>
-            ${collections.length > 0 ? `<div class="asset-collections">${collectionTags}</div>` : ''}
+            <div class="asset-card-footer">
+                ${metadataBadges}
+                <div class="asset-collections">
+                    ${collectionTags}
+                    ${addCollectionBtn}
+                </div>
+            </div>
         </div>
     `;
 }
@@ -626,30 +1309,47 @@ function renderCollections(collections) {
     const allAssetsItem = `
         <div class="collection-item active" data-collection-id="">
             <span class="collection-color" style="background: #6366f1"></span>
-            <span>All Assets</span>
+            <span class="collection-name">All Assets</span>
             <span class="collection-count">0</span>
         </div>
     `;
 
-    const collectionItems = collections.map(col => `
+    // Filter out collections with 0 assets
+    const nonEmptyCollections = collections.filter(col => (col.asset_count || 0) > 0);
+
+    const collectionItems = nonEmptyCollections.map(col => `
         <div class="collection-item" data-collection-id="${col.id}">
             <span class="collection-color" style="background: ${col.color || '#6366f1'}"></span>
-            <span>${col.name}</span>
+            <span class="collection-name">${col.name}</span>
             <span class="collection-count">${col.asset_count || 0}</span>
+            <button class="collection-delete-btn" data-collection-id="${col.id}" data-collection-name="${col.name}" title="Delete collection">×</button>
         </div>
     `).join('');
 
     list.innerHTML = allAssetsItem + collectionItems;
 
-    // Add click handlers
+    // Add click handlers for collection items
     list.querySelectorAll('.collection-item').forEach(item => {
-        item.addEventListener('click', () => {
+        item.addEventListener('click', (e) => {
+            // Don't trigger if clicking delete button
+            if (e.target.classList.contains('collection-delete-btn')) return;
+
             list.querySelectorAll('.collection-item').forEach(i => i.classList.remove('active'));
             item.classList.add('active');
             const collectionId = item.dataset.collectionId || null;
             Store.dispatch({ type: 'SET_FILTER', payload: { collection: collectionId } });
             // Reload assets with collection filter
             reloadAssets({ collection: collectionId });
+        });
+    });
+
+    // Add click handlers for delete buttons
+    list.querySelectorAll('.collection-delete-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const collectionId = btn.dataset.collectionId;
+            const collectionName = btn.dataset.collectionName;
+            openDeleteCollectionModal(collectionId, collectionName);
         });
     });
 }
@@ -735,6 +1435,9 @@ function renderDetailPanel(asset) {
     // Store current asset ID for actions
     content.dataset.assetId = asset.id;
 
+    // Store full asset for save operations (transcripts, skeletons)
+    currentDetailAsset = asset;
+
     content.innerHTML = `
         <div class="detail-section">
             <span class="asset-type-badge" style="background: ${typeColor}20; color: ${typeColor}">
@@ -759,7 +1462,7 @@ function renderDetailPanel(asset) {
             ` : ''}
         </div>
 
-        <div class="detail-section">
+        <div class="detail-section detail-section-content">
             <div class="detail-section-title">Content</div>
             <div class="detail-body-content">
                 ${renderAssetContent(asset)}
@@ -777,16 +1480,288 @@ function renderDetailPanel(asset) {
     `;
 }
 
+function calculateSkeletonStats(skeletons) {
+    const totalVideos = skeletons.length;
+    const totalViews = skeletons.reduce((sum, s) => sum + (s.views || 0), 0);
+    const totalLikes = skeletons.reduce((sum, s) => sum + (s.likes || 0), 0);
+
+    // Hook stats
+    const hookWordCounts = skeletons.map(s => s.hook_word_count || 0).filter(c => c > 0);
+    const avgHookWords = hookWordCounts.length > 0
+        ? Math.round(hookWordCounts.reduce((a, b) => a + b, 0) / hookWordCounts.length * 10) / 10
+        : 0;
+
+    // Duration stats
+    const durations = skeletons.map(s => s.estimated_duration_seconds || 0).filter(d => d > 0);
+    const avgDuration = durations.length > 0
+        ? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length)
+        : 0;
+
+    // Total word count stats
+    const wordCounts = skeletons.map(s => s.total_word_count || 0).filter(c => c > 0);
+    const avgWordCount = wordCounts.length > 0
+        ? Math.round(wordCounts.reduce((a, b) => a + b, 0) / wordCounts.length)
+        : 0;
+
+    // Hook technique distribution
+    const hookTechniques = {};
+    skeletons.forEach(s => {
+        const tech = s.hook_technique || 'unknown';
+        hookTechniques[tech] = (hookTechniques[tech] || 0) + 1;
+    });
+
+    // Value structure distribution
+    const valueStructures = {};
+    skeletons.forEach(s => {
+        const struct = s.value_structure || 'unknown';
+        valueStructures[struct] = (valueStructures[struct] || 0) + 1;
+    });
+
+    // CTA type distribution
+    const ctaTypes = {};
+    skeletons.forEach(s => {
+        const cta = s.cta_type || 'unknown';
+        ctaTypes[cta] = (ctaTypes[cta] || 0) + 1;
+    });
+
+    // Get dominant patterns
+    const dominantHook = Object.entries(hookTechniques).sort((a, b) => b[1] - a[1])[0];
+    const dominantValue = Object.entries(valueStructures).sort((a, b) => b[1] - a[1])[0];
+    const dominantCta = Object.entries(ctaTypes).sort((a, b) => b[1] - a[1])[0];
+
+    return {
+        totalVideos,
+        totalViews,
+        totalLikes,
+        avgViews: totalVideos > 0 ? Math.round(totalViews / totalVideos) : 0,
+        avgHookWords,
+        avgDuration,
+        avgWordCount,
+        hookTechniques,
+        valueStructures,
+        ctaTypes,
+        dominantHook: dominantHook ? { name: dominantHook[0], count: dominantHook[1], pct: Math.round(dominantHook[1] / totalVideos * 100) } : null,
+        dominantValue: dominantValue ? { name: dominantValue[0], count: dominantValue[1], pct: Math.round(dominantValue[1] / totalVideos * 100) } : null,
+        dominantCta: dominantCta ? { name: dominantCta[0], count: dominantCta[1], pct: Math.round(dominantCta[1] / totalVideos * 100) } : null
+    };
+}
+
+function calculateScrapeStats(reels) {
+    const totalReels = reels.length;
+    const totalViews = reels.reduce((sum, r) => sum + (r.views || r.play_count || 0), 0);
+    const totalLikes = reels.reduce((sum, r) => sum + (r.likes || r.like_count || 0), 0);
+    const totalComments = reels.reduce((sum, r) => sum + (r.comments || r.comment_count || 0), 0);
+
+    return {
+        totalReels,
+        totalViews,
+        totalLikes,
+        totalComments,
+        avgViews: totalReels > 0 ? Math.round(totalViews / totalReels) : 0,
+        avgLikes: totalReels > 0 ? Math.round(totalLikes / totalReels) : 0,
+        avgComments: totalReels > 0 ? Math.round(totalComments / totalReels) : 0
+    };
+}
+
+function renderScrapeMetadataHeader(stats, username, platform = 'instagram') {
+    const profileUrl = platform === 'tiktok'
+        ? `https://www.tiktok.com/@${username}`
+        : `https://www.instagram.com/${username}/`;
+
+    return `
+        <div class="skeleton-metadata-header scrape-metadata-header">
+            <div class="metadata-row primary">
+                <div class="metadata-stat highlight">
+                    <span class="stat-value">${stats.totalReels}</span>
+                    <span class="stat-label">Reels</span>
+                </div>
+                <div class="metadata-stat highlight">
+                    <span class="stat-value">${formatNumber(stats.totalViews)}</span>
+                    <span class="stat-label">Total Views</span>
+                </div>
+                <div class="metadata-stat">
+                    <span class="stat-value">${formatNumber(stats.totalLikes)}</span>
+                    <span class="stat-label">Total Likes</span>
+                </div>
+                <div class="metadata-stat">
+                    <span class="stat-value">${formatNumber(stats.totalComments)}</span>
+                    <span class="stat-label">Total Comments</span>
+                </div>
+            </div>
+            <div class="metadata-row secondary">
+                <div class="metadata-stat small">
+                    <span class="stat-value">${formatNumber(stats.avgViews)}</span>
+                    <span class="stat-label">Avg Views</span>
+                </div>
+                <div class="metadata-stat small">
+                    <span class="stat-value">${formatNumber(stats.avgLikes)}</span>
+                    <span class="stat-label">Avg Likes</span>
+                </div>
+                <div class="metadata-stat small">
+                    <span class="stat-value">${formatNumber(stats.avgComments)}</span>
+                    <span class="stat-label">Avg Comments</span>
+                </div>
+            </div>
+            <div class="metadata-creators">
+                <a href="${profileUrl}" target="_blank" rel="noopener noreferrer" class="creator-tag" onclick="event.stopPropagation();">@${username}</a>
+            </div>
+        </div>
+    `;
+}
+
+function renderSkeletonMetadataHeader(stats, creators, platform = 'instagram') {
+    const creatorLinks = creators.map(c => {
+        const profileUrl = platform === 'tiktok'
+            ? `https://www.tiktok.com/@${c}`
+            : `https://www.instagram.com/${c}/`;
+        return `<a href="${profileUrl}" target="_blank" rel="noopener noreferrer" class="creator-tag" onclick="event.stopPropagation();">@${c}</a>`;
+    }).join('');
+
+    return `
+        <div class="skeleton-metadata-header">
+            <div class="metadata-row primary">
+                <div class="metadata-stat highlight">
+                    <span class="stat-value">${stats.totalVideos}</span>
+                    <span class="stat-label">Videos Analyzed</span>
+                </div>
+                <div class="metadata-stat highlight">
+                    <span class="stat-value">${formatNumber(stats.totalViews)}</span>
+                    <span class="stat-label">Total Views</span>
+                </div>
+                <div class="metadata-stat">
+                    <span class="stat-value">${formatNumber(stats.avgViews)}</span>
+                    <span class="stat-label">Avg Views</span>
+                </div>
+                <div class="metadata-stat">
+                    <span class="stat-value">${creators.length}</span>
+                    <span class="stat-label">Creators</span>
+                </div>
+            </div>
+            <div class="metadata-row secondary">
+                <div class="metadata-stat small">
+                    <span class="stat-value">${stats.avgHookWords}</span>
+                    <span class="stat-label">Avg Hook Words</span>
+                </div>
+                <div class="metadata-stat small">
+                    <span class="stat-value">${stats.avgWordCount}</span>
+                    <span class="stat-label">Avg Total Words</span>
+                </div>
+                <div class="metadata-stat small">
+                    <span class="stat-value">${stats.avgDuration}s</span>
+                    <span class="stat-label">Avg Duration</span>
+                </div>
+            </div>
+            <div class="metadata-row patterns">
+                ${stats.dominantHook ? `
+                    <div class="pattern-stat">
+                        <span class="pattern-label">Top Hook:</span>
+                        <span class="pattern-value">${stats.dominantHook.name}</span>
+                        <span class="pattern-pct">(${stats.dominantHook.pct}%)</span>
+                    </div>
+                ` : ''}
+                ${stats.dominantValue ? `
+                    <div class="pattern-stat">
+                        <span class="pattern-label">Top Structure:</span>
+                        <span class="pattern-value">${stats.dominantValue.name}</span>
+                        <span class="pattern-pct">(${stats.dominantValue.pct}%)</span>
+                    </div>
+                ` : ''}
+                ${stats.dominantCta ? `
+                    <div class="pattern-stat">
+                        <span class="pattern-label">Top CTA:</span>
+                        <span class="pattern-value">${stats.dominantCta.name}</span>
+                        <span class="pattern-pct">(${stats.dominantCta.pct}%)</span>
+                    </div>
+                ` : ''}
+            </div>
+            <div class="metadata-creators">
+                ${creatorLinks}
+            </div>
+        </div>
+    `;
+}
+
 function renderAssetContent(asset) {
     // Handle scrape reports - show full reel details like v2 modal
     if (asset.type === 'scrape_report' && asset.top_reels && asset.top_reels.length > 0) {
+        const stats = calculateScrapeStats(asset.top_reels);
+        const platform = asset.metadata?.platform || 'instagram';
+        const profileUrl = platform === 'tiktok'
+            ? `https://www.tiktok.com/@${asset.username}`
+            : `https://www.instagram.com/${asset.username}/`;
+
         return `
             <div class="scrape-results">
+                ${renderScrapeMetadataHeader(stats, asset.username, platform)}
                 <div class="scrape-summary">
-                    <strong>${asset.top_reels.length} reels</strong> from @${asset.username}
+                    <strong>${asset.top_reels.length} reel${asset.top_reels.length === 1 ? '' : 's'}</strong> from <a href="${profileUrl}" target="_blank" rel="noopener noreferrer" class="creator-link" onclick="event.stopPropagation();">@${asset.username}</a>
                 </div>
                 <div class="reels-accordion">
                     ${asset.top_reels.map((reel, i) => renderReelAccordionItem(reel, i, asset.id)).join('')}
+                </div>
+            </div>
+        `;
+    }
+
+    // Handle skeleton reports - tabbed view with Report and Skeletons
+    if (asset.type === 'skeleton_report') {
+        const hasSkeletons = asset.skeletons && asset.skeletons.length > 0;
+        const hasMarkdown = asset.markdown && asset.markdown.trim().length > 0;
+        const creators = hasSkeletons ? [...new Set(asset.skeletons.map(s => s.creator_username || 'unknown'))] : [];
+        const platform = asset?.metadata?.platform || 'instagram';
+
+        // Calculate accurate stats from skeleton data
+        const stats = hasSkeletons ? calculateSkeletonStats(asset.skeletons) : null;
+
+        // Build creator links for skeleton summary
+        const creatorSummaryLinks = creators.map(c => {
+            const profileUrl = platform === 'tiktok'
+                ? `https://www.tiktok.com/@${c}`
+                : `https://www.instagram.com/${c}/`;
+            return `<a href="${profileUrl}" target="_blank" rel="noopener noreferrer" class="creator-link" onclick="event.stopPropagation();">@${c}</a>`;
+        }).join(', ');
+
+        return `
+            <div class="skeleton-report-container">
+                ${stats ? renderSkeletonMetadataHeader(stats, creators, platform) : ''}
+
+                <div class="skeleton-report-tabs">
+                    <button class="skeleton-tab active" data-tab="report" onclick="switchSkeletonTab('report')">
+                        📊 Analysis Report
+                    </button>
+                    <button class="skeleton-tab" data-tab="skeletons" onclick="switchSkeletonTab('skeletons')">
+                        🦴 Raw Skeletons (${hasSkeletons ? asset.skeletons.length : 0})
+                    </button>
+                </div>
+
+                <div class="skeleton-tab-content" id="skeleton-tab-report">
+                    ${hasMarkdown ? `
+                        <div class="skeleton-report-markdown">
+                            ${renderMarkdown(asset.markdown)}
+                        </div>
+                    ` : `
+                        <div class="skeleton-report-empty">
+                            <p>No analysis report available.</p>
+                            <p class="text-muted">The synthesis may have failed or this is an older report.</p>
+                        </div>
+                    `}
+                </div>
+
+                <div class="skeleton-tab-content" id="skeleton-tab-skeletons" style="display: none;">
+                    ${hasSkeletons ? `
+                        <div class="skeleton-results">
+                            <div class="skeleton-summary">
+                                <strong>${asset.skeletons.length} skeleton${asset.skeletons.length === 1 ? '' : 's'}</strong> from ${creatorSummaryLinks}
+                            </div>
+                            <div class="skeletons-accordion">
+                                ${asset.skeletons.map((sk, i) => renderSkeletonAccordionItem(sk, i, asset.id)).join('')}
+                            </div>
+                        </div>
+                    ` : `
+                        <div class="skeleton-report-empty">
+                            <p>No skeletons extracted.</p>
+                        </div>
+                    `}
                 </div>
             </div>
         `;
@@ -807,19 +1782,33 @@ function renderReelAccordionItem(reel, index, scrapeId) {
     const comments = reel.comment_count || reel.comments || 0;
     const caption = reel.caption || 'No caption';
     const transcript = reel.transcript || null;
+    const hasVideo = reel.local_video ? true : false;
     const url = reel.url || reel.video_url || '';
     const shortcode = reel.shortcode || reel.id || '';
 
     return `
         <div class="reel-accordion-item" data-index="${index}">
             <div class="reel-accordion-header" onclick="toggleReelAccordion(${index})">
-                <div class="reel-header-left">
-                    <span class="reel-index">#${index + 1}</span>
-                    <span class="reel-header-caption">${escapeHtml(caption.substring(0, 60))}${caption.length > 60 ? '...' : ''}</span>
+                <div class="reel-header-content">
+                    <div class="reel-header-title">
+                        <span class="reel-index">#${index + 1}</span>
+                        <span class="reel-header-caption">${escapeHtml(caption.substring(0, 80))}${caption.length > 80 ? '...' : ''}</span>
+                    </div>
+                    <div class="reel-header-stats">
+                        <span class="reel-stat-mini">${formatNumber(views)} views</span>
+                        <span class="reel-stat-mini">${formatNumber(likes)} likes</span>
+                        <span class="reel-stat-mini">${formatNumber(comments)} comments</span>
+                    </div>
                 </div>
-                <div class="reel-header-right">
-                    <span class="reel-stat-mini">${formatNumber(views)} views</span>
-                    ${transcript ? '<span class="reel-has-transcript">📝</span>' : ''}
+                <div class="reel-header-indicators">
+                    <div class="reel-indicator ${transcript ? 'active' : ''}" title="${transcript ? 'Transcript available' : 'No transcript'}">
+                        <span class="indicator-dot"></span>
+                        <span class="indicator-label">${transcript ? 'Transcript' : 'No Transcript'}</span>
+                    </div>
+                    <div class="reel-indicator ${hasVideo ? 'active' : ''}" title="${hasVideo ? 'Video downloaded' : 'Video not downloaded'}">
+                        <span class="indicator-dot"></span>
+                        <span class="indicator-label">${hasVideo ? 'Video' : 'No Video'}</span>
+                    </div>
                     <span class="reel-accordion-arrow">▼</span>
                 </div>
             </div>
@@ -862,7 +1851,11 @@ function renderReelAccordionItem(reel, index, scrapeId) {
                 <div class="reel-section">
                     <div class="reel-section-title">TRANSCRIPT</div>
                     <div class="reel-transcript">${escapeHtml(transcript)}</div>
-                    <button class="btn-copy-sm" onclick="copyTranscriptFromReel(${index})">COPY TRANSCRIPT</button>
+                    <div class="reel-section-actions">
+                        <button class="btn-copy-sm" onclick="copyTranscriptFromReel(${index})">COPY</button>
+                        <button class="btn-save-sm" onclick="saveTranscriptAsAsset(${index}, '${scrapeId}')">SAVE TO LIBRARY</button>
+                        <button class="btn-rewrite-sm" onclick="openRewriteModal('${scrapeId}', '${shortcode}')">REWRITE WITH AI</button>
+                    </div>
                 </div>
                 ` : `
                 <div class="reel-section reel-no-transcript">
@@ -873,7 +1866,7 @@ function renderReelAccordionItem(reel, index, scrapeId) {
 
                 <!-- Actions -->
                 <div class="reel-actions">
-                    ${url ? `<a href="${escapeHtml(url)}" target="_blank" class="btn btn-secondary btn-sm">OPEN IN IG</a>` : ''}
+                    ${url ? `<a href="${escapeHtml(url)}" target="_blank" class="btn btn-secondary btn-sm btn-ig"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg> OPEN IN IG</a>` : ''}
                     <button class="btn btn-secondary btn-sm" onclick="copyReelForAI(${index})">COPY FOR AI</button>
                 </div>
             </div>
@@ -939,6 +1932,325 @@ function copyUrlFromReel(index) {
     copyToClipboard(url, btn);
 }
 
+// Store current asset for save operations
+let currentDetailAsset = null;
+
+async function saveTranscriptAsAsset(index, scrapeId) {
+    if (!currentDetailAsset || !currentDetailAsset.top_reels) {
+        alert('Unable to save: asset data not loaded');
+        return;
+    }
+
+    const reel = currentDetailAsset.top_reels[index];
+    if (!reel || !reel.transcript) {
+        alert('No transcript available to save');
+        return;
+    }
+
+    const btn = document.querySelector(`.reel-accordion-item[data-index="${index}"] .btn-save-sm`);
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'SAVING...';
+    }
+
+    try {
+        const response = await fetch('/api/assets/save-transcript', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                reel_data: reel,
+                source_report_id: scrapeId,
+                username: currentDetailAsset.username || 'unknown'
+            })
+        });
+
+        const result = await response.json();
+        if (response.ok) {
+            if (btn) {
+                btn.textContent = '✓ SAVED';
+                btn.classList.add('saved');
+            }
+            // Refresh library to show new asset
+            loadAssets();
+        } else {
+            throw new Error(result.error || 'Failed to save');
+        }
+    } catch (error) {
+        console.error('[Workspace] Failed to save transcript:', error);
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = 'SAVE TO LIBRARY';
+        }
+        alert('Failed to save transcript: ' + error.message);
+    }
+}
+
+window.saveTranscriptAsAsset = saveTranscriptAsAsset;
+
+function renderSkeletonAccordionItem(skeleton, index, reportId) {
+    const hook = skeleton.hook || 'No hook';
+    const hookTechnique = skeleton.hook_technique || '';
+    const hookWordCount = skeleton.hook_word_count || 0;
+    const value = skeleton.value || '';
+    const valueStructure = skeleton.value_structure || '';
+    const valuePoints = skeleton.value_points || [];
+    const cta = skeleton.cta || '';
+    const ctaType = skeleton.cta_type || '';
+    const creator = skeleton.creator_username || 'unknown';
+    const views = skeleton.views || skeleton.metrics?.views || 0;
+    const totalWords = skeleton.total_word_count || 0;
+    const duration = skeleton.estimated_duration_seconds || 0;
+
+    return `
+        <div class="skeleton-accordion-item" data-index="${index}">
+            <div class="skeleton-accordion-header" onclick="toggleSkeletonAccordion(${index})">
+                <div class="skeleton-header-content">
+                    <div class="skeleton-header-title">
+                        <span class="skeleton-index">#${index + 1}</span>
+                        <span class="skeleton-creator">@${creator}</span>
+                        <span class="skeleton-header-hook">${escapeHtml(hook.substring(0, 60))}${hook.length > 60 ? '...' : ''}</span>
+                    </div>
+                    <div class="skeleton-header-meta">
+                        ${hookTechnique ? `<span class="skeleton-tag technique">${hookTechnique}</span>` : ''}
+                        ${views > 0 ? `<span class="skeleton-tag views">${formatNumber(views)} views</span>` : ''}
+                    </div>
+                </div>
+                <span class="skeleton-accordion-arrow">▼</span>
+            </div>
+            <div class="skeleton-accordion-body" id="skeleton-body-${index}" style="display: none;">
+                <!-- Hook Section -->
+                <div class="skeleton-section">
+                    <div class="skeleton-section-header">
+                        <div class="skeleton-section-title">HOOK</div>
+                        <div class="skeleton-section-meta">
+                            ${hookTechnique ? `<span class="meta-tag">${hookTechnique}</span>` : ''}
+                            ${hookWordCount > 0 ? `<span class="meta-tag">${hookWordCount} words</span>` : ''}
+                        </div>
+                    </div>
+                    <div class="skeleton-content">${escapeHtml(hook)}</div>
+                </div>
+
+                <!-- Value Section -->
+                ${value ? `
+                <div class="skeleton-section">
+                    <div class="skeleton-section-header">
+                        <div class="skeleton-section-title">VALUE DELIVERY</div>
+                        <div class="skeleton-section-meta">
+                            ${valueStructure ? `<span class="meta-tag">${valueStructure}</span>` : ''}
+                        </div>
+                    </div>
+                    <div class="skeleton-content">${escapeHtml(value)}</div>
+                </div>
+                ` : ''}
+
+                <!-- Value Points -->
+                ${valuePoints.length > 0 ? `
+                <div class="skeleton-section">
+                    <div class="skeleton-section-title">KEY POINTS</div>
+                    <ul class="skeleton-key-points">
+                        ${valuePoints.map(vp => `<li>${escapeHtml(vp)}</li>`).join('')}
+                    </ul>
+                </div>
+                ` : ''}
+
+                <!-- CTA -->
+                ${cta ? `
+                <div class="skeleton-section">
+                    <div class="skeleton-section-header">
+                        <div class="skeleton-section-title">CTA</div>
+                        <div class="skeleton-section-meta">
+                            ${ctaType ? `<span class="meta-tag">${ctaType}</span>` : ''}
+                        </div>
+                    </div>
+                    <div class="skeleton-content">${escapeHtml(cta)}</div>
+                </div>
+                ` : ''}
+
+                <!-- Stats Footer -->
+                ${(totalWords > 0 || duration > 0) ? `
+                <div class="skeleton-stats-footer">
+                    ${totalWords > 0 ? `<span class="stat-item">${totalWords} words</span>` : ''}
+                    ${duration > 0 ? `<span class="stat-item">~${duration}s</span>` : ''}
+                </div>
+                ` : ''}
+
+                <!-- Actions -->
+                <div class="skeleton-section-actions">
+                    <button class="btn-copy-sm" onclick="copySkeletonContent(${index})">COPY</button>
+                    <button class="btn-save-sm" onclick="saveSkeletonAsAsset(${index}, '${reportId}')">SAVE TO LIBRARY</button>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function toggleSkeletonAccordion(index) {
+    const body = document.getElementById(`skeleton-body-${index}`);
+    const item = body.closest('.skeleton-accordion-item');
+    const arrow = item.querySelector('.skeleton-accordion-arrow');
+
+    if (body.style.display === 'none') {
+        body.style.display = 'block';
+        item.classList.add('expanded');
+        arrow.textContent = '▲';
+    } else {
+        body.style.display = 'none';
+        item.classList.remove('expanded');
+        arrow.textContent = '▼';
+    }
+}
+
+function copySkeletonContent(index) {
+    if (!currentDetailAsset || !currentDetailAsset.skeletons) return;
+    const sk = currentDetailAsset.skeletons[index];
+    if (!sk) return;
+
+    let text = `HOOK (${sk.hook_technique || 'unknown'}):\n${sk.hook || 'N/A'}\n\n`;
+    if (sk.value) text += `VALUE (${sk.value_structure || 'unknown'}):\n${sk.value}\n\n`;
+    if (sk.value_points && sk.value_points.length > 0) {
+        text += `KEY POINTS:\n${sk.value_points.map(vp => `• ${vp}`).join('\n')}\n\n`;
+    }
+    if (sk.cta) text += `CTA (${sk.cta_type || 'unknown'}):\n${sk.cta}`;
+
+    navigator.clipboard.writeText(text.trim()).then(() => {
+        const btn = document.querySelector(`.skeleton-accordion-item[data-index="${index}"] .btn-copy-sm`);
+        if (btn) {
+            const original = btn.textContent;
+            btn.textContent = '✓ COPIED';
+            setTimeout(() => btn.textContent = original, 1500);
+        }
+    });
+}
+
+async function saveSkeletonAsAsset(index, reportId) {
+    if (!currentDetailAsset || !currentDetailAsset.skeletons) {
+        alert('Unable to save: asset data not loaded');
+        return;
+    }
+
+    const skeleton = currentDetailAsset.skeletons[index];
+    if (!skeleton) {
+        alert('No skeleton available to save');
+        return;
+    }
+
+    const btn = document.querySelector(`.skeleton-accordion-item[data-index="${index}"] .btn-save-sm`);
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'SAVING...';
+    }
+
+    try {
+        const response = await fetch('/api/assets/save-skeleton', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                skeleton_data: skeleton,
+                source_report_id: reportId
+            })
+        });
+
+        const result = await response.json();
+        if (response.ok) {
+            if (btn) {
+                btn.textContent = '✓ SAVED';
+                btn.classList.add('saved');
+            }
+            loadAssets();
+        } else {
+            throw new Error(result.error || 'Failed to save');
+        }
+    } catch (error) {
+        console.error('[Workspace] Failed to save skeleton:', error);
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = 'SAVE TO LIBRARY';
+        }
+        alert('Failed to save skeleton: ' + error.message);
+    }
+}
+
+window.toggleSkeletonAccordion = toggleSkeletonAccordion;
+window.copySkeletonContent = copySkeletonContent;
+window.saveSkeletonAsAsset = saveSkeletonAsAsset;
+
+// Tab switching for skeleton reports
+function switchSkeletonTab(tabName) {
+    // Update tab buttons
+    document.querySelectorAll('.skeleton-tab').forEach(tab => {
+        tab.classList.toggle('active', tab.dataset.tab === tabName);
+    });
+
+    // Update tab content
+    document.querySelectorAll('.skeleton-tab-content').forEach(content => {
+        content.style.display = content.id === `skeleton-tab-${tabName}` ? 'block' : 'none';
+    });
+}
+window.switchSkeletonTab = switchSkeletonTab;
+
+// Simple markdown to HTML renderer
+function renderMarkdown(markdown) {
+    if (!markdown) return '';
+
+    // First, extract code blocks and replace with placeholders
+    const codeBlocks = [];
+    let processedMd = markdown.replace(/```([\s\S]*?)```/g, (match, code) => {
+        const index = codeBlocks.length;
+        // Preserve code content, add extra spacing between lines that look like labeled items
+        let processedCode = code.trim()
+            // Add blank line before lines that start with common labels
+            .replace(/\n(Template:|Example|Why it works:|Use when:|Structure:|Step \d|Hook:|Value:|CTA:|Best for:|Duration:)/g, '\n\n$1');
+        codeBlocks.push(processedCode);
+        return `__CODE_BLOCK_${index}__`;
+    });
+
+    let html = processedMd
+        // Escape HTML first
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        // Headers
+        .replace(/^### (.*$)/gm, '<h3>$1</h3>')
+        .replace(/^## (.*$)/gm, '<h2>$1</h2>')
+        .replace(/^# (.*$)/gm, '<h1>$1</h1>')
+        // Bold and italic
+        .replace(/\*\*\*(.*?)\*\*\*/g, '<strong><em>$1</em></strong>')
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.*?)\*/g, '<em>$1</em>')
+        // Inline code
+        .replace(/`([^`]+)`/g, '<code>$1</code>')
+        // Horizontal rules
+        .replace(/^---$/gm, '<hr>')
+        // Unordered lists
+        .replace(/^\s*[-*]\s+(.*)$/gm, '<li>$1</li>')
+        // Paragraphs (double newlines)
+        .replace(/\n\n/g, '</p><p>')
+        // Line breaks
+        .replace(/\n/g, '<br>');
+
+    // Restore code blocks
+    codeBlocks.forEach((code, index) => {
+        const escapedCode = code
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+        html = html.replace(`__CODE_BLOCK_${index}__`, `<pre><code>${escapedCode}</code></pre>`);
+    });
+
+    // Wrap list items in ul
+    html = html.replace(/(<li>.*<\/li>)/gs, (match) => {
+        if (!match.includes('<ul>')) {
+            return '<ul>' + match + '</ul>';
+        }
+        return match;
+    });
+
+    // Clean up consecutive ul tags
+    html = html.replace(/<\/ul>\s*<ul>/g, '');
+
+    return '<div class="markdown-content"><p>' + html + '</p></div>';
+}
+
 function formatNumber(num) {
     if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
     if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
@@ -974,6 +2286,114 @@ async function toggleStarAsset() {
     } catch (error) {
         console.error('[Workspace] Failed to toggle star:', error);
     }
+}
+
+// Toggle asset star from library card (takes assetId as parameter)
+async function toggleAssetStar(assetId) {
+    console.log('[Workspace] Toggling star for asset:', assetId);
+    try {
+        const result = await API.toggleStar(assetId);
+
+        // Update in store (this triggers re-render of library and favorites)
+        const state = Store.getState();
+        const assets = state.assets.map(a =>
+            a.id === assetId ? { ...a, starred: result.starred } : a
+        );
+        Store.dispatch({ type: 'SET_ASSETS', payload: assets });
+
+        // Update favorites count in sidebar
+        updateFavoritesCount(assets.filter(a => a.starred).length);
+
+        // Also update detail panel star button if this asset is currently open
+        const content = document.getElementById('detail-panel-content');
+        if (content && content.dataset.assetId === assetId) {
+            const starBtn = document.getElementById('btn-star-asset');
+            if (starBtn) {
+                starBtn.textContent = result.starred ? '★' : '☆';
+                starBtn.classList.toggle('starred', result.starred);
+            }
+        }
+
+        console.log('[Workspace] Toggled asset star:', result.starred);
+    } catch (error) {
+        console.error('[Workspace] Failed to toggle asset star:', error);
+    }
+}
+
+function startInlineEdit(assetId) {
+    const titleEl = document.querySelector(`.asset-title[data-asset-id="${assetId}"]`);
+    if (!titleEl || titleEl.querySelector('input')) return; // Already editing
+
+    const currentTitle = titleEl.textContent;
+    const editBtn = titleEl.parentElement.querySelector('.btn-edit-title');
+
+    // Hide the edit button while editing
+    if (editBtn) editBtn.style.display = 'none';
+
+    // Create input field
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'inline-title-input';
+    input.value = currentTitle;
+
+    // Replace title text with input
+    titleEl.textContent = '';
+    titleEl.appendChild(input);
+    input.focus();
+    input.select();
+
+    // Handle save on blur or Enter
+    const saveEdit = async () => {
+        const newTitle = input.value.trim();
+        if (newTitle && newTitle !== currentTitle) {
+            try {
+                const response = await fetch(`/api/assets/${assetId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title: newTitle })
+                });
+
+                if (!response.ok) throw new Error('Failed to rename');
+
+                // Update in store and re-render
+                const state = Store.getState();
+                const assets = state.assets.map(a =>
+                    a.id === assetId ? { ...a, title: newTitle } : a
+                );
+                Store.dispatch({ type: 'SET_ASSETS', payload: assets });
+                renderAssets(assets);
+
+                console.log('[Workspace] Renamed asset:', newTitle);
+            } catch (error) {
+                console.error('[Workspace] Failed to rename:', error);
+                titleEl.textContent = currentTitle;
+            }
+        } else {
+            titleEl.textContent = currentTitle;
+        }
+        if (editBtn) editBtn.style.display = '';
+    };
+
+    const cancelEdit = () => {
+        titleEl.textContent = currentTitle;
+        if (editBtn) editBtn.style.display = '';
+    };
+
+    input.addEventListener('blur', saveEdit);
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            input.blur();
+        } else if (e.key === 'Escape') {
+            input.removeEventListener('blur', saveEdit);
+            cancelEdit();
+        }
+    });
+}
+
+// Legacy function kept for compatibility
+async function renameAsset(assetId, currentTitle) {
+    startInlineEdit(assetId);
 }
 
 async function copyAssetContent() {
@@ -1240,8 +2660,13 @@ async function startScrape() {
 
         closeModal();
 
-        // Navigate to jobs view
+        // Navigate to jobs view and switch to active tab
         window.location.hash = '#jobs';
+        // Ensure active tab is selected and jobs are loaded after navigation
+        setTimeout(() => {
+            document.querySelector('.jobs-tab[data-tab="active"]')?.click();
+            loadJobs('active');
+        }, 100);
     } catch (error) {
         console.error('[Workspace] Failed to start scrape:', error);
         errorEl.textContent = error.message || 'Failed to start scrape';
@@ -1455,7 +2880,14 @@ async function startDirectScrape() {
         }
 
         closeModal();
+
+        // Navigate to jobs view and switch to active tab
         window.location.hash = '#jobs';
+        // Ensure active tab is selected and jobs are loaded after navigation
+        setTimeout(() => {
+            document.querySelector('.jobs-tab[data-tab="active"]')?.click();
+            loadJobs('active');
+        }, 100);
     } catch (error) {
         console.error('[Workspace] Failed to start direct scrape:', error);
         errorEl.textContent = error.message || 'Failed to start scrape';
@@ -1608,17 +3040,29 @@ async function startAnalysis() {
 
     try {
         const result = await API.startAnalysis({
-            creators,
+            usernames: creators,
             videos_per_creator: videosPerCreator,
-            provider_id: provider,
-            model_id: model
+            llm_provider: provider,
+            llm_model: model
         });
 
         console.log('[Workspace] Analysis started:', result);
+
+        // Track job for completion detection
+        if (result.job_id) {
+            trackedActiveJobs.add(result.job_id);
+            startJobsPolling();
+        }
+
         closeModal();
 
-        // Navigate to jobs view
+        // Navigate to jobs view and switch to active tab
         window.location.hash = '#jobs';
+        // Ensure active tab is selected and jobs are loaded after navigation
+        setTimeout(() => {
+            document.querySelector('.jobs-tab[data-tab="active"]')?.click();
+            loadJobs('active');
+        }, 100);
     } catch (error) {
         console.error('[Workspace] Failed to start analysis:', error);
         errorEl.textContent = error.message || 'Failed to start analysis';
@@ -1733,6 +3177,1021 @@ function hideReconnectOverlay() {
     serverWasDown = false;
 }
 
+// Resizable detail panel
+function setupPanelResize() {
+    const panel = document.getElementById('detail-panel');
+    const resizeHandle = document.getElementById('detail-panel-resize');
+
+    if (!panel || !resizeHandle) return;
+
+    let isResizing = false;
+    let startX = 0;
+    let startWidth = 0;
+    let saveTimeout = null;
+
+    resizeHandle.addEventListener('mousedown', (e) => {
+        isResizing = true;
+        startX = e.clientX;
+        startWidth = panel.offsetWidth;
+
+        panel.classList.add('resizing');
+        resizeHandle.classList.add('dragging');
+        document.body.style.cursor = 'ew-resize';
+        document.body.style.userSelect = 'none';
+
+        e.preventDefault();
+    });
+
+    document.addEventListener('mousemove', (e) => {
+        if (!isResizing) return;
+
+        // Calculate new width (dragging left increases width since panel is on right)
+        const deltaX = startX - e.clientX;
+        let newWidth = startWidth + deltaX;
+
+        // Clamp to min/max
+        const minWidth = 400;
+        const maxWidth = window.innerWidth * 0.8;
+        newWidth = Math.max(minWidth, Math.min(maxWidth, newWidth));
+
+        panel.style.width = newWidth + 'px';
+    });
+
+    document.addEventListener('mouseup', () => {
+        if (!isResizing) return;
+
+        isResizing = false;
+        panel.classList.remove('resizing');
+        resizeHandle.classList.remove('dragging');
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+
+        // Save width preference to server (debounced)
+        const currentWidth = parseInt(panel.style.width);
+        if (saveTimeout) clearTimeout(saveTimeout);
+        saveTimeout = setTimeout(() => {
+            API.updateSettings({ detail_panel_width: currentWidth }).catch(err => {
+                console.warn('[Workspace] Failed to save panel width:', err);
+            });
+        }, 500);
+    });
+
+    // Restore saved width from server settings
+    API.getSettings().then(settings => {
+        if (settings.detail_panel_width) {
+            panel.style.width = settings.detail_panel_width + 'px';
+        }
+    }).catch(err => {
+        console.warn('[Workspace] Failed to load panel width:', err);
+    });
+}
+
+// Custom context menu for PyWebView (right-click copy/paste)
+function setupContextMenu() {
+    // Create context menu element
+    const menu = document.createElement('div');
+    menu.id = 'custom-context-menu';
+    menu.innerHTML = `
+        <div class="ctx-item" data-action="refresh">🔄 Refresh</div>
+        <div class="ctx-divider"></div>
+        <div class="ctx-item" data-action="copy">Copy</div>
+        <div class="ctx-item" data-action="cut">Cut</div>
+        <div class="ctx-item" data-action="paste">Paste</div>
+        <div class="ctx-divider"></div>
+        <div class="ctx-item" data-action="selectall">Select All</div>
+    `;
+    menu.style.cssText = `
+        display: none;
+        position: fixed;
+        background: #27272a;
+        border: 1px solid #3f3f46;
+        border-radius: 6px;
+        padding: 4px 0;
+        min-width: 120px;
+        z-index: 99999;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    `;
+    document.body.appendChild(menu);
+
+    // Style menu items
+    const style = document.createElement('style');
+    style.textContent = `
+        #custom-context-menu .ctx-item {
+            padding: 8px 16px;
+            cursor: pointer;
+            color: #fafafa;
+            font-size: 13px;
+        }
+        #custom-context-menu .ctx-item:hover {
+            background: #10b981;
+        }
+        #custom-context-menu .ctx-divider {
+            height: 1px;
+            background: #3f3f46;
+            margin: 4px 0;
+        }
+    `;
+    document.head.appendChild(style);
+
+    // Store selection when menu opens (before it gets cleared by clicking menu)
+    let savedSelection = '';
+    let savedActiveElement = null;
+
+    // Show menu on right-click
+    document.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+
+        // Save selection NOW before clicking menu clears it
+        savedSelection = window.getSelection().toString();
+        savedActiveElement = document.activeElement;
+
+        menu.style.display = 'block';
+        menu.style.left = e.clientX + 'px';
+        menu.style.top = e.clientY + 'px';
+
+        // Adjust if menu goes off screen
+        const rect = menu.getBoundingClientRect();
+        if (rect.right > window.innerWidth) {
+            menu.style.left = (e.clientX - rect.width) + 'px';
+        }
+        if (rect.bottom > window.innerHeight) {
+            menu.style.top = (e.clientY - rect.height) + 'px';
+        }
+    });
+
+    // Hide menu on click elsewhere
+    document.addEventListener('click', (e) => {
+        if (!menu.contains(e.target)) {
+            menu.style.display = 'none';
+        }
+    });
+
+    // Handle menu actions
+    menu.addEventListener('click', async (e) => {
+        const action = e.target.dataset.action;
+        if (!action) return;
+
+        try {
+            switch (action) {
+                case 'refresh':
+                    window.location.reload();
+                    break;
+                case 'copy':
+                    if (savedSelection) {
+                        await navigator.clipboard.writeText(savedSelection);
+                    }
+                    break;
+                case 'cut':
+                    if (savedSelection && (savedActiveElement.tagName === 'INPUT' || savedActiveElement.tagName === 'TEXTAREA')) {
+                        await navigator.clipboard.writeText(savedSelection);
+                        savedActiveElement.focus();
+                        document.execCommand('delete');
+                    }
+                    break;
+                case 'paste':
+                    if (savedActiveElement.tagName === 'INPUT' || savedActiveElement.tagName === 'TEXTAREA') {
+                        const text = await navigator.clipboard.readText();
+                        savedActiveElement.focus();
+                        document.execCommand('insertText', false, text);
+                    }
+                    break;
+                case 'selectall':
+                    document.execCommand('selectAll');
+                    break;
+            }
+        } catch (err) {
+            console.error('Context menu action failed:', err);
+        }
+        menu.style.display = 'none';
+    });
+}
+
+// =========================================
+// STARRED JOBS VIEW
+// =========================================
+
+async function loadStarredJobs() {
+    const list = document.getElementById('starred-jobs-list');
+    if (!list) return;
+
+    // Apply current view mode (same as main jobs list)
+    list.classList.remove('view-list', 'view-grid-2', 'view-grid-3');
+    list.classList.add(`view-${currentJobsViewMode}`);
+
+    try {
+        const response = await fetch('/api/jobs/starred');
+        const data = await response.json();
+
+        if (data.success && data.jobs.length > 0) {
+            list.innerHTML = data.jobs.map(job => renderJobCard(job, 'starred')).join('');
+
+            // Add click handlers
+            list.querySelectorAll('.job-card').forEach(card => {
+                card.addEventListener('click', () => {
+                    // Use assetFilterId for library filtering (matches history/asset IDs)
+                    const assetFilterId = card.dataset.assetFilterId;
+                    const jobType = card.dataset.jobType;
+                    openJobDetail(assetFilterId, jobType);
+                });
+            });
+        } else {
+            list.innerHTML = `<div class="empty-state"><p>No favorite jobs yet. Star jobs to see them here.</p></div>`;
+        }
+    } catch (error) {
+        console.error('[Workspace] Failed to load starred jobs:', error);
+        list.innerHTML = `<div class="empty-state"><p>Failed to load favorite jobs.</p></div>`;
+    }
+}
+
+// Switch view programmatically
+function switchView(viewName) {
+    Router.navigate(viewName);
+}
+
+// =========================================
+// COLLECTION MODAL FUNCTIONS
+// =========================================
+
+let addCollectionTargetAssetId = null;
+let addCollectionSelectedColor = '#10B981';
+
+function openAddCollectionModal(assetId) {
+    addCollectionTargetAssetId = assetId;
+    loadCollectionsForModal();
+    document.getElementById('addCollectionModal').classList.add('active');
+}
+
+function closeAddCollectionModal() {
+    document.getElementById('addCollectionModal').classList.remove('active');
+    addCollectionTargetAssetId = null;
+    cancelNewCollectionForm();
+}
+
+async function loadCollectionsForModal() {
+    try {
+        const response = await fetch('/api/collections');
+        const collections = await response.json();
+
+        const select = document.getElementById('addCollectionDropdown');
+        select.innerHTML = '<option value="">-- Select Collection --</option>';
+
+        collections.forEach(c => {
+            const option = document.createElement('option');
+            option.value = c.id;
+            option.textContent = c.name;
+            select.appendChild(option);
+        });
+    } catch (error) {
+        console.error('[Workspace] Failed to load collections:', error);
+    }
+}
+
+function showNewCollectionForm() {
+    document.getElementById('addCollectionNewForm').style.display = 'block';
+    document.getElementById('addCollectionNewName').focus();
+}
+
+function cancelNewCollectionForm() {
+    const form = document.getElementById('addCollectionNewForm');
+    const input = document.getElementById('addCollectionNewName');
+    if (form) form.style.display = 'none';
+    if (input) input.value = '';
+    selectCollectionColor('#10B981');
+}
+
+function selectCollectionColor(color) {
+    addCollectionSelectedColor = color;
+    document.querySelectorAll('#addCollectionColors .color-swatch').forEach(swatch => {
+        swatch.classList.toggle('active', swatch.dataset.color === color);
+    });
+}
+
+async function createNewCollection() {
+    const name = document.getElementById('addCollectionNewName').value.trim();
+    if (!name) {
+        alert('Please enter a collection name');
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/collections', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                name: name,
+                color: addCollectionSelectedColor
+            })
+        });
+
+        if (!response.ok) throw new Error('Failed to create collection');
+
+        const collection = await response.json();
+
+        // Reload collections and select the new one
+        await loadCollectionsForModal();
+        document.getElementById('addCollectionDropdown').value = collection.id;
+
+        // Hide form
+        cancelNewCollectionForm();
+
+        // Also refresh sidebar collections
+        loadCollections();
+    } catch (error) {
+        console.error('[Workspace] Failed to create collection:', error);
+        alert('Failed to create collection');
+    }
+}
+
+async function confirmAddToCollection() {
+    const select = document.getElementById('addCollectionDropdown');
+    const collectionId = select.value;
+
+    if (!collectionId) {
+        alert('Please select a collection');
+        return;
+    }
+
+    if (!addCollectionTargetAssetId) {
+        alert('No asset selected');
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/assets/${addCollectionTargetAssetId}/collections`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ collection_id: collectionId })
+        });
+
+        if (!response.ok) throw new Error('Failed to add to collection');
+
+        closeAddCollectionModal();
+        reloadAssets();
+        loadCollections();
+        console.log('[Workspace] Added asset to collection');
+    } catch (error) {
+        console.error('[Workspace] Failed to add to collection:', error);
+        alert('Failed to add to collection');
+    }
+}
+
+// Reload sidebar collections
+async function loadCollections() {
+    try {
+        const response = await fetch('/api/collections');
+        const collections = await response.json();
+        renderCollections(collections);
+    } catch (error) {
+        console.error('[Workspace] Failed to load collections:', error);
+    }
+}
+
+// =========================================
+// DELETE COLLECTION MODAL FUNCTIONS
+// =========================================
+
+let deleteCollectionTargetId = null;
+
+function openDeleteCollectionModal(collectionId, collectionName) {
+    deleteCollectionTargetId = collectionId;
+    document.getElementById('deleteCollectionName').textContent = collectionName;
+    document.getElementById('deleteCollectionModal').classList.add('active');
+}
+
+function closeDeleteCollectionModal() {
+    document.getElementById('deleteCollectionModal').classList.remove('active');
+    deleteCollectionTargetId = null;
+}
+
+async function confirmDeleteCollection() {
+    if (!deleteCollectionTargetId) {
+        console.error('[Workspace] No collection selected for deletion');
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/collections/${deleteCollectionTargetId}`, {
+            method: 'DELETE'
+        });
+
+        if (!response.ok) throw new Error('Failed to delete collection');
+
+        console.log('[Workspace] Deleted collection:', deleteCollectionTargetId);
+        closeDeleteCollectionModal();
+
+        // Refresh sidebar collections
+        loadCollections();
+
+        // If viewing the deleted collection, switch to All Assets
+        const activeCollection = document.querySelector('.collection-item.active');
+        if (activeCollection?.dataset.collectionId === deleteCollectionTargetId) {
+            reloadAssets({});
+        }
+    } catch (error) {
+        console.error('[Workspace] Failed to delete collection:', error);
+        alert('Failed to delete collection');
+    }
+}
+
+// Initialize starred jobs count on page load
+async function initStarredJobsCount() {
+    await updateStarredJobsCount();
+}
+
+// =====================
+// REWRITE FUNCTIONALITY
+// =====================
+
+// Rewrite state variables
+let currentRewriteReel = null;
+let cachedSettings = null;
+const TOTAL_WIZARD_STEPS = 8;
+let wizardStep = 0;
+let wizardData = {};
+let wizardMode = 'guided'; // 'guided' or 'quick'
+
+// Models for each provider (used in rewrite modal)
+const providerModels = {
+    local: [], // Populated dynamically from Ollama
+    openai: ['gpt-4o-mini', 'gpt-4o', 'gpt-4-turbo', 'gpt-3.5-turbo'],
+    anthropic: ['claude-3-5-haiku-20241022', 'claude-3-5-sonnet-20241022', 'claude-3-opus-20240229'],
+    google: ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.0-flash-exp']
+};
+
+// Fetch settings and Ollama models for rewrite modal
+async function fetchRewriteSettings() {
+    try {
+        const [settingsRes, ollamaRes] = await Promise.all([
+            fetch('/api/settings'),
+            fetch('/api/ollama/models').catch(() => ({ json: () => ({ available: false, models: [] }) }))
+        ]);
+
+        cachedSettings = await settingsRes.json();
+
+        try {
+            const ollamaData = await ollamaRes.json();
+            if (ollamaData.available && ollamaData.models.length > 0) {
+                providerModels.local = ollamaData.models;
+            }
+        } catch (e) {
+            providerModels.local = [];
+        }
+    } catch (error) {
+        console.error('Failed to fetch rewrite settings:', error);
+    }
+}
+
+// Update rewrite model dropdown based on selected provider
+function updateRewriteModel() {
+    const provider = document.getElementById('rewriteProvider').value;
+    const modelSelect = document.getElementById('rewriteModel');
+    const statusDiv = document.getElementById('rewriteProviderStatus');
+
+    modelSelect.innerHTML = '';
+
+    if (provider === 'local') {
+        if (providerModels.local.length > 0) {
+            providerModels.local.forEach(model => {
+                const option = document.createElement('option');
+                option.value = model;
+                option.textContent = model;
+                modelSelect.appendChild(option);
+            });
+            statusDiv.textContent = `${providerModels.local.length} local models available`;
+            statusDiv.style.color = 'var(--color-accent-primary)';
+        } else {
+            const option = document.createElement('option');
+            option.value = '';
+            option.textContent = '-- No models --';
+            modelSelect.appendChild(option);
+            statusDiv.textContent = 'Ollama not running or no models installed';
+            statusDiv.style.color = 'var(--color-danger)';
+        }
+    } else {
+        const models = providerModels[provider] || [];
+        models.forEach(model => {
+            const option = document.createElement('option');
+            option.value = model;
+            option.textContent = model;
+            modelSelect.appendChild(option);
+        });
+
+        if (cachedSettings) {
+            const keyField = `has_${provider}_key`;
+            if (cachedSettings[keyField]) {
+                statusDiv.textContent = 'API key configured';
+                statusDiv.style.color = 'var(--color-accent-primary)';
+            } else {
+                statusDiv.textContent = 'API key not configured - set in Settings';
+                statusDiv.style.color = 'var(--color-warning)';
+            }
+        } else {
+            statusDiv.textContent = '';
+        }
+    }
+
+    // Set default model from settings if available
+    if (cachedSettings) {
+        const modelKey = `${provider}_model`;
+        if (cachedSettings[modelKey]) {
+            modelSelect.value = cachedSettings[modelKey];
+        }
+    }
+}
+
+// Open rewrite modal
+function openRewriteModal(scrapeId, shortcode) {
+    const rewriteModal = document.getElementById('rewriteModal');
+    currentRewriteReel = { scrapeId, shortcode };
+
+    // Fetch settings if not cached
+    if (!cachedSettings) {
+        fetchRewriteSettings().then(() => {
+            setupRewriteModal();
+        });
+    } else {
+        setupRewriteModal();
+    }
+
+    rewriteModal.classList.add('active');
+}
+
+// Setup rewrite modal after settings are loaded
+function setupRewriteModal() {
+    resetWizardState();
+
+    const providerSelect = document.getElementById('rewriteProvider');
+    if (cachedSettings && cachedSettings.ai_provider && cachedSettings.ai_provider !== 'copy') {
+        providerSelect.value = cachedSettings.ai_provider;
+    } else {
+        if (cachedSettings?.has_openai_key) {
+            providerSelect.value = 'openai';
+        } else if (cachedSettings?.has_anthropic_key) {
+            providerSelect.value = 'anthropic';
+        } else if (cachedSettings?.has_google_key) {
+            providerSelect.value = 'google';
+        } else if (providerModels.local.length > 0) {
+            providerSelect.value = 'local';
+        }
+    }
+
+    updateRewriteModel();
+    initWizardOptionButtons();
+}
+
+// Reset wizard state
+function resetWizardState() {
+    wizardStep = 0;
+    wizardData = {
+        niche: '',
+        voice: '',
+        angle: '',
+        product: '',
+        setup: '',
+        cta: '',
+        timeLimit: 'Under 60 seconds'
+    };
+
+    const inputs = ['wizardNiche', 'wizardVoice', 'wizardAngle', 'wizardProduct', 'wizardSetup', 'wizardCta'];
+    inputs.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+    });
+
+    document.querySelectorAll('.voice-btn, .cta-btn').forEach(btn => btn.classList.remove('selected'));
+    document.querySelectorAll('.time-btn').forEach(btn => {
+        btn.classList.toggle('selected', btn.dataset.time === 'Under 60 seconds');
+    });
+
+    const resultEl = document.getElementById('rewriteResult');
+    const outputEl = document.getElementById('rewriteOutput');
+    const placeholderEl = document.getElementById('resultPlaceholder');
+
+    if (resultEl) resultEl.style.display = 'none';
+    if (outputEl) outputEl.textContent = '';
+    if (placeholderEl) placeholderEl.style.display = 'flex';
+
+    updateWizardUI();
+}
+
+// Initialize option button click handlers
+function initWizardOptionButtons() {
+    document.querySelectorAll('.voice-btn').forEach(btn => {
+        btn.onclick = () => {
+            document.querySelectorAll('.voice-btn').forEach(b => b.classList.remove('selected'));
+            btn.classList.add('selected');
+            document.getElementById('wizardVoice').value = btn.dataset.voice;
+        };
+    });
+
+    document.querySelectorAll('.cta-btn').forEach(btn => {
+        btn.onclick = () => {
+            document.querySelectorAll('.cta-btn').forEach(b => b.classList.remove('selected'));
+            btn.classList.add('selected');
+            document.getElementById('wizardCta').value = btn.dataset.cta;
+        };
+    });
+
+    document.querySelectorAll('.time-btn').forEach(btn => {
+        btn.onclick = () => {
+            document.querySelectorAll('.time-btn').forEach(b => b.classList.remove('selected'));
+            btn.classList.add('selected');
+            wizardData.timeLimit = btn.dataset.time;
+        };
+    });
+}
+
+// Update wizard UI based on current step
+function updateWizardUI() {
+    const progressBar = document.getElementById('wizardProgressBar');
+    const stepCount = document.getElementById('wizardStepCount');
+
+    if (progressBar) {
+        const progress = ((wizardStep + 1) / TOTAL_WIZARD_STEPS) * 100;
+        progressBar.style.width = `${progress}%`;
+    }
+
+    if (stepCount) {
+        stepCount.textContent = `Step ${wizardStep + 1} of ${TOTAL_WIZARD_STEPS}`;
+    }
+
+    document.querySelectorAll('.wizard-step').forEach(step => {
+        step.classList.toggle('active', parseInt(step.dataset.step) === wizardStep);
+    });
+
+    const backBtn = document.getElementById('wizardBackBtn');
+    const skipBtn = document.getElementById('wizardSkipBtn');
+    const nextBtn = document.getElementById('wizardNextBtn');
+
+    if (backBtn) backBtn.style.display = wizardStep > 0 ? 'inline-flex' : 'none';
+
+    if (wizardStep === TOTAL_WIZARD_STEPS - 1) {
+        if (nextBtn) {
+            nextBtn.textContent = 'GENERATE';
+            nextBtn.classList.add('primary');
+        }
+        if (skipBtn) skipBtn.style.display = 'none';
+    } else {
+        if (nextBtn) nextBtn.textContent = 'NEXT';
+        if (skipBtn) skipBtn.style.display = wizardStep === 0 ? 'none' : 'inline-flex';
+    }
+}
+
+// Collect current step data
+function collectStepData() {
+    switch(wizardStep) {
+        case 1:
+            wizardData.niche = document.getElementById('wizardNiche')?.value.trim() || '';
+            break;
+        case 2:
+            wizardData.voice = document.getElementById('wizardVoice')?.value.trim() || '';
+            break;
+        case 3:
+            wizardData.angle = document.getElementById('wizardAngle')?.value.trim() || '';
+            break;
+        case 4:
+            wizardData.product = document.getElementById('wizardProduct')?.value.trim() || '';
+            break;
+        case 5:
+            wizardData.setup = document.getElementById('wizardSetup')?.value.trim() || '';
+            break;
+        case 6:
+            wizardData.cta = document.getElementById('wizardCta')?.value.trim() || '';
+            break;
+    }
+}
+
+// Build context string from wizard data
+function buildContextFromWizard() {
+    const parts = [];
+
+    if (wizardData.niche) parts.push(`NICHE: ${wizardData.niche}`);
+    if (wizardData.voice) parts.push(`BRAND VOICE: ${wizardData.voice}`);
+    if (wizardData.angle) parts.push(`ANGLE: ${wizardData.angle}`);
+    if (wizardData.product) parts.push(`PRODUCT/SERVICE: ${wizardData.product}`);
+    if (wizardData.setup) parts.push(`SETUP/HOW IT WORKS:\n${wizardData.setup}`);
+    if (wizardData.cta) parts.push(`CTA: ${wizardData.cta}`);
+    if (wizardData.timeLimit) parts.push(`TIME LIMIT: ${wizardData.timeLimit}`);
+
+    return parts.join('\n\n');
+}
+
+// Wizard navigation
+function wizardNext() {
+    collectStepData();
+
+    if (wizardStep === 0) {
+        const model = document.getElementById('rewriteModel')?.value;
+        if (!model) {
+            alert('Please select a model');
+            return;
+        }
+    }
+
+    if (wizardStep < TOTAL_WIZARD_STEPS - 1) {
+        wizardStep++;
+        updateWizardUI();
+    } else {
+        generateRewrite();
+    }
+}
+
+function wizardBack() {
+    collectStepData();
+    if (wizardStep > 0) {
+        wizardStep--;
+        updateWizardUI();
+    }
+}
+
+function wizardSkip() {
+    if (wizardStep < TOTAL_WIZARD_STEPS - 1) {
+        wizardStep++;
+        updateWizardUI();
+    }
+}
+
+function resetWizard() {
+    resetWizardState();
+}
+
+function editWizardContext() {
+    wizardStep = 1;
+
+    const resultEl = document.getElementById('rewriteResult');
+    const placeholderEl = document.getElementById('resultPlaceholder');
+
+    if (resultEl) resultEl.style.display = 'none';
+    if (placeholderEl) {
+        placeholderEl.style.display = 'flex';
+        placeholderEl.innerHTML = `
+            <div class="placeholder-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                </svg>
+            </div>
+            <div class="placeholder-text">Your rewritten script will appear here</div>
+            <div class="placeholder-hint">Edit your context and click Generate</div>
+        `;
+    }
+
+    updateWizardUI();
+}
+
+// Switch between guided and quick mode
+function setWizardMode(mode) {
+    wizardMode = mode;
+
+    document.querySelectorAll('.mode-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.mode === mode);
+    });
+
+    const guidedMode = document.getElementById('guidedMode');
+    const quickMode = document.getElementById('quickMode');
+
+    if (guidedMode) guidedMode.style.display = mode === 'guided' ? 'flex' : 'none';
+    if (quickMode) quickMode.style.display = mode === 'quick' ? 'flex' : 'none';
+
+    if (mode === 'quick') {
+        const guidedProvider = document.getElementById('rewriteProvider')?.value;
+        const quickProvider = document.getElementById('quickProvider');
+        if (guidedProvider && quickProvider) {
+            quickProvider.value = guidedProvider;
+            updateQuickModel();
+        }
+    }
+
+    const resultEl = document.getElementById('rewriteResult');
+    const placeholderEl = document.getElementById('resultPlaceholder');
+    if (resultEl) resultEl.style.display = 'none';
+    if (placeholderEl) placeholderEl.style.display = 'flex';
+}
+
+// Update quick mode model dropdown
+function updateQuickModel() {
+    const provider = document.getElementById('quickProvider')?.value;
+    const modelSelect = document.getElementById('quickModel');
+    if (!modelSelect) return;
+
+    modelSelect.innerHTML = '';
+
+    const models = providerModels[provider] || [];
+    models.forEach(model => {
+        const option = document.createElement('option');
+        option.value = model;
+        option.textContent = model;
+        modelSelect.appendChild(option);
+    });
+
+    if (cachedSettings && cachedSettings[`${provider}_model`]) {
+        modelSelect.value = cachedSettings[`${provider}_model`];
+    }
+}
+
+// Generate rewrite in quick mode
+async function generateQuickRewrite() {
+    if (!currentRewriteReel) return;
+
+    const btn = document.querySelector('#quickMode .modal-btn.primary');
+    const resultDiv = document.getElementById('rewriteResult');
+    const outputDiv = document.getElementById('rewriteOutput');
+    const placeholder = document.getElementById('resultPlaceholder');
+    const context = document.getElementById('quickContext')?.value.trim() || '';
+    const provider = document.getElementById('quickProvider')?.value;
+    const model = document.getElementById('quickModel')?.value;
+
+    if (!model) {
+        alert('Please select a model');
+        return;
+    }
+
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'GENERATING...';
+    }
+
+    if (placeholder) {
+        placeholder.innerHTML = `
+            <div class="placeholder-icon" style="opacity: 0.6;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M12 2v4m0 12v4m-8-10H0m24 0h-4m-2.343-5.657l-2.828 2.828m-5.658 5.658l-2.828 2.828m0-11.314l2.828 2.828m5.658 5.658l2.828 2.828"/>
+                </svg>
+            </div>
+            <div class="placeholder-text">Generating your script...</div>
+            <div class="placeholder-hint">This may take a few seconds</div>
+        `;
+    }
+
+    try {
+        const response = await fetch('/api/rewrite', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                scrape_id: currentRewriteReel.scrapeId,
+                shortcode: currentRewriteReel.shortcode,
+                context: context,
+                provider: provider,
+                model: model
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.error) {
+            throw new Error(data.error);
+        }
+
+        if (outputDiv) outputDiv.textContent = data.result;
+        if (placeholder) placeholder.style.display = 'none';
+        if (resultDiv) resultDiv.style.display = 'flex';
+
+    } catch (error) {
+        alert(`Error: ${error.message}`);
+        if (placeholder) {
+            placeholder.innerHTML = `
+                <div class="placeholder-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    </svg>
+                </div>
+                <div class="placeholder-text">Your rewritten script will appear here</div>
+                <div class="placeholder-hint">Add context and click Generate</div>
+            `;
+        }
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = 'GENERATE';
+        }
+    }
+}
+
+// Close rewrite modal
+function closeRewriteModal() {
+    const rewriteModal = document.getElementById('rewriteModal');
+    if (rewriteModal) rewriteModal.classList.remove('active');
+    currentRewriteReel = null;
+}
+
+// Generate rewrite using AI
+async function generateRewrite() {
+    if (!currentRewriteReel) return;
+
+    const btn = document.getElementById('wizardNextBtn');
+    const resultDiv = document.getElementById('rewriteResult');
+    const outputDiv = document.getElementById('rewriteOutput');
+    const placeholder = document.getElementById('resultPlaceholder');
+    const context = buildContextFromWizard();
+    const provider = document.getElementById('rewriteProvider')?.value;
+    const model = document.getElementById('rewriteModel')?.value;
+
+    if (!model) {
+        alert('Please select a model');
+        return;
+    }
+
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'GENERATING...';
+    }
+
+    if (placeholder) {
+        placeholder.innerHTML = `
+            <div class="placeholder-icon" style="opacity: 0.6;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M12 2v4m0 12v4m-8-10H0m24 0h-4m-2.343-5.657l-2.828 2.828m-5.658 5.658l-2.828 2.828m0-11.314l2.828 2.828m5.658 5.658l2.828 2.828"/>
+                </svg>
+            </div>
+            <div class="placeholder-text">Generating your script...</div>
+            <div class="placeholder-hint">This may take a few seconds</div>
+        `;
+    }
+
+    try {
+        const response = await fetch('/api/rewrite', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                scrape_id: currentRewriteReel.scrapeId,
+                shortcode: currentRewriteReel.shortcode,
+                context: context,
+                provider: provider,
+                model: model
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.error) {
+            throw new Error(data.error);
+        }
+
+        if (outputDiv) outputDiv.textContent = data.result;
+        if (placeholder) placeholder.style.display = 'none';
+        if (resultDiv) resultDiv.style.display = 'flex';
+
+    } catch (error) {
+        alert(`Error: ${error.message}`);
+        if (placeholder) {
+            placeholder.innerHTML = `
+                <div class="placeholder-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    </svg>
+                </div>
+                <div class="placeholder-text">Your rewritten script will appear here</div>
+                <div class="placeholder-hint">Complete the wizard and click Generate</div>
+            `;
+        }
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = 'GENERATE';
+        }
+    }
+}
+
+// Copy rewrite result
+async function copyRewriteResult(event) {
+    const output = document.getElementById('rewriteOutput')?.textContent || '';
+    const success = await copyToClipboard(output);
+
+    if (success) {
+        const btn = event?.target || document.querySelector('.copy-rewrite-btn');
+        if (btn) {
+            const originalText = btn.textContent;
+            btn.textContent = 'COPIED!';
+            btn.style.color = 'var(--color-accent-primary)';
+            setTimeout(() => {
+                btn.textContent = originalText;
+                btn.style.color = '';
+            }, 2000);
+        }
+    } else {
+        alert('Failed to copy. Try selecting and copying manually.');
+    }
+}
+
+// Subscribe to view changes for starred jobs
+Store.subscribe(() => {
+    const state = Store.getState();
+    if (state.ui.activeView === 'starred-jobs') {
+        loadStarredJobs();
+    }
+});
+
+// Initialize color swatch click handlers when DOM is ready
+setTimeout(() => {
+    document.querySelectorAll('#addCollectionColors .color-swatch').forEach(swatch => {
+        swatch.addEventListener('click', () => {
+            selectCollectionColor(swatch.dataset.color);
+        });
+    });
+
+    // Load starred jobs count
+    initStarredJobsCount();
+}, 100);
+
 // Export for debugging
 window.ReelRecon = { Store, Router, API };
 
@@ -1743,3 +4202,32 @@ window.copyReelForAI = copyReelForAI;
 window.copyTranscriptFromReel = copyTranscriptFromReel;
 window.copyUrlFromReel = copyUrlFromReel;
 window.abortJob = abortJob;
+
+// Expose new functions globally
+window.toggleJobStar = toggleJobStar;
+window.toggleAssetStar = toggleAssetStar;
+window.filterLibraryByJob = filterLibraryByJob;
+window.renameAsset = renameAsset;
+window.startInlineEdit = startInlineEdit;
+window.openAddCollectionModal = openAddCollectionModal;
+window.closeAddCollectionModal = closeAddCollectionModal;
+window.showNewCollectionForm = showNewCollectionForm;
+window.cancelNewCollectionForm = cancelNewCollectionForm;
+window.createNewCollection = createNewCollection;
+window.confirmAddToCollection = confirmAddToCollection;
+window.selectCollectionColor = selectCollectionColor;
+
+// Expose rewrite functions globally
+window.openRewriteModal = openRewriteModal;
+window.closeRewriteModal = closeRewriteModal;
+window.generateRewrite = generateRewrite;
+window.generateQuickRewrite = generateQuickRewrite;
+window.copyRewriteResult = copyRewriteResult;
+window.updateRewriteModel = updateRewriteModel;
+window.updateQuickModel = updateQuickModel;
+window.setWizardMode = setWizardMode;
+window.wizardNext = wizardNext;
+window.wizardBack = wizardBack;
+window.wizardSkip = wizardSkip;
+window.resetWizard = resetWizard;
+window.editWizardContext = editWizardContext;

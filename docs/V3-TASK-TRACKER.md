@@ -18,7 +18,16 @@ Phase 3: [x] Complete
 **Current Phase:** Phase 7 - Direct Reel Scrape (testing fixes)
 **Current Task:** Test direct reel scrape after refactoring to use get_reel_info()
 **Blocker:** Views showing 0 - fixed by using existing get_reel_info() instead of yt-dlp
-**Last Updated:** 2026-01-01 14:16 CST
+**Last Updated:** 2026-01-03 14:23 CST
+
+### Session Notes (2026-01-03)
+**Feature Added:**
+- Detail panel width persistence via server-side config (replaces localStorage)
+- Files: `app.py` (settings API), `workspace.js` (setupPanelResize)
+
+**Bug Fixed:**
+- Progress bar stuck at 0% - changed `elif progress_pct` to `if progress_pct` (lines 865, 1105)
+- Now allows both phase AND progress_pct updates in same callback
 
 ### Session Notes (2026-01-01)
 **Fixes Applied (need restart to test):**
@@ -389,6 +398,12 @@ Detail panel enhanced with full reel accordion showing stats, URL, caption, tran
 - [ ] 5.20 / focuses search
 - [ ] 5.21 n opens new scrape modal
 - [ ] 5.22 Document shortcuts
+
+### User Preferences
+- [x] 5.22a Detail panel width persistence (2026-01-03)
+  - Server-side config storage via `/api/settings`
+  - Files: `app.py`, `workspace.js` (setupPanelResize)
+  - Replaces unreliable localStorage with config.json
 
 ### Final Polish
 - [ ] 5.23 Audit all transitions/animations

@@ -170,7 +170,8 @@ class SkeletonRipperPipeline:
     def run(
         self,
         config: JobConfig,
-        on_progress: Optional[Callable[[JobProgress], None]] = None
+        on_progress: Optional[Callable[[JobProgress], None]] = None,
+        job_id: Optional[str] = None
     ) -> JobResult:
         """
         Run the full skeleton ripper pipeline.
@@ -178,11 +179,13 @@ class SkeletonRipperPipeline:
         Args:
             config: Job configuration
             on_progress: Optional callback for progress updates
+            job_id: Optional job ID (generated if not provided)
 
         Returns:
             JobResult with all data and output paths
         """
-        job_id = f"sr_{uuid.uuid4().hex[:8]}"
+        if job_id is None:
+            job_id = f"sr_{uuid.uuid4().hex[:8]}"
         progress = JobProgress(
             status=JobStatus.PENDING,
             started_at=datetime.utcnow().isoformat(),
@@ -401,32 +404,21 @@ class SkeletonRipperPipeline:
             progress.current_video_index = 0
             progress.reels_fetched = 0
             progress.phase = f"Processing @{username} ({idx + 1}/{len(config.usernames)})"
-            progress.message = "Checking cache..."
+            progress.message = "Fetching reels..."
             self._notify(on_progress, progress)
 
-            # Check cache for this creator first
-            cached_transcripts = self._get_cached_transcripts(
-                config.platform, username, config.videos_per_creator
-            )
-
-            if cached_transcripts and len(cached_transcripts) >= config.videos_per_creator:
-                # Have enough cached - use those
-                logger.info("SKELETON", f"Using {len(cached_transcripts)} cached transcripts for @{username}")
-                progress.message = f"Using {len(cached_transcripts)} cached transcripts"
-                progress.transcripts_from_cache += len(cached_transcripts)
-                transcripts.extend(cached_transcripts[:config.videos_per_creator])
-                progress.videos_scraped += len(cached_transcripts[:config.videos_per_creator])
-                progress.videos_transcribed += len(cached_transcripts[:config.videos_per_creator])
-                progress.videos_downloaded += len(cached_transcripts[:config.videos_per_creator])
-                self._notify(on_progress, progress)
-                continue
-
-            # Fetch reel metadata (100 most recent, no download)
+            # Always fetch fresh reel metadata to get current views
+            # (cached transcripts are checked per-video in the loop below)
             progress.message = f"Fetching reels from @{username}..."
             self._notify(on_progress, progress)
 
+            # Progress callback for reel fetching (like regular scraper)
+            def fetch_progress(msg, phase=None, progress_pct=None):
+                progress.message = msg
+                self._notify(on_progress, progress)
+
             try:
-                reels, profile, error = get_user_reels(session, username, max_reels=100)
+                reels, profile, error = get_user_reels(session, username, max_reels=100, progress_callback=fetch_progress)
 
                 if error:
                     logger.warning("SKELETON", f"Failed to fetch reels for @{username}: {error}")
@@ -521,18 +513,30 @@ class SkeletonRipperPipeline:
                 progress.message = f"Video {valid_count + 1}/{config.videos_per_creator}: Transcribing... ({views_display} views)"
                 self._notify(on_progress, progress)
 
-                # Transcribe video
+                # Transcribe video with progress callback wrapper
                 transcript_text = None
+
+                def transcribe_progress(msg):
+                    """Wrapper to send transcription heartbeats to main progress"""
+                    progress.message = f"Video {valid_count + 1}/{config.videos_per_creator}: {msg}"
+                    self._notify(on_progress, progress)
+
                 try:
                     if config.transcribe_provider == 'openai' and openai_key:
                         transcript_text = transcribe_video_openai(
                             video_path=str(video_path),
-                            api_key=openai_key
+                            api_key=openai_key,
+                            progress_callback=transcribe_progress,
+                            video_index=valid_count + 1,
+                            total_videos=config.videos_per_creator
                         )
                     elif whisper_model:
                         transcript_text = transcribe_video(
                             video_path=str(video_path),
-                            model=whisper_model
+                            model=whisper_model,
+                            progress_callback=transcribe_progress,
+                            video_index=valid_count + 1,
+                            total_videos=config.videos_per_creator
                         )
                     else:
                         logger.warning("SKELETON", f"No transcription method available for {video_id}")

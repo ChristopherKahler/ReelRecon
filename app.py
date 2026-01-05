@@ -55,6 +55,7 @@ COOKIES_FILE = BASE_DIR / "cookies.txt"
 TIKTOK_COOKIES_FILE = BASE_DIR / "tiktok_cookies.txt"
 HISTORY_FILE = BASE_DIR / "scrape_history.json"
 CONFIG_FILE = BASE_DIR / "config.json"
+STATE_DIR = BASE_DIR / "state"  # Required for skeleton job persistence
 
 # Default configuration
 DEFAULT_CONFIG = {
@@ -371,6 +372,20 @@ def health_check():
     return jsonify({'status': 'ok'})
 
 
+@app.route('/api/debug/routes')
+def debug_routes():
+    """Debug: list all registered routes"""
+    routes = []
+    for rule in app.url_map.iter_rules():
+        routes.append({
+            'endpoint': rule.endpoint,
+            'methods': list(rule.methods - {'HEAD', 'OPTIONS'}),
+            'path': str(rule)
+        })
+    routes.sort(key=lambda r: r['path'])
+    return jsonify({'routes': routes, 'total': len(routes)})
+
+
 # =========================================
 # V3 Unified Jobs API
 # =========================================
@@ -434,7 +449,7 @@ def get_active_jobs():
             jobs.append({
                 'id': scrape_id,
                 'type': 'scrape',
-                'title': f"@{scrape.get('username', 'unknown')}",
+                'title': f"Scrape: {scrape.get('username', 'unknown')}",
                 'platform': scrape.get('platform', 'instagram'),
                 'status': scrape.get('status', 'unknown'),
                 'progress': scrape.get('progress', ''),
@@ -443,18 +458,57 @@ def get_active_jobs():
                 'created_at': scrape.get('created_at', '')
             })
 
-    # Add active skeleton ripper jobs
+    # Add active skeleton ripper jobs (now uses 'running' status consistently like regular scrapes)
     for job_id, job in active_skeleton_jobs.items():
         if job.get('status') in ('running', 'starting'):
-            progress = job.get('progress', {})
+            progress = job.get('progress') or {}
+
+            # Calculate overall progress percentage based on pipeline status and counts
+            # Pipeline phases: scraping (includes download+transcribe) -> extracting -> aggregating -> synthesizing
+            total_target = progress.get('total_target', 1) or 1
+            videos_downloaded = progress.get('videos_downloaded', 0)
+            videos_transcribed = progress.get('videos_transcribed', 0)
+            skeletons_extracted = progress.get('skeletons_extracted', 0)
+            valid_transcripts = progress.get('valid_transcripts', 0) or total_target
+
+            pipeline_status = progress.get('status', '')
+            phase_display = progress.get('phase', '')  # Keep for display
+
+            if job.get('status') == 'complete' or pipeline_status == 'complete':
+                progress_pct = 100
+            elif pipeline_status == 'synthesizing':
+                progress_pct = 95
+            elif pipeline_status == 'aggregating':
+                progress_pct = 90
+            elif pipeline_status == 'extracting':
+                # Extracting: 70-90%
+                extract_pct = (skeletons_extracted / valid_transcripts) * 100 if valid_transcripts else 0
+                progress_pct = 70 + int(extract_pct * 0.20)
+            elif pipeline_status == 'scraping':
+                # Scraping phase includes fetch, download, transcribe
+                # Progress within scraping: download gives 0-35%, transcribe gives 35-70%
+                if videos_transcribed > 0:
+                    trans_pct = (videos_transcribed / total_target) * 100 if total_target else 0
+                    progress_pct = 35 + int(trans_pct * 0.35)
+                elif videos_downloaded > 0:
+                    dl_pct = (videos_downloaded / total_target) * 100 if total_target else 0
+                    progress_pct = int(dl_pct * 0.35)
+                else:
+                    progress_pct = 5  # Fetching reels
+            else:
+                progress_pct = 0
+
             jobs.append({
                 'id': job_id,
                 'type': 'analysis',
                 'title': f"Analysis: {', '.join(job.get('creators', [])[:2])}{'...' if len(job.get('creators', [])) > 2 else ''}",
                 'status': job.get('status', 'unknown'),
                 'progress': progress.get('message', ''),
-                'progress_pct': progress.get('overall', 0),
-                'phase': progress.get('phase', ''),
+                'progress_pct': min(progress_pct, 100),
+                'phase': phase_display,  # Human-readable phase text
+                'platform': job.get('platform', 'instagram'),
+                'creators': job.get('creators', []),
+                'videos_per_creator': job.get('videos_per_creator', 3),
                 'created_at': job.get('created_at', '')
             })
 
@@ -476,11 +530,12 @@ def get_recent_jobs():
             jobs.append({
                 'id': job.get('id'),
                 'type': 'scrape',
-                'title': f"@{job.get('username', 'unknown')}",
+                'title': f"Scrape: {job.get('username', 'unknown')}",
                 'platform': job.get('platform', 'instagram'),
                 'status': job.get('state', 'unknown'),
                 'created_at': job.get('created_at', ''),
                 'completed_at': job.get('completed_at', ''),
+                'starred': job.get('starred', False),
                 'result': job.get('result')
             })
 
@@ -492,7 +547,11 @@ def get_recent_jobs():
                 'type': 'analysis',
                 'title': f"Analysis: {', '.join(job.get('creators', [])[:2])}{'...' if len(job.get('creators', [])) > 2 else ''}",
                 'status': job.get('status', 'unknown'),
+                'platform': job.get('platform', 'instagram'),
+                'creators': job.get('creators', []),
+                'videos_per_creator': job.get('videos_per_creator', 3),
                 'created_at': job.get('created_at', ''),
+                'starred': job.get('starred', False),
                 'result': job.get('result')
             })
 
@@ -500,6 +559,235 @@ def get_recent_jobs():
     jobs.sort(key=lambda j: j.get('created_at', ''), reverse=True)
 
     return jsonify({'success': True, 'jobs': jobs[:20]})
+
+
+@app.route('/api/jobs/<job_id>/star', methods=['POST'])
+def toggle_job_star(job_id):
+    """Toggle starred status for a job"""
+    # Check skeleton ripper jobs
+    if job_id in active_skeleton_jobs:
+        current = active_skeleton_jobs[job_id].get('starred', False)
+        active_skeleton_jobs[job_id]['starred'] = not current
+        save_skeleton_jobs()
+        return jsonify({
+            'success': True,
+            'job_id': job_id,
+            'starred': active_skeleton_jobs[job_id]['starred']
+        })
+
+    # Check scrape jobs in state manager
+    job = state_manager.get_job(job_id)
+    if job:
+        current = job.starred
+        state_manager.update_job(job_id, starred=not current)
+        return jsonify({
+            'success': True,
+            'job_id': job_id,
+            'starred': not current
+        })
+
+    return jsonify({'success': False, 'error': 'Job not found'}), 404
+
+
+@app.route('/api/jobs/starred', methods=['GET'])
+def get_starred_jobs():
+    """Get all starred jobs"""
+    jobs = []
+
+    # Get starred scrape jobs from state manager
+    scrape_jobs = state_manager.get_recent_jobs(limit=100)
+    for job in scrape_jobs:
+        if job.get('starred'):
+            jobs.append({
+                'id': job.get('id'),
+                'type': 'scrape',
+                'title': f"Scrape: {job.get('username', 'unknown')}",
+                'platform': job.get('platform', 'instagram'),
+                'status': job.get('state', 'unknown'),
+                'created_at': job.get('created_at', ''),
+                'completed_at': job.get('completed_at', ''),
+                'starred': True,
+                'result': job.get('result')
+            })
+
+    # Get starred skeleton ripper jobs
+    for job_id, job in active_skeleton_jobs.items():
+        if job.get('starred'):
+            jobs.append({
+                'id': job_id,
+                'type': 'analysis',
+                'title': f"Analysis: {', '.join(job.get('creators', [])[:2])}{'...' if len(job.get('creators', [])) > 2 else ''}",
+                'status': job.get('status', 'unknown'),
+                'platform': job.get('platform', 'instagram'),
+                'creators': job.get('creators', []),
+                'videos_per_creator': job.get('videos_per_creator', 3),
+                'created_at': job.get('created_at', ''),
+                'starred': True,
+                'result': job.get('result')
+            })
+
+    jobs.sort(key=lambda j: j.get('created_at', ''), reverse=True)
+    return jsonify({'success': True, 'jobs': jobs})
+
+
+@app.route('/api/jobs/<job_id>/archive', methods=['POST'])
+def archive_job(job_id):
+    """Archive a job (soft delete)"""
+    job_data = None
+
+    # Check skeleton ripper jobs
+    if job_id in active_skeleton_jobs:
+        job = active_skeleton_jobs[job_id]
+        job_data = {
+            'id': job_id,
+            'type': 'analysis',
+            'title': f"Analysis: {', '.join(job.get('creators', [])[:2])}{'...' if len(job.get('creators', [])) > 2 else ''}",
+            'status': job.get('status', 'unknown'),
+            'platform': job.get('platform', 'instagram'),
+            'creators': job.get('creators', []),
+            'videos_per_creator': job.get('videos_per_creator', 3),
+            'created_at': job.get('created_at', ''),
+            'archived_at': datetime.now().isoformat(),
+            'starred': job.get('starred', False),
+            'result': job.get('result'),
+            'original_data': job
+        }
+        del active_skeleton_jobs[job_id]
+        save_skeleton_jobs()
+
+    # Check scrape jobs in state manager
+    if not job_data:
+        job = state_manager.get_job(job_id)
+        if job:
+            job_data = {
+                'id': job_id,
+                'type': 'scrape',
+                'title': f"Scrape: {job.get('username', 'unknown')}",
+                'platform': job.get('platform', 'instagram'),
+                'status': job.get('state', 'unknown'),
+                'created_at': job.get('created_at', ''),
+                'archived_at': datetime.now().isoformat(),
+                'starred': job.get('starred', False),
+                'result': job.get('result'),
+                'original_data': job
+            }
+            state_manager.delete_job(job_id)
+
+    if job_data:
+        archived_jobs.append(job_data)
+        save_archived_jobs()
+        return jsonify({'success': True, 'job_id': job_id})
+
+    return jsonify({'success': False, 'error': 'Job not found'}), 404
+
+
+@app.route('/api/jobs/<job_id>/restore', methods=['POST'])
+def restore_job(job_id):
+    """Restore a job from archive"""
+    job_to_restore = None
+    job_index = None
+
+    for i, job in enumerate(archived_jobs):
+        if job.get('id') == job_id:
+            job_to_restore = job
+            job_index = i
+            break
+
+    if not job_to_restore:
+        return jsonify({'success': False, 'error': 'Job not found in archive'}), 404
+
+    # Restore based on job type
+    if job_to_restore.get('type') == 'analysis':
+        original_data = job_to_restore.get('original_data', {})
+        active_skeleton_jobs[job_id] = original_data
+        save_skeleton_jobs()
+    else:
+        # Restore scrape job
+        original_data = job_to_restore.get('original_data', {})
+        state_manager.restore_job(job_id, original_data)
+
+    # Remove from archive
+    archived_jobs.pop(job_index)
+    save_archived_jobs()
+
+    return jsonify({'success': True, 'job_id': job_id})
+
+
+@app.route('/api/jobs/archived', methods=['GET'])
+def get_archived_jobs():
+    """Get all archived jobs"""
+    jobs = []
+    for job in archived_jobs:
+        jobs.append({
+            'id': job.get('id'),
+            'type': job.get('type'),
+            'title': job.get('title'),
+            'platform': job.get('platform'),
+            'status': job.get('status'),
+            'created_at': job.get('created_at'),
+            'archived_at': job.get('archived_at'),
+            'starred': job.get('starred', False)
+        })
+
+    jobs.sort(key=lambda j: j.get('archived_at', ''), reverse=True)
+    return jsonify({'success': True, 'jobs': jobs})
+
+
+@app.route('/api/jobs/clear-all', methods=['POST'])
+def clear_all_jobs():
+    """Archive all recent jobs (soft delete)"""
+    global archived_jobs
+    archived_count = 0
+
+    # Archive skeleton ripper jobs
+    skeleton_ids = list(active_skeleton_jobs.keys())
+    for job_id in skeleton_ids:
+        job = active_skeleton_jobs[job_id]
+        if job.get('status') in ('complete', 'failed'):
+            job_data = {
+                'id': job_id,
+                'type': 'analysis',
+                'title': f"Analysis: {', '.join(job.get('creators', [])[:2])}{'...' if len(job.get('creators', [])) > 2 else ''}",
+                'status': job.get('status', 'unknown'),
+                'platform': job.get('platform', 'instagram'),
+                'creators': job.get('creators', []),
+                'videos_per_creator': job.get('videos_per_creator', 3),
+                'created_at': job.get('created_at', ''),
+                'archived_at': datetime.now().isoformat(),
+                'starred': job.get('starred', False),
+                'result': job.get('result'),
+                'original_data': job
+            }
+            archived_jobs.append(job_data)
+            del active_skeleton_jobs[job_id]
+            archived_count += 1
+
+    save_skeleton_jobs()
+
+    # Archive completed scrape jobs from state manager
+    scrape_jobs = state_manager.get_recent_jobs(limit=100)
+    for job in scrape_jobs:
+        if job.get('state') in ('complete', 'error', 'partial', 'aborted'):
+            job_id = job.get('id')
+            job_data = {
+                'id': job_id,
+                'type': 'scrape',
+                'title': f"Scrape: {job.get('username', 'unknown')}",
+                'platform': job.get('platform', 'instagram'),
+                'status': job.get('state', 'unknown'),
+                'created_at': job.get('created_at', ''),
+                'archived_at': datetime.now().isoformat(),
+                'starred': job.get('starred', False),
+                'result': job.get('result'),
+                'original_data': job
+            }
+            archived_jobs.append(job_data)
+            state_manager.delete_job(job_id)
+            archived_count += 1
+
+    save_archived_jobs()
+
+    return jsonify({'success': True, 'archived_count': archived_count})
 
 
 @app.route('/api/scrape', methods=['POST'])
@@ -594,7 +882,7 @@ def start_scrape():
                         progress_pct or 0,
                         msg
                     )
-                elif progress_pct is not None:
+                if progress_pct is not None:  # Changed from elif to if - allows both phase AND progress_pct updates
                     active_scrapes[scrape_id]['progress_pct'] = progress_pct
 
                 logger.progress(scrape_id, active_scrapes[scrape_id].get('phase', 'processing'),
@@ -834,7 +1122,7 @@ def start_batch_scrape():
                             progress_pct or 0,
                             msg
                         )
-                    elif progress_pct is not None:
+                    if progress_pct is not None:  # Changed from elif to if - allows both phase AND progress_pct updates
                         active_scrapes[scrape_id]['progress_pct'] = progress_pct
                 except Exception as e:
                     logger.warning("BATCH", f"Progress callback error: {e}")
@@ -1138,20 +1426,61 @@ def start_direct_scrape():
                     transcript_dir.mkdir(exist_ok=True)
                     transcript_file = transcript_dir / f"01_{reel_id}.txt"
 
+                    # Transcription progress callback wrapper
+                    def transcribe_progress(msg):
+                        progress_callback(msg, phase='transcribing', progress_pct=70)
+
                     try:
                         if scrape_config['transcribe_provider'] == 'openai' and openai_key:
-                            transcript = transcribe_video_openai(reel['local_video'], openai_key, transcript_file)
+                            # OpenAI: use heartbeat thread for progress updates
+                            import threading
+                            transcribe_start = time.time()
+                            stop_heartbeat = threading.Event()
+
+                            def openai_heartbeat():
+                                tick = 0
+                                while not stop_heartbeat.is_set():
+                                    stop_heartbeat.wait(5)
+                                    if not stop_heartbeat.is_set():
+                                        tick += 1
+                                        elapsed = int(time.time() - transcribe_start)
+                                        progress_callback(f"Transcribing (OpenAI) - {elapsed}s elapsed...", phase='transcribing', progress_pct=70)
+
+                            heartbeat_thread = threading.Thread(target=openai_heartbeat, daemon=True)
+                            heartbeat_thread.start()
+
+                            try:
+                                transcript = transcribe_video_openai(reel['local_video'], openai_key, transcript_file)
+                            finally:
+                                stop_heartbeat.set()
+                                heartbeat_thread.join(timeout=1)
                         else:
-                            # Local whisper
+                            # Local whisper - pass progress callback for heartbeat updates
                             from scraper.core import transcribe_video, load_whisper_model
+                            progress_callback(f"Loading Whisper model ({scrape_config['whisper_model']})...", phase='transcribing', progress_pct=65)
                             model = load_whisper_model(scrape_config['whisper_model'])
-                            transcript = transcribe_video(reel['local_video'], model, transcript_file)
+                            transcript = transcribe_video(
+                                reel['local_video'], model, transcript_file,
+                                progress_callback=transcribe_progress,
+                                video_index=1, total_videos=1
+                            )
 
                         reel['transcript'] = transcript
                         reel['transcript_file'] = str(transcript_file) if transcript else None
                     except Exception as e:
                         reel['transcript'] = None
                         result['transcription_errors'].append({'shortcode': reel_id, 'error': str(e)})
+
+                # Clean up video if not keeping it (same logic as core.py)
+                if not scrape_config['download']:
+                    video_path = reel.get('local_video')
+                    if video_path and os.path.exists(video_path):
+                        try:
+                            os.remove(video_path)
+                            progress_callback(f"Cleaned up temporary video", phase='cleanup', progress_pct=95)
+                        except Exception as e:
+                            print(f"[DIRECT] Failed to remove temp video: {video_path}")
+                    reel['local_video'] = None
 
                 progress_callback(f"Complete", phase='complete', progress_pct=100)
 
@@ -1628,7 +1957,10 @@ def get_settings():
         'has_anthropic_key': bool(config.get('anthropic_key')),
         'has_google_key': bool(config.get('google_key')),
         'output_directory': config.get('output_directory', ''),
-        'default_output_directory': str(OUTPUT_DIR)
+        'default_output_directory': str(OUTPUT_DIR),
+        'detail_panel_width': config.get('detail_panel_width', 600),
+        'jobs_view_mode': config.get('jobs_view_mode', 'list'),
+        'asset_view_mode': config.get('asset_view_mode', 'grid-4')
     })
 
 
@@ -1658,6 +1990,12 @@ def update_settings():
     if 'output_directory' in data:
         # Allow empty string to reset to default
         config['output_directory'] = data['output_directory'].strip()
+    if 'detail_panel_width' in data:
+        config['detail_panel_width'] = int(data['detail_panel_width'])
+    if 'jobs_view_mode' in data:
+        config['jobs_view_mode'] = data['jobs_view_mode']
+    if 'asset_view_mode' in data:
+        config['asset_view_mode'] = data['asset_view_mode']
 
     save_config(config)
     return jsonify({'success': True})
@@ -2071,8 +2409,57 @@ def delete_video():
 # SKELETON RIPPER ENDPOINTS
 # =====================
 
-# Active skeleton ripper jobs
-active_skeleton_jobs = {}
+# Active skeleton ripper jobs (persisted to disk)
+SKELETON_JOBS_FILE = STATE_DIR / 'skeleton_jobs.json'
+
+def load_skeleton_jobs() -> dict:
+    """Load skeleton jobs from disk."""
+    if SKELETON_JOBS_FILE.exists():
+        try:
+            with open(SKELETON_JOBS_FILE, 'r') as f:
+                return json.load(f)
+        except Exception as e:
+            logger.warning("SKELETON", f"Failed to load skeleton jobs: {e}")
+    return {}
+
+def save_skeleton_jobs():
+    """Save skeleton jobs to disk."""
+    try:
+        STATE_DIR.mkdir(parents=True, exist_ok=True)
+        with open(SKELETON_JOBS_FILE, 'w') as f:
+            json.dump(active_skeleton_jobs, f, indent=2, default=str)
+    except Exception as e:
+        logger.warning("SKELETON", f"Failed to save skeleton jobs: {e}")
+
+# Initialize from disk
+active_skeleton_jobs = load_skeleton_jobs()
+
+# =========================================
+# ARCHIVED JOBS PERSISTENCE
+# =========================================
+ARCHIVED_JOBS_FILE = STATE_DIR / 'archived_jobs.json'
+
+def load_archived_jobs() -> list:
+    """Load archived jobs from disk."""
+    if ARCHIVED_JOBS_FILE.exists():
+        try:
+            with open(ARCHIVED_JOBS_FILE, 'r') as f:
+                return json.load(f)
+        except Exception as e:
+            logger.warning("ARCHIVE", f"Failed to load archived jobs: {e}")
+    return []
+
+def save_archived_jobs():
+    """Save archived jobs to disk."""
+    try:
+        STATE_DIR.mkdir(parents=True, exist_ok=True)
+        with open(ARCHIVED_JOBS_FILE, 'w') as f:
+            json.dump(archived_jobs, f, indent=2, default=str)
+    except Exception as e:
+        logger.warning("ARCHIVE", f"Failed to save archived jobs: {e}")
+
+# Initialize archived jobs from disk
+archived_jobs = load_archived_jobs()
 
 
 @app.route('/api/skeleton-ripper/providers')
@@ -2195,8 +2582,14 @@ def start_skeleton_ripper():
     active_skeleton_jobs[job_id] = {
         'status': 'starting',
         'progress': None,
-        'result': None
+        'result': None,
+        'creators': usernames,
+        'platform': platform,
+        'videos_per_creator': videos_per_creator,
+        'created_at': datetime.now().isoformat(),
+        'starred': False
     }
+    save_skeleton_jobs()
 
     logger.info("SKELETON", f"Starting skeleton ripper job {job_id}", {
         "usernames": usernames,
@@ -2209,8 +2602,9 @@ def start_skeleton_ripper():
     # Run in background thread
     def run_skeleton_job():
         def progress_callback(progress: JobProgress):
+            # Store detailed progress info (phase info for display)
             active_skeleton_jobs[job_id]['progress'] = {
-                'status': progress.status.value,
+                'status': progress.status.value,  # Keep pipeline status in progress for display
                 'phase': progress.phase,
                 'message': progress.message,
                 # Core counts
@@ -2232,10 +2626,11 @@ def start_skeleton_ripper():
                 # Errors
                 'errors': progress.errors
             }
-            active_skeleton_jobs[job_id]['status'] = progress.status.value
+            # Use 'running' status consistently (like regular scrapes) - only change on completion
+            active_skeleton_jobs[job_id]['status'] = 'running'
 
         try:
-            result = pipeline.run(job_config, on_progress=progress_callback)
+            result = pipeline.run(job_config, on_progress=progress_callback, job_id=job_id)
 
             active_skeleton_jobs[job_id]['result'] = {
                 'success': result.success,
@@ -2248,10 +2643,46 @@ def start_skeleton_ripper():
             }
             active_skeleton_jobs[job_id]['status'] = 'complete' if result.success else 'failed'
 
+            # Create skeleton_report asset in library
+            if result.success and result.report_path:
+                try:
+                    creators = active_skeleton_jobs[job_id].get('creators', [])
+                    report_title = f"Skeleton Report - {', '.join(creators[:2])}{'...' if len(creators) > 2 else ''}"
+                    preview_text = f"{len(result.skeletons)} skeletons extracted from {len(creators)} creators"
+
+                    # Calculate aggregate stats for card display
+                    total_views = sum(s.get('views', 0) for s in result.skeletons)
+                    avg_views = total_views // len(result.skeletons) if result.skeletons else 0
+                    hook_words = [s.get('hook_word_count', 0) for s in result.skeletons if s.get('hook_word_count')]
+                    avg_hook_words = round(sum(hook_words) / len(hook_words), 1) if hook_words else 0
+
+                    asset = Asset.create(
+                        type='skeleton_report',
+                        title=report_title,
+                        content_path=str(Path(result.report_path).parent),
+                        preview=preview_text,
+                        metadata={
+                            'job_id': result.job_id,
+                            'creators': creators,
+                            'skeletons_count': len(result.skeletons),
+                            'report_path': result.report_path,
+                            'skeletons_path': result.skeletons_path,
+                            'synthesis_path': result.synthesis_path,
+                            # Aggregate stats for card display
+                            'total_views': total_views,
+                            'avg_views': avg_views,
+                            'avg_hook_words': avg_hook_words
+                        }
+                    )
+                    logger.info("SKELETON", f"Created skeleton_report asset: {asset.id}")
+                except Exception as asset_err:
+                    logger.warning("SKELETON", f"Failed to create asset for job {job_id}: {asset_err}")
+
             logger.info("SKELETON", f"Job {job_id} completed", {
                 "success": result.success,
                 "skeletons": len(result.skeletons)
             })
+            save_skeleton_jobs()
 
         except Exception as e:
             logger.error("SKELETON", f"Job {job_id} failed: {e}")
@@ -2260,6 +2691,7 @@ def start_skeleton_ripper():
                 'success': False,
                 'error': str(e)
             }
+            save_skeleton_jobs()
 
     thread = Thread(target=run_skeleton_job, daemon=True)
     thread.start()
@@ -2279,11 +2711,50 @@ def skeleton_ripper_status(job_id):
         return jsonify({'success': False, 'error': 'Job not found'}), 404
 
     job = active_skeleton_jobs[job_id]
+    progress = job.get('progress') or {}
+
+    # Calculate progress percentage based on pipeline status and counts
+    # Pipeline phases: scraping (includes download+transcribe) -> extracting -> aggregating -> synthesizing
+    pipeline_status = progress.get('status', '')
+    total_target = progress.get('total_target', 1) or 1
+    videos_downloaded = progress.get('videos_downloaded', 0)
+    videos_transcribed = progress.get('videos_transcribed', 0)
+    skeletons_extracted = progress.get('skeletons_extracted', 0)
+    valid_transcripts = progress.get('valid_transcripts', 0) or total_target
+
+    if job.get('status') == 'complete' or pipeline_status == 'complete':
+        progress_pct = 100
+    elif pipeline_status == 'synthesizing':
+        progress_pct = 95
+    elif pipeline_status == 'aggregating':
+        progress_pct = 90
+    elif pipeline_status == 'extracting':
+        # Extracting: 70-90%
+        extract_pct = (skeletons_extracted / valid_transcripts) * 100 if valid_transcripts else 0
+        progress_pct = 70 + int(extract_pct * 0.20)
+    elif pipeline_status == 'scraping':
+        # Scraping phase includes fetch, download, transcribe
+        # Progress within scraping: download gives 0-35%, transcribe gives 35-70%
+        if videos_transcribed > 0:
+            # In transcription part of scraping phase
+            trans_pct = (videos_transcribed / total_target) * 100 if total_target else 0
+            progress_pct = 35 + int(trans_pct * 0.35)
+        elif videos_downloaded > 0:
+            # In download part of scraping phase
+            dl_pct = (videos_downloaded / total_target) * 100 if total_target else 0
+            progress_pct = int(dl_pct * 0.35)
+        else:
+            # Still fetching reels (0-5%)
+            progress_pct = 5
+    else:
+        progress_pct = 0
+
     return jsonify({
         'success': True,
         'job_id': job_id,
         'status': job['status'],
         'progress': job['progress'],
+        'progress_pct': min(progress_pct, 100),
         'result': job['result']
     })
 
@@ -2617,6 +3088,7 @@ def list_assets():
     asset_type = request.args.get('type')
     starred = request.args.get('starred')
     collection_id = request.args.get('collection_id')
+    job_id = request.args.get('job_id')  # Filter by source job
     limit = int(request.args.get('limit', 50))
     offset = int(request.args.get('offset', 0))
 
@@ -2636,6 +3108,16 @@ def list_assets():
     for asset in assets:
         asset_dict = asset.to_dict()
         asset_dict['collections'] = [c.to_dict() for c in asset.get_collections()]
+
+        # Filter by job_id if provided (check metadata.job_id or metadata.source_job_id)
+        if job_id:
+            meta = asset.metadata or {}
+            asset_job_id = meta.get('job_id') or meta.get('source_job_id')
+            # Also check source_report's job_id for child assets
+            source_report_id = meta.get('source_report_id')
+            if asset_job_id != job_id and source_report_id != job_id:
+                continue
+
         result.append(asset_dict)
 
     return jsonify(result)
@@ -2683,15 +3165,104 @@ def update_asset(asset_id):
     return jsonify(asset.to_dict())
 
 
-@app.route('/api/assets/<asset_id>', methods=['DELETE'])
-def delete_asset(asset_id):
-    """Delete an asset"""
+@app.route('/api/assets/<asset_id>/star', methods=['POST'])
+def toggle_asset_star(asset_id):
+    """Toggle starred status for an asset"""
     asset = Asset.get(asset_id)
     if not asset:
         return jsonify({'error': 'Asset not found'}), 404
 
+    new_starred = not asset.starred
+    asset.update(starred=new_starred)
+
+    return jsonify({
+        'success': True,
+        'asset_id': asset_id,
+        'starred': new_starred
+    })
+
+
+@app.route('/api/assets/<asset_id>', methods=['DELETE'])
+def delete_asset(asset_id):
+    """Delete an asset and clean up associated files"""
+    asset = Asset.get(asset_id)
+    if not asset:
+        return jsonify({'error': 'Asset not found'}), 404
+
+    cleaned_files = []
+    metadata = asset.metadata or {}
+
+    # Clean up video files for scrape_report assets
+    if asset.type == 'scrape_report':
+        original_id = metadata.get('original_id')
+
+        if original_id:
+            history = load_history()
+            scrape_data = next((h for h in history if h.get('id') == original_id), None)
+
+            if scrape_data:
+                top_reels = scrape_data.get('top_reels', [])
+                for reel in top_reels:
+                    video_path = reel.get('local_video')
+                    if video_path and os.path.exists(video_path):
+                        try:
+                            os.remove(video_path)
+                            cleaned_files.append(video_path)
+                            print(f"[DELETE] Cleaned up video: {video_path}")
+                        except Exception as e:
+                            print(f"[DELETE] Failed to remove video {video_path}: {e}")
+
+                # Also remove the scrape from history
+                history = [h for h in history if h.get('id') != original_id]
+                save_history(history)
+                print(f"[DELETE] Removed scrape {original_id} from history")
+
+        # Clean up content_path directory
+        if asset.content_path:
+            content_dir = Path(asset.content_path)
+            if content_dir.exists() and content_dir.is_dir():
+                try:
+                    import shutil
+                    shutil.rmtree(content_dir)
+                    cleaned_files.append(str(content_dir))
+                    print(f"[DELETE] Cleaned up directory: {content_dir}")
+                except Exception as e:
+                    print(f"[DELETE] Failed to remove directory {content_dir}: {e}")
+
+    # Clean up skeleton_report assets
+    elif asset.type == 'skeleton_report':
+        job_id = metadata.get('job_id')
+
+        # Remove from skeleton_jobs.json
+        if job_id and job_id in active_skeleton_jobs:
+            del active_skeleton_jobs[job_id]
+            save_skeleton_jobs()
+            print(f"[DELETE] Removed skeleton job: {job_id}")
+
+        # Clean up content_path directory
+        if asset.content_path:
+            content_dir = Path(asset.content_path)
+            if content_dir.exists() and content_dir.is_dir():
+                try:
+                    import shutil
+                    shutil.rmtree(content_dir)
+                    cleaned_files.append(str(content_dir))
+                    print(f"[DELETE] Cleaned up directory: {content_dir}")
+                except Exception as e:
+                    print(f"[DELETE] Failed to remove directory {content_dir}: {e}")
+
+    # Clean up individual skeleton assets (no files, just metadata)
+    elif asset.type == 'skeleton':
+        # Nothing to clean up on disk, just delete from DB
+        print(f"[DELETE] Removing skeleton asset: {asset.title}")
+
+    # Clean up transcript assets
+    elif asset.type == 'transcript':
+        # Transcript content is stored in metadata, no files to clean
+        print(f"[DELETE] Removing transcript asset: {asset.title}")
+
     asset.delete()
-    return jsonify({'success': True})
+    return jsonify({'success': True, 'cleaned_files': cleaned_files})
 
 
 def normalize_path(path_str):
@@ -2936,6 +3507,13 @@ if __name__ == '__main__':
     # Initialize asset database (P0)
     init_db()
     logger.info("SYSTEM", "Asset database initialized")
+
+    # Debug: Print all job-related routes
+    print("\n=== Registered Job Routes ===")
+    for rule in app.url_map.iter_rules():
+        if 'jobs' in rule.rule:
+            print(f"  {list(rule.methods - {'OPTIONS', 'HEAD'})} {rule.rule}")
+    print("=============================\n")
 
     # IMPORTANT: use_reloader=False prevents Flask from restarting when Whisper
     # or other libraries touch their own files during import/execution.

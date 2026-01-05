@@ -3052,7 +3052,6 @@
             // Build expanded content
             const expandedHtml = `
                 <div class="scrape-reel-header">
-                    <span class="scrape-reel-rank">#${index + 1}</span>
                     <div class="scrape-reel-info">
                         <div class="scrape-reel-caption">${escapeHtml((reel.caption || 'No caption').slice(0, 100))}${reel.caption?.length > 100 ? '...' : ''}</div>
                         <div class="scrape-reel-stats">${formatNumber(reel.views || 0)} views • ${formatNumber(reel.likes || 0)} likes</div>
@@ -3104,7 +3103,6 @@
 
             // Restore original content
             clickedItem.innerHTML = `
-                <span class="scrape-reel-rank">#${index + 1}</span>
                 <div class="scrape-reel-info">
                     <div class="scrape-reel-caption">${escapeHtml((reel.caption || 'No caption').slice(0, 100))}${reel.caption?.length > 100 ? '...' : ''}</div>
                     <div class="scrape-reel-stats">${formatNumber(reel.views || 0)} views • ${formatNumber(reel.likes || 0)} likes</div>

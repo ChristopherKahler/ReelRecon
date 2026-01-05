@@ -67,6 +67,7 @@ class ScrapeJob:
     error_message: Optional[str] = None
     created_at: str = ""
     completed_at: Optional[str] = None
+    starred: bool = False
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization"""
@@ -102,7 +103,8 @@ class ScrapeJob:
             error_code=data.get('error_code'),
             error_message=data.get('error_message'),
             created_at=data.get('created_at', ''),
-            completed_at=data.get('completed_at')
+            completed_at=data.get('completed_at'),
+            starred=data.get('starred', False)
         )
 
 
@@ -382,3 +384,57 @@ class ScrapeStateManager:
                 reverse=True
             )
             return [j.to_dict() for j in jobs[:limit]]
+
+    def update_job(self, scrape_id: str, **kwargs):
+        """Update arbitrary fields on a job"""
+        with self._lock:
+            job = self._jobs.get(scrape_id)
+            if not job:
+                return None
+
+            for key, value in kwargs.items():
+                if hasattr(job, key):
+                    setattr(job, key, value)
+
+            self._save_state()
+            return job
+
+    def delete_job(self, scrape_id: str) -> bool:
+        """Delete a job from state (for archiving)"""
+        with self._lock:
+            if scrape_id in self._jobs:
+                del self._jobs[scrape_id]
+                self._save_state()
+                return True
+            return False
+
+    def restore_job(self, scrape_id: str, job_data: Dict[str, Any]) -> bool:
+        """Restore a job from archive data"""
+        with self._lock:
+            try:
+                # Handle both raw dict and ScrapeJob dict formats
+                if 'state' in job_data and isinstance(job_data['state'], str):
+                    # Already in dict format from archive
+                    job = ScrapeJob.from_dict(job_data)
+                else:
+                    # Create job from archive original_data
+                    job = ScrapeJob(
+                        id=scrape_id,
+                        username=job_data.get('username', 'unknown'),
+                        platform=job_data.get('platform', 'instagram'),
+                        state=ScrapeState(job_data.get('state', 'complete')),
+                        config=job_data.get('config', {}),
+                        result=job_data.get('result'),
+                        created_at=job_data.get('created_at', ''),
+                        completed_at=job_data.get('completed_at')
+                    )
+                    # Restore starred status if present
+                    if 'starred' in job_data:
+                        job.starred = job_data['starred']
+
+                self._jobs[scrape_id] = job
+                self._save_state()
+                return True
+            except Exception as e:
+                print(f"[StateManager] Failed to restore job: {e}")
+                return False
