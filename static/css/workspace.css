@@ -3345,26 +3345,14 @@ select.form-input {
     grid-template-columns: repeat(3, 1fr);
 }
 
-.asset-grid.view-grid-4 {
-    grid-template-columns: repeat(4, 1fr);
-}
-
 /* Responsive adjustments for asset grids */
-@media (max-width: 1400px) {
-    .asset-grid.view-grid-4 {
-        grid-template-columns: repeat(3, 1fr);
-    }
-}
-
 @media (max-width: 1100px) {
-    .asset-grid.view-grid-4,
     .asset-grid.view-grid-3 {
         grid-template-columns: repeat(2, 1fr);
     }
 }
 
 @media (max-width: 768px) {
-    .asset-grid.view-grid-4,
     .asset-grid.view-grid-3,
     .asset-grid.view-grid-2 {
         grid-template-columns: 1fr;
@@ -3497,22 +3485,64 @@ select.form-input {
    ASSET CARDS (Phase 2)
    ========================================= */
 
+/* Asset Card - Job Card Style */
 .asset-card {
-    background: var(--color-bg-elevated);
-    border: 1px solid var(--color-border-dim);
-    border-radius: var(--radius-lg);
-    padding: var(--space-md);
+    background: linear-gradient(
+        135deg,
+        rgba(24, 24, 27, 0.95) 0%,
+        rgba(39, 39, 42, 0.9) 100%
+    );
+    border: 1px solid rgba(63, 63, 70, 0.6);
+    border-radius: 6px;
+    padding: var(--space-md) var(--space-lg);
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: visible;
+    backdrop-filter: blur(8px);
     display: flex;
     flex-direction: column;
-    min-height: 200px;
+    /* Container queries for responsive internals */
+    container-type: inline-size;
+    container-name: asset-card;
 }
 
+/* Left accent line */
+.asset-card::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: linear-gradient(
+        180deg,
+        var(--color-accent-primary) 0%,
+        rgba(16, 185, 129, 0.3) 100%
+    );
+    opacity: 0.6;
+    transition: opacity 0.2s ease;
+}
+
+/* Corner accent removed per user feedback */
+
 .asset-card:hover {
-    border-color: var(--color-border);
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    border-color: rgba(16, 185, 129, 0.4);
+    background: linear-gradient(
+        135deg,
+        rgba(24, 24, 27, 0.98) 0%,
+        rgba(39, 39, 42, 0.95) 100%
+    );
+    transform: translateX(2px);
+    box-shadow:
+        0 4px 20px rgba(0, 0, 0, 0.3),
+        0 0 30px rgba(16, 185, 129, 0.08),
+        inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.asset-card:hover::before {
+    opacity: 1;
+    box-shadow: 0 0 12px rgba(16, 185, 129, 0.4);
 }
 
 .asset-card:focus {
@@ -3520,32 +3550,328 @@ select.form-input {
     outline-offset: 2px;
 }
 
+/* Asset Card Header - contains title row and date/platform row */
 .asset-card-header {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+    margin-bottom: var(--space-md);
+    /* No border - single divider is above actions */
+}
+
+/* Top row: type badge, title, completion indicators */
+.header-top-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+}
+
+/* Completion indicators container (upper right) */
+.header-completion {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+    margin-left: auto;
+}
+
+/* Individual completion indicator (emoji + ratio) */
+.completion-indicator {
+    font-size: 0.7rem;
+    font-family: var(--font-mono);
+    padding: 2px 6px;
+    border-radius: 4px;
+    cursor: help;
+    white-space: nowrap;
+}
+
+.completion-indicator.complete {
+    color: var(--color-text-muted);
+    background: rgba(16, 185, 129, 0.1);
+}
+
+.completion-indicator.incomplete {
+    color: #F59E0B;
+    background: rgba(245, 158, 11, 0.15);
+}
+
+/* Date/platform/stats row under title - no wrap, scale if needed */
+.header-meta-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding-left: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+/* Stats pushed to right side of header meta row */
+.header-stats {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+    margin-left: auto;
+}
+
+/* When card is narrow, shrink ALL header elements */
+@container asset-card (max-width: 400px) {
+    .asset-card-header .header-meta-row {
+        gap: var(--space-xs);
+    }
+    .asset-card-header .header-meta-row .asset-date {
+        font-size: 0.6rem !important;
+    }
+    .asset-card-header .header-meta-row .asset-platform {
+        font-size: 0.55rem !important;
+        padding: 1px 4px !important;
+    }
+    .asset-card-header .header-meta-row .stat-badge {
+        font-size: 0.55rem !important;
+        padding: 2px 5px !important;
+    }
+    .header-stats {
+        gap: 3px;
+    }
+    .completion-indicator {
+        font-size: 0.6rem !important;
+        padding: 1px 4px !important;
+    }
+}
+
+@container asset-card (max-width: 320px) {
+    .asset-card-header .header-meta-row {
+        gap: 4px;
+    }
+    .asset-card-header .header-meta-row .asset-date {
+        font-size: 0.5rem !important;
+    }
+    .asset-card-header .header-meta-row .asset-platform {
+        font-size: 0.5rem !important;
+        padding: 1px 3px !important;
+    }
+    .asset-card-header .header-meta-row .stat-badge {
+        font-size: 0.5rem !important;
+        padding: 1px 3px !important;
+    }
+    .header-stats {
+        gap: 2px;
+    }
+    .completion-indicator {
+        font-size: 0.5rem !important;
+        padding: 1px 3px !important;
+    }
+}
+
+@container asset-card (max-width: 260px) {
+    .asset-card-header .header-meta-row .asset-date {
+        font-size: 0.45rem !important;
+    }
+    .asset-card-header .header-meta-row .asset-platform {
+        font-size: 0.45rem !important;
+        padding: 1px 2px !important;
+    }
+    .asset-card-header .header-meta-row .stat-badge {
+        font-size: 0.45rem !important;
+        padding: 1px 2px !important;
+    }
+    .completion-indicator {
+        font-size: 0.45rem !important;
+        padding: 1px 2px !important;
+    }
+}
+
+/* Title in header - matches job-title style */
+.asset-card-header .asset-title {
+    flex: 1;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    font-size: 0.9rem;
+    font-family: var(--font-mono);
+    letter-spacing: -0.01em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin: 0;
+}
+
+/* Type badge - matches job-type-badge */
+.asset-type-badge {
+    font-size: 0.65rem;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 9999px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+}
+
+/* Date styling in header */
+.header-meta-row .asset-date {
+    font-size: 0.7rem;
+    color: var(--color-text-muted);
+    font-family: var(--font-mono);
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+}
+
+.header-meta-row .asset-platform {
+    font-size: 0.65rem;
+    color: var(--color-text-muted);
+    font-family: var(--font-mono);
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    padding: 2px 6px;
+    background: rgba(63, 63, 70, 0.4);
+    border-radius: 3px;
+    border: 1px solid rgba(63, 63, 70, 0.6);
+    white-space: nowrap;
+}
+
+/* Asset Stats Row - metadata indicators spread across width in grid, right-aligned in list */
+.asset-stats-row {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: var(--space-sm);
+    gap: var(--space-md);
+    margin: var(--space-lg) 0;
+    padding: var(--space-md) 0;
 }
 
-.asset-card-header-left {
-    display: flex;
-    align-items: center;
-    gap: 8px;
+/* In list view, align metadata right under engagement stats */
+.view-list .asset-stats-row {
+    justify-content: flex-end;
 }
 
-.asset-card-header .asset-date {
-    font-size: var(--text-xs);
+.stat-badge {
+    font-size: 0.65rem;
     font-family: var(--font-mono);
+    padding: 3px 8px;
+    background: rgba(63, 63, 70, 0.3);
+    border: 1px solid rgba(63, 63, 70, 0.5);
+    border-radius: 3px;
     color: var(--color-text-muted);
+    white-space: nowrap;
 }
 
-.asset-type-badge {
+/* Indicator badges with dots */
+.indicator-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.65rem;
+    font-family: var(--font-mono);
+    padding: 3px 8px;
+    background: rgba(63, 63, 70, 0.3);
+    border: 1px solid rgba(63, 63, 70, 0.5);
+    border-radius: 3px;
+    color: var(--color-text-muted);
+    white-space: nowrap;
+}
+
+.indicator-badge .indicator-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #ef4444; /* Red when inactive/zero */
+}
+
+.indicator-badge.active .indicator-dot {
+    background: #10b981; /* Green when active */
+}
+
+.indicator-badge.active {
+    color: #10b981;
+}
+
+.indicator-badge.inactive {
+    color: #ef4444;
+}
+
+/* Asset Preview (for transcripts only) */
+.asset-preview {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    line-height: 1.5;
+    padding: var(--space-md) 0;
+    margin: var(--space-sm) 0;
+    font-style: italic;
+    opacity: 0.85;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+}
+
+/* Asset Actions Row - matches job-actions */
+.asset-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-sm);
+    margin-top: var(--space-sm);
+    padding-top: var(--space-md);
+    border-top: 1px solid rgba(63, 63, 70, 0.3);
+}
+
+/* Star in actions row - pushed to right */
+.asset-actions .asset-star {
+    margin-left: auto;
+}
+
+/* Collection button - matches job action button style */
+.btn-collection {
     font-size: var(--text-xs);
     font-weight: 500;
-    padding: 2px 8px;
-    border-radius: 9999px;
-    text-transform: uppercase;
-    letter-spacing: 0.025em;
+    padding: 6px 10px;
+    background: var(--color-bg-elevated);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.btn-collection:hover {
+    background: var(--color-accent-dim);
+    border-color: var(--color-accent-primary);
+    color: var(--color-text-primary);
+}
+
+.collection-remove-x {
+    font-size: 0.8rem;
+    opacity: 0.6;
+    cursor: pointer;
+    transition: opacity 0.15s;
+}
+
+.collection-remove-x:hover {
+    opacity: 1;
+    color: #F87171;
+}
+
+/* Add collection button */
+.btn-add-collection {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    font-weight: 500;
+    background: transparent;
+    border: 1px dashed var(--color-border);
+    border-radius: var(--radius-md);
+    color: var(--color-text-muted);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.btn-add-collection:hover {
+    border-color: var(--color-accent-primary);
+    border-style: solid;
+    color: var(--color-accent-primary);
+    background: rgba(16, 185, 129, 0.1);
 }
 
 .asset-starred {

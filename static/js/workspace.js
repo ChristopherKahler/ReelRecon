@@ -356,7 +356,7 @@ Store.subscribe((state) => {
 let jobsPollingInterval = null;
 let trackedActiveJobs = new Set(); // Track job IDs to detect completion
 let currentJobsViewMode = 'list'; // list, grid-2, grid-3 (loaded from server settings)
-let currentAssetViewMode = 'grid-4'; // list, grid-2, grid-3, grid-4 (loaded from server settings)
+let currentAssetViewMode = 'grid-3'; // list, grid-2, grid-3 (loaded from server settings)
 
 // Load view preferences from server and apply them (called on page load)
 async function loadViewPreferences() {
@@ -1166,6 +1166,20 @@ function setupCollectionRemoveHandlers(container) {
     });
 }
 
+// Remove asset from collection (called from inline onclick in asset cards)
+async function removeFromCollection(assetId, collectionId) {
+    try {
+        await API.removeFromCollection(assetId, collectionId);
+        // Refresh the assets to update UI
+        await loadAssets();
+        // Refresh sidebar collections to update counts
+        loadCollections();
+        console.log('[Workspace] Removed asset', assetId, 'from collection:', collectionId);
+    } catch (error) {
+        console.error('[Workspace] Failed to remove from collection:', error);
+    }
+}
+
 function renderAssetCard(asset) {
     const typeLabels = {
         'skeleton': 'Skeleton',
@@ -1185,151 +1199,160 @@ function renderAssetCard(asset) {
 
     const typeLabel = typeLabels[asset.type] || asset.type;
     const typeColor = typeColors[asset.type] || '#6B7280';
-    const date = asset.created_at ? new Date(asset.created_at).toLocaleDateString() : '';
+    // Compact date format to prevent wrapping (e.g., "1/5/26 7:53am")
+    const dateObj = asset.created_at ? new Date(asset.created_at) : null;
+    const createdDate = dateObj ? `${dateObj.getMonth()+1}/${dateObj.getDate()}/${String(dateObj.getFullYear()).slice(-2)} ${dateObj.getHours() % 12 || 12}:${String(dateObj.getMinutes()).padStart(2,'0')}${dateObj.getHours() >= 12 ? 'pm' : 'am'}` : '';
 
-    // Generate clean preview based on asset type (avoiding redundancy with badges)
-    let preview = '';
-    if (asset.type === 'skeleton_report') {
-        // Show creator handles only - counts are shown in badges
+    // Extract creator name(s) based on asset type (similar to job card title extraction)
+    let creatorName = '';
+    if (asset.type === 'scrape_report') {
+        // Title format: "@username - Instagram" or similar
+        creatorName = asset.title || 'Unknown';
+        // Extract just the @username part if present
+        const match = creatorName.match(/@[\w.]+/);
+        if (match) creatorName = match[0];
+    } else if (asset.type === 'skeleton_report') {
+        // Use metadata.creators array
         const meta = asset.metadata || {};
         const creators = meta.creators || [];
         if (creators.length > 0) {
-            preview = creators.slice(0, 4).map(c => `@${c}`).join(', ') + (creators.length > 4 ? ` +${creators.length - 4}` : '');
+            creatorName = creators.slice(0, 3).map(c => `@${c}`).join(', ');
+            if (creators.length > 3) creatorName += ` +${creators.length - 3}`;
+        } else {
+            creatorName = asset.title || 'Analysis';
         }
-    } else if (asset.type === 'scrape_report') {
-        // No preview text - badges show TXT/VID/reel count, title has username
-        preview = '';
-    } else if (asset.preview) {
-        preview = asset.preview.substring(0, 120) + (asset.preview.length > 120 ? '...' : '');
+    } else if (asset.type === 'transcript' || asset.type === 'skeleton') {
+        // Title format: "@creator: Content title..."
+        const titleMatch = asset.title?.match(/^@[\w.]+/);
+        creatorName = titleMatch ? titleMatch[0] : (asset.title?.substring(0, 40) || 'Untitled');
+    } else {
+        creatorName = asset.title?.substring(0, 40) || 'Untitled';
     }
 
-    // Render collection tags with remove button
-    const collections = asset.collections || [];
-    const collectionTags = collections.map(col => `
-        <span class="collection-tag" style="background: ${col.color || '#6366f1'}20; color: ${col.color || '#6366f1'}; border-color: ${col.color || '#6366f1'}40" data-collection-id="${col.id}" data-asset-id="${asset.id}">
-            ${col.name}
-            <button class="collection-remove" title="Remove from collection">×</button>
-        </span>
-    `).join('');
+    // Detect platform from metadata or title
+    const platform = asset.metadata?.platform ||
+                     asset.platform ||
+                     (asset.title?.toLowerCase().includes('instagram') ? 'INSTAGRAM' :
+                      asset.title?.toLowerCase().includes('tiktok') ? 'TIKTOK' : '');
 
-    // Always show collections area with + button
-    const addCollectionBtn = `
-        <button class="collection-add-btn" onclick="openAddCollectionModal('${asset.id}'); event.stopPropagation();" title="Add to collection">
-            +
-        </button>
-    `;
+    // Helper for proper pluralization
+    const pluralize = (count, singular, plural) => count === 1 ? singular : plural;
 
-    // Calculate metadata badges based on asset type
-    let metadataBadges = '';
-    if (asset.type === 'scrape_report') {
-        // Use pre-computed counts if available, otherwise calculate from top_reels
-        const totalReels = asset.reel_count || (asset.top_reels ? asset.top_reels.length : 0);
-        const transcriptCount = asset.transcript_count ?? (asset.top_reels ? asset.top_reels.filter(r => r.transcript).length : 0);
-        const videoCount = asset.video_count ?? (asset.top_reels ? asset.top_reels.filter(r => r.local_video).length : 0);
+    // Generate engagement stats and completion indicators
+    let engagementBadges = [];
+    let completionIndicators = []; // Compact icons for upper-right (conditional)
 
-        if (totalReels > 0) {
-            const hasTranscripts = transcriptCount > 0;
-            const hasVideos = videoCount > 0;
-
-            metadataBadges = `
-                <div class="asset-metadata-badges">
-                    <div class="asset-indicator ${hasTranscripts ? 'active' : ''}" title="${hasTranscripts ? `${transcriptCount}/${totalReels} transcript${transcriptCount === 1 ? '' : 's'}` : 'No transcripts'}">
-                        <span class="indicator-dot"></span>
-                        <span class="indicator-label">${transcriptCount} Transcript${transcriptCount === 1 ? '' : 's'}</span>
-                    </div>
-                    <div class="asset-indicator ${hasVideos ? 'active' : ''}" title="${hasVideos ? `${videoCount}/${totalReels} video${videoCount === 1 ? '' : 's'}` : 'No videos'}">
-                        <span class="indicator-dot"></span>
-                        <span class="indicator-label">${videoCount} Video${videoCount === 1 ? '' : 's'}</span>
-                    </div>
-                    <span class="asset-reel-count">${totalReels} reel${totalReels === 1 ? '' : 's'}</span>
-                </div>
-            `;
-        }
-    } else if (asset.type === 'skeleton_report') {
-        // Show skeleton count and creator count for analysis reports
-        const meta = asset.metadata || {};
-        const skeletonCount = meta.skeletons_count || meta.video_count || 0;
-        const creators = meta.creators || [];
-
-        metadataBadges = `
-            <div class="asset-metadata-badges skeleton-report-badges">
-                <div class="asset-indicator active" title="${skeletonCount} skeleton${skeletonCount === 1 ? '' : 's'} extracted">
-                    <span class="indicator-dot"></span>
-                    <span class="indicator-label">${skeletonCount} Skeleton${skeletonCount === 1 ? '' : 's'}</span>
-                </div>
-                <div class="asset-indicator ${creators.length > 0 ? 'active' : ''}" title="${creators.length} creator${creators.length === 1 ? '' : 's'} analyzed">
-                    <span class="indicator-dot"></span>
-                    <span class="indicator-label">${creators.length} Creator${creators.length === 1 ? '' : 's'}</span>
-                </div>
-            </div>
-        `;
-    }
-
-    // Only show preview if not empty
-    const previewHtml = preview ? `<p class="asset-preview">${preview}</p>` : '';
-
-    // Generate stats line based on asset type
-    let statsLine = '';
     if (asset.type === 'scrape_report') {
         const totalViews = asset.total_views || 0;
         const totalLikes = asset.total_likes || 0;
         const totalComments = asset.total_comments || 0;
-        if (totalViews > 0 || totalLikes > 0 || totalComments > 0) {
-            statsLine = `
-                <div class="asset-stats-line">
-                    <span class="stat-item"><span class="stat-num">${formatNumber(totalViews)}</span> views</span>
-                    <span class="stat-item"><span class="stat-num">${formatNumber(totalLikes)}</span> likes</span>
-                    <span class="stat-item"><span class="stat-num">${formatNumber(totalComments)}</span> comments</span>
-                </div>
-            `;
+        const totalReels = asset.reel_count || (asset.top_reels ? asset.top_reels.length : 0);
+        const transcriptCount = asset.transcript_count ?? (asset.top_reels ? asset.top_reels.filter(r => r.transcript).length : 0);
+        const videoCount = asset.video_count ?? (asset.top_reels ? asset.top_reels.filter(r => r.local_video).length : 0);
+
+        // Engagement stats (views, likes, comments)
+        if (totalViews > 0) engagementBadges.push(`<span class="stat-badge">${formatNumber(totalViews)} ${pluralize(totalViews, 'view', 'views')}</span>`);
+        if (totalLikes > 0) engagementBadges.push(`<span class="stat-badge">${formatNumber(totalLikes)} ${pluralize(totalLikes, 'like', 'likes')}</span>`);
+        if (totalComments > 0) engagementBadges.push(`<span class="stat-badge">${formatNumber(totalComments)} ${pluralize(totalComments, 'comment', 'comments')}</span>`);
+
+        // Completion indicators (conditional - only show if incomplete or always show for context)
+        // Format: icon + current/total with tooltip
+        if (totalReels > 0) {
+            const transcriptComplete = transcriptCount >= totalReels;
+            const videoComplete = videoCount >= totalReels;
+
+            // Always show these for scrape reports (useful context)
+            completionIndicators.push(`<span class="completion-indicator ${transcriptComplete ? 'complete' : 'incomplete'}" title="Transcripts: ${transcriptCount} of ${totalReels} reels">📝${transcriptCount}/${totalReels}</span>`);
+            completionIndicators.push(`<span class="completion-indicator ${videoComplete ? 'complete' : 'incomplete'}" title="Videos: ${videoCount} of ${totalReels} reels">🎬${videoCount}/${totalReels}</span>`);
         }
+
     } else if (asset.type === 'skeleton_report') {
         const meta = asset.metadata || {};
         const totalViews = meta.total_views || 0;
         const avgViews = meta.avg_views || 0;
-        const avgHookWords = meta.avg_hook_words || 0;
-        if (totalViews > 0 || avgViews > 0) {
-            statsLine = `
-                <div class="asset-stats-line">
-                    <span class="stat-item"><span class="stat-num">${formatNumber(totalViews)}</span> views</span>
-                    <span class="stat-item"><span class="stat-num">${formatNumber(avgViews)}</span> avg</span>
-                    <span class="stat-item"><span class="stat-num">${avgHookWords}</span> hook words</span>
-                </div>
-            `;
-        }
+        const skeletonCount = meta.skeletons_count || meta.video_count || 0;
+        const creators = meta.creators || [];
+
+        // Engagement/performance stats
+        if (totalViews > 0) engagementBadges.push(`<span class="stat-badge">${formatNumber(totalViews)} ${pluralize(totalViews, 'view', 'views')}</span>`);
+        if (avgViews > 0) engagementBadges.push(`<span class="stat-badge">${formatNumber(avgViews)} avg</span>`);
+
+        // Completion indicators for skeleton reports
+        if (skeletonCount > 0) completionIndicators.push(`<span class="completion-indicator complete" title="Skeletons extracted">🦴${skeletonCount}</span>`);
+        if (creators.length > 0) completionIndicators.push(`<span class="completion-indicator complete" title="Creators analyzed">👤${creators.length}</span>`);
+
+    } else if (asset.type === 'transcript') {
+        // Show word count if available
+        const wordCount = asset.metadata?.word_count || (asset.preview ? asset.preview.split(/\s+/).length : 0);
+        if (wordCount > 0) engagementBadges.push(`<span class="stat-badge">${formatNumber(wordCount)} ${pluralize(wordCount, 'word', 'words')}</span>`);
+
+    } else if (asset.type === 'skeleton') {
+        const views = asset.metadata?.views || 0;
+        if (views > 0) engagementBadges.push(`<span class="stat-badge">${formatNumber(views)} ${pluralize(views, 'view', 'views')}</span>`);
     }
+
+    // Build completion indicators for upper-right of title row
+    const completionHtml = completionIndicators.length > 0
+        ? `<span class="header-completion">${completionIndicators.join('')}</span>`
+        : '';
+
+    // Build preview section (only for transcripts)
+    let previewHtml = '';
+    if (asset.type === 'transcript' && asset.preview) {
+        // Truncate preview to ~150 chars for bird's eye view
+        const truncatedPreview = asset.preview.length > 150
+            ? asset.preview.substring(0, 150).trim() + '...'
+            : asset.preview;
+        previewHtml = `<div class="asset-preview">${truncatedPreview}</div>`;
+    }
+
+    // Render collection buttons (styled like job action buttons)
+    const collections = asset.collections || [];
+    const collectionButtons = collections.map(col => `
+        <button class="btn-collection"
+                style="background: ${col.color || '#6366f1'}15; color: ${col.color || '#6366f1'}; border-color: ${col.color || '#6366f1'}40"
+                data-collection-id="${col.id}"
+                data-asset-id="${asset.id}"
+                onclick="event.stopPropagation();">
+            ${col.name}
+            <span class="collection-remove-x" onclick="removeFromCollection('${asset.id}', '${col.id}'); event.stopPropagation();" title="Remove">×</span>
+        </button>
+    `).join('');
+
+    const addCollectionBtn = `
+        <button class="btn-add-collection" onclick="openAddCollectionModal('${asset.id}'); event.stopPropagation();" title="Add to collection">
+            +
+        </button>
+    `;
+
+    // Build engagement stats for header meta row
+    const allStatsHtml = engagementBadges.join('');
 
     return `
         <div class="asset-card" data-asset-id="${asset.id}">
             <div class="asset-card-header">
-                <div class="asset-card-header-left">
+                <div class="header-top-row">
                     <span class="asset-type-badge" style="background: ${typeColor}20; color: ${typeColor}">
                         ${typeLabel}
                     </span>
-                    <span class="asset-date">${date}</span>
+                    <span class="asset-title">${creatorName}</span>
+                    ${completionHtml}
                 </div>
-                <div class="asset-card-actions">
-                    <button class="btn-icon asset-star${asset.starred ? ' starred' : ''}"
-                            onclick="toggleAssetStar('${asset.id}'); event.stopPropagation();"
-                            title="${asset.starred ? 'Unfavorite' : 'Favorite'}">
-                        ${asset.starred ? '★' : '☆'}
-                    </button>
+                <div class="header-meta-row">
+                    <span class="asset-date">${createdDate}</span>
+                    ${platform ? `<span class="asset-platform">${platform}</span>` : ''}
+                    <span class="header-stats">${allStatsHtml}</span>
                 </div>
             </div>
-            ${statsLine}
-            <div class="asset-card-body">
-                <div class="asset-title-row">
-                    <h3 class="asset-title" data-asset-id="${asset.id}">${asset.title || 'Untitled'}</h3>
-                    <button class="btn-edit-title" onclick="startInlineEdit('${asset.id}'); event.stopPropagation();" title="Rename">✏️</button>
-                </div>
-                ${previewHtml}
-            </div>
-            <div class="asset-card-footer">
-                ${metadataBadges}
-                <div class="asset-collections">
-                    ${collectionTags}
-                    ${addCollectionBtn}
-                </div>
+            ${previewHtml}
+            <div class="asset-actions">
+                ${collectionButtons}
+                ${addCollectionBtn}
+                <button class="btn-icon asset-star${asset.starred ? ' starred' : ''}"
+                        onclick="toggleAssetStar('${asset.id}'); event.stopPropagation();"
+                        title="${asset.starred ? 'Unfavorite' : 'Favorite'}">
+                    ${asset.starred ? '★' : '☆'}
+                </button>
             </div>
         </div>
     `;
