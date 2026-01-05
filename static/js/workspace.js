@@ -7,6 +7,44 @@ import { Store } from './state/store.js';
 import { Router } from './utils/router.js';
 import { API } from './utils/api.js';
 
+// Module-level state
+let cachedSettings = null; // Cached settings for copyReelForAI and other features
+
+// Toast notification system
+function showToast(message, type = 'info', duration = 3000) {
+    // Create container if it doesn't exist
+    let container = document.querySelector('.toast-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.className = 'toast-container';
+        document.body.appendChild(container);
+    }
+
+    // Icon mapping
+    const icons = {
+        success: '✓',
+        error: '✕',
+        warning: '⚠',
+        info: 'ℹ'
+    };
+
+    // Create toast element
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.innerHTML = `
+        <span class="toast-icon">${icons[type] || icons.info}</span>
+        <span class="toast-message">${message}</span>
+    `;
+
+    container.appendChild(toast);
+
+    // Auto-remove after duration
+    setTimeout(() => {
+        toast.classList.add('toast-out');
+        setTimeout(() => toast.remove(), 300);
+    }, duration);
+}
+
 // Initialize app when DOM ready
 document.addEventListener('DOMContentLoaded', () => {
     console.log('[Workspace] Initializing ReelRecon v3.0...');
@@ -265,6 +303,15 @@ function setupEventListeners() {
 
 async function loadInitialData() {
     try {
+        // Load settings first (needed for copyReelForAI and other features)
+        try {
+            const settings = await API.getSettings();
+            cachedSettings = settings;
+            console.log('[Workspace] Settings loaded');
+        } catch (err) {
+            console.warn('[Workspace] Failed to load settings:', err.message);
+        }
+
         // Load collections for sidebar
         const collectionsResponse = await API.getCollections();
         const collections = collectionsResponse.collections || collectionsResponse || [];
@@ -2455,6 +2502,13 @@ function copyReelForAI(index) {
         const caption = item.querySelector('.reel-caption-full')?.textContent || '';
         const transcript = item.querySelector('.reel-transcript')?.textContent || '';
         let text = '';
+
+        // Check for custom prompt settings
+        const settings = getCopyForAISettings();
+        if (settings.enabled && settings.customPrompt) {
+            text += `${settings.customPrompt}\n\n---\n\n`;
+        }
+
         if (caption) text += `CAPTION:\n${caption}\n\n`;
         if (transcript) text += `TRANSCRIPT:\n${transcript}`;
         copyToClipboard(text.trim());
@@ -2474,8 +2528,17 @@ function copyReelForAI(index) {
     const caption = reel.caption || '';
     const transcript = reel.transcript || '';
 
-    // Format for AI with full context
-    let text = `CREATOR: @${username}\n`;
+    // Check for custom prompt settings
+    const settings = getCopyForAISettings();
+    let text = '';
+
+    // Prepend custom prompt if enabled
+    if (settings.enabled && settings.customPrompt) {
+        text += `${settings.customPrompt}\n\n---\n\n`;
+    }
+
+    // Add metadata
+    text += `CREATOR: @${username}\n`;
     text += `PLATFORM: ${platform.charAt(0).toUpperCase() + platform.slice(1)}\n`;
     text += `URL: ${videoUrl}\n`;
     text += `VIEWS: ${views.toLocaleString()}\n`;
@@ -3914,6 +3977,614 @@ function setupPanelResize() {
     });
 }
 
+// =========================================
+// SETTINGS VIEW
+// =========================================
+
+// Subscribe to view changes to load settings
+Store.subscribe((state) => {
+    if (state.ui.activeView === 'settings') {
+        loadSettingsView();
+    }
+});
+
+// Load settings when entering settings view
+async function loadSettingsView() {
+    console.log('[Settings] Loading settings view...');
+    try {
+        const settings = await API.getSettings();
+        cachedSettings = settings;
+        populateSettingsForm(settings);
+        setupSettingsTabSwitching();
+        updateCopyForAIPreview();
+        console.log('[Settings] Settings loaded successfully');
+    } catch (error) {
+        console.error('[Settings] Failed to load settings:', error);
+        showToast('Failed to load settings', 'error');
+    }
+}
+
+// Populate settings form with data
+function populateSettingsForm(settings) {
+    // API Keys Tab - check has_*_key flags (keys aren't returned for security)
+    if (settings.has_openai_key) {
+        document.getElementById('openai-key').placeholder = '••••••••••••';
+        updateProviderStatus('openai', true);
+    }
+    if (settings.has_anthropic_key) {
+        document.getElementById('anthropic-key').placeholder = '••••••••••••';
+        updateProviderStatus('anthropic', true);
+    }
+    if (settings.has_google_key) {
+        document.getElementById('google-key').placeholder = '••••••••••••';
+        updateProviderStatus('google', true);
+    }
+
+    // Set model selections
+    const openaiModel = document.getElementById('openai-model');
+    const anthropicModel = document.getElementById('anthropic-model');
+    const googleModel = document.getElementById('google-model');
+    const defaultProvider = document.getElementById('default-provider');
+
+    if (openaiModel && settings.openai_model) openaiModel.value = settings.openai_model;
+    if (anthropicModel && settings.anthropic_model) anthropicModel.value = settings.anthropic_model;
+    if (googleModel && settings.google_model) googleModel.value = settings.google_model;
+    if (defaultProvider && settings.default_provider) defaultProvider.value = settings.default_provider;
+
+    // Refresh Ollama models
+    refreshOllamaModels();
+
+    // Rewrite Wizard Tab
+    const systemPromptMode = settings.rewrite_system_prompt_mode || 'append';
+    setSystemPromptMode(systemPromptMode, false);
+
+    const systemPrompt = document.getElementById('rewrite-system-prompt');
+    if (systemPrompt) systemPrompt.value = settings.rewrite_system_prompt || '';
+
+    const defaultPrompt = document.getElementById('default-system-prompt');
+    if (defaultPrompt) defaultPrompt.value = settings.rewrite_default_system_prompt || '';
+
+    renderQuickTemplates(settings.rewrite_quick_templates || []);
+
+    // Rewrite defaults
+    const defaults = settings.rewrite_defaults || {};
+    const defaultNiche = document.getElementById('default-niche');
+    const defaultVoice = document.getElementById('default-voice');
+    const defaultCta = document.getElementById('default-cta');
+    const defaultTimeLimit = document.getElementById('default-time-limit');
+
+    if (defaultNiche) defaultNiche.value = defaults.niche || '';
+    if (defaultVoice) defaultVoice.value = defaults.voice || '';
+    if (defaultCta) defaultCta.value = defaults.cta || '';
+    if (defaultTimeLimit) defaultTimeLimit.value = defaults.timeLimit || 'Under 60 seconds';
+
+    // Copy for AI Tab
+    const copyForAIEnabled = document.getElementById('copy-for-ai-enabled');
+    const copyForAIPrompt = document.getElementById('copy-for-ai-prompt');
+
+    if (copyForAIEnabled) copyForAIEnabled.checked = settings.copy_for_ai_prompt_enabled || false;
+    if (copyForAIPrompt) copyForAIPrompt.value = settings.copy_for_ai_custom_prompt || '';
+
+    // Preferences Tab
+    const libraryViewMode = settings.asset_view_mode || 'grid-3';
+    const jobsViewMode = settings.jobs_view_mode || 'list';
+
+    document.querySelectorAll('input[name="library-view-mode"]').forEach(radio => {
+        radio.checked = radio.value === libraryViewMode;
+    });
+
+    document.querySelectorAll('input[name="jobs-view-mode"]').forEach(radio => {
+        radio.checked = radio.value === jobsViewMode;
+    });
+
+    const detailPanelWidth = document.getElementById('detail-panel-width');
+    const outputDirectory = document.getElementById('output-directory');
+
+    if (detailPanelWidth) detailPanelWidth.value = settings.detail_panel_width || 600;
+    if (outputDirectory) outputDirectory.value = settings.output_dir || '';
+}
+
+// Update provider status indicator
+function updateProviderStatus(provider, configured) {
+    const dot = document.getElementById(`${provider}-dot`);
+    if (dot) {
+        dot.classList.toggle('configured', configured);
+    }
+}
+
+// Settings tab switching
+function setupSettingsTabSwitching() {
+    const tabs = document.querySelectorAll('.settings-tab');
+    const panels = document.querySelectorAll('.settings-panel');
+
+    tabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            const targetPanel = tab.dataset.settingsTab;
+
+            // Update tab active states
+            tabs.forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+
+            // Update panel visibility
+            panels.forEach(p => {
+                p.classList.toggle('active', p.dataset.settingsPanel === targetPanel);
+            });
+        });
+    });
+}
+
+// Test API key connection
+async function testApiKey(provider) {
+    const inputMap = {
+        'openai': 'openai-key',
+        'anthropic': 'anthropic-key',
+        'google': 'google-key'
+    };
+
+    const input = document.getElementById(inputMap[provider]);
+    if (!input || !input.value.trim()) {
+        showToast('Please enter an API key first', 'warning');
+        return;
+    }
+
+    showToast(`Testing ${provider} connection...`, 'info');
+
+    try {
+        // Save the key first, then test
+        const saveData = {};
+        saveData[`${provider}_api_key`] = input.value.trim();
+        await API.updateSettings(saveData);
+
+        // Test connection via providers endpoint
+        const providers = await API.getProviders();
+        const providerData = providers.find(p => p.id === provider);
+
+        if (providerData && providerData.configured) {
+            updateProviderStatus(provider, true);
+            showToast(`${provider} connection successful!`, 'success');
+        } else {
+            updateProviderStatus(provider, false);
+            showToast(`${provider} API key may be invalid`, 'warning');
+        }
+    } catch (error) {
+        updateProviderStatus(provider, false);
+        showToast(`Failed to test ${provider}: ${error.message}`, 'error');
+    }
+}
+
+// Refresh Ollama models - uses /api/ollama/models directly like rewrite wizard
+async function refreshOllamaModels() {
+    const select = document.getElementById('ollama-model');
+    const dot = document.getElementById('ollama-dot');
+    if (!select) return;
+
+    try {
+        const response = await fetch('/api/ollama/models');
+        const data = await response.json();
+
+        if (data.available && data.models && data.models.length > 0) {
+            select.innerHTML = data.models.map(model =>
+                `<option value="${model}">${model}</option>`
+            ).join('');
+
+            // Update status dot
+            if (dot) {
+                dot.classList.add('configured');
+            }
+        } else {
+            select.innerHTML = '<option value="">No models available</option>';
+            if (dot) {
+                dot.classList.remove('configured');
+            }
+        }
+    } catch (error) {
+        console.warn('[Settings] Failed to refresh Ollama models:', error);
+        select.innerHTML = '<option value="">Connection failed</option>';
+        if (dot) {
+            dot.classList.remove('configured');
+        }
+    }
+}
+
+// System prompt mode toggle
+function setSystemPromptMode(mode, showWarning = true) {
+    const appendBtn = document.querySelector('.settings-toggle[data-mode="append"]');
+    const overrideBtn = document.querySelector('.settings-toggle[data-mode="override"]');
+    const warning = document.getElementById('override-warning');
+
+    if (appendBtn && overrideBtn) {
+        appendBtn.classList.toggle('active', mode === 'append');
+        overrideBtn.classList.toggle('active', mode === 'override');
+    }
+
+    if (warning && showWarning) {
+        warning.style.display = mode === 'override' ? 'flex' : 'none';
+    }
+
+    // Store mode in cached settings for save
+    if (cachedSettings) {
+        cachedSettings.rewrite_system_prompt_mode = mode;
+    }
+}
+
+// Revert system prompt to default
+function revertSystemPrompt() {
+    const textarea = document.getElementById('rewrite-system-prompt');
+    if (textarea) {
+        textarea.value = '';
+        showToast('System prompt cleared. Save to apply.', 'info');
+    }
+}
+
+// Copy template variable to clipboard
+function copyTemplateVar(element) {
+    const varText = element.textContent;
+    navigator.clipboard.writeText(varText).then(() => {
+        showToast(`Copied ${varText}`, 'success');
+    }).catch(() => {
+        // Fallback
+        const textarea = document.getElementById('rewrite-system-prompt');
+        if (textarea) {
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+            const text = textarea.value;
+            textarea.value = text.substring(0, start) + varText + text.substring(end);
+            textarea.selectionStart = textarea.selectionEnd = start + varText.length;
+            textarea.focus();
+            showToast(`Inserted ${varText}`, 'success');
+        }
+    });
+}
+
+// Substitute template variables in prompt with actual reel data
+function substituteTemplateVars(prompt, reelData, wizardContext = {}) {
+    if (!prompt) return prompt;
+
+    // Format numbers with commas
+    const formatNum = (n) => {
+        const num = parseInt(n) || 0;
+        return num.toLocaleString();
+    };
+
+    // Available substitutions
+    const vars = {
+        // Metrics
+        '{{VIEWS}}': formatNum(reelData.views || reelData.play_count || reelData.plays || 0),
+        '{{LIKES}}': formatNum(reelData.likes || reelData.like_count || 0),
+        '{{COMMENTS}}': formatNum(reelData.comments || reelData.comment_count || 0),
+        '{{SHARES}}': formatNum(reelData.shares || reelData.share_count || 0),
+        // Creator
+        '{{CREATOR}}': reelData.creator || reelData.username || reelData.author || 'Unknown',
+        '{{PLATFORM}}': reelData.platform || 'Instagram',
+        // Content
+        '{{TRANSCRIPT}}': reelData.transcript || '[No transcript available]',
+        '{{CAPTION}}': reelData.caption || reelData.description || '[No caption]',
+        '{{DURATION}}': reelData.duration || 'Unknown',
+        // Wizard context (from rewrite form)
+        '{{NICHE}}': wizardContext.niche || '[Niche not specified]',
+        '{{VOICE}}': wizardContext.voice || '[Voice not specified]',
+        '{{ANGLE}}': wizardContext.angle || '[Angle not specified]',
+        '{{CTA}}': wizardContext.cta || '[CTA not specified]'
+    };
+
+    let result = prompt;
+    for (const [key, value] of Object.entries(vars)) {
+        result = result.split(key).join(value);
+    }
+
+    return result;
+}
+
+// Quick Templates Management
+function renderQuickTemplates(templates) {
+    const container = document.getElementById('quick-templates-list');
+    if (!container) return;
+
+    if (!templates || templates.length === 0) {
+        container.innerHTML = `
+            <div class="settings-empty-templates">
+                No templates saved yet. Click "+ Add New" to create one.
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = templates.map((template, index) => `
+        <div class="settings-template-item" data-index="${index}">
+            <span class="settings-template-name">${template.name}</span>
+            <div class="settings-template-actions">
+                <button class="settings-template-btn" onclick="editQuickTemplate(${index})">Edit</button>
+                <button class="settings-template-btn delete" onclick="deleteQuickTemplate(${index})">Delete</button>
+            </div>
+        </div>
+    `).join('');
+}
+
+// Add new quick template
+// Template Editor Modal State
+let templateEditorState = {
+    mode: 'add', // 'add' or 'edit'
+    editIndex: null
+};
+
+// Open template editor modal for new template
+function addQuickTemplate() {
+    templateEditorState.mode = 'add';
+    templateEditorState.editIndex = null;
+
+    document.getElementById('templateEditorTitle').textContent = 'NEW TEMPLATE';
+    document.getElementById('templateEditorName').value = '';
+    document.getElementById('templateEditorContent').value = '';
+
+    openTemplateEditor();
+}
+
+// Open template editor modal for editing
+function editQuickTemplate(index) {
+    const templates = cachedSettings.rewrite_quick_templates || [];
+    const template = templates[index];
+    if (!template) return;
+
+    templateEditorState.mode = 'edit';
+    templateEditorState.editIndex = index;
+
+    document.getElementById('templateEditorTitle').textContent = 'EDIT TEMPLATE';
+    document.getElementById('templateEditorName').value = template.name;
+    document.getElementById('templateEditorContent').value = template.content;
+
+    openTemplateEditor();
+}
+
+// Open the template editor modal
+function openTemplateEditor() {
+    const modal = document.getElementById('templateEditorModal');
+    if (modal) {
+        modal.classList.add('active');
+        // Focus on name input
+        setTimeout(() => {
+            document.getElementById('templateEditorName')?.focus();
+        }, 100);
+
+        // Initialize drag/resize
+        if (typeof ModalUtils !== 'undefined') {
+            ModalUtils.makeDraggableResizable('#templateEditorModal', {
+                persistKey: 'templateEditorBounds',
+                minWidth: 400,
+                minHeight: 350
+            });
+        }
+    }
+}
+
+// Close the template editor modal
+function closeTemplateEditor() {
+    const modal = document.getElementById('templateEditorModal');
+    if (modal) {
+        modal.classList.remove('active');
+    }
+}
+
+// Save template from modal
+function saveTemplate() {
+    const name = document.getElementById('templateEditorName')?.value.trim();
+    const content = document.getElementById('templateEditorContent')?.value.trim();
+
+    if (!name) {
+        showToast('Please enter a template name', 'error');
+        document.getElementById('templateEditorName')?.focus();
+        return;
+    }
+
+    if (!content) {
+        showToast('Please enter template content', 'error');
+        document.getElementById('templateEditorContent')?.focus();
+        return;
+    }
+
+    if (!cachedSettings.rewrite_quick_templates) {
+        cachedSettings.rewrite_quick_templates = [];
+    }
+
+    if (templateEditorState.mode === 'edit' && templateEditorState.editIndex !== null) {
+        // Update existing
+        const templates = cachedSettings.rewrite_quick_templates;
+        templates[templateEditorState.editIndex] = {
+            ...templates[templateEditorState.editIndex],
+            name: name,
+            content: content
+        };
+        showToast('Template updated. Save settings to persist.', 'info');
+    } else {
+        // Add new
+        cachedSettings.rewrite_quick_templates.push({
+            id: Date.now().toString(),
+            name: name,
+            content: content
+        });
+        showToast('Template added. Save settings to persist.', 'info');
+    }
+
+    renderQuickTemplates(cachedSettings.rewrite_quick_templates);
+    closeTemplateEditor();
+}
+
+// Insert field label into template content textarea
+function insertTemplateField(field) {
+    const textarea = document.getElementById('templateEditorContent');
+    if (!textarea) return;
+
+    const fieldText = `${field}: `;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const text = textarea.value;
+
+    // If at start of line or empty, just insert. Otherwise add newline first.
+    let insert = fieldText;
+    if (start > 0 && text[start - 1] !== '\n') {
+        insert = '\n' + fieldText;
+    }
+
+    textarea.value = text.substring(0, start) + insert + text.substring(end);
+    textarea.selectionStart = textarea.selectionEnd = start + insert.length;
+    textarea.focus();
+}
+
+// Delete quick template with custom confirmation
+function deleteQuickTemplate(index) {
+    const templates = cachedSettings.rewrite_quick_templates || [];
+    const template = templates[index];
+    if (!template) return;
+
+    // Use custom toast confirm or simple confirm for now
+    if (!confirm(`Delete template "${template.name}"?`)) return;
+
+    templates.splice(index, 1);
+    renderQuickTemplates(templates);
+    showToast('Template deleted. Save to persist.', 'info');
+}
+
+// Update Copy for AI preview
+function updateCopyForAIPreview() {
+    const enabledCheckbox = document.getElementById('copy-for-ai-enabled');
+    const promptTextarea = document.getElementById('copy-for-ai-prompt');
+    const previewContent = document.querySelector('.settings-preview-content');
+
+    if (!previewContent) return;
+
+    const enabled = enabledCheckbox?.checked || false;
+    const customPrompt = promptTextarea?.value || '';
+
+    // Build preview
+    let preview = '';
+
+    if (enabled && customPrompt) {
+        preview += `<span class="preview-prompt">${escapeHtml(customPrompt)}</span>\n\n`;
+        preview += `<span class="preview-divider">---</span>\n\n`;
+    }
+
+    preview += `<span class="preview-label">CREATOR:</span> <span class="preview-value">@example_user</span>\n`;
+    preview += `<span class="preview-label">PLATFORM:</span> <span class="preview-value">Instagram</span>\n`;
+    preview += `<span class="preview-label">URL:</span> <span class="preview-value">https://instagram.com/reel/abc123</span>\n`;
+    preview += `<span class="preview-label">VIEWS:</span> <span class="preview-value">125,432</span>\n`;
+    preview += `<span class="preview-label">LIKES:</span> <span class="preview-value">8,921</span>\n`;
+    preview += `<span class="preview-label">COMMENTS:</span> <span class="preview-value">342</span>\n\n`;
+    preview += `<span class="preview-divider">---</span>\n\n`;
+    preview += `<span class="preview-label">CAPTION:</span>\n<span class="preview-value">This is an example caption...</span>\n\n`;
+    preview += `<span class="preview-label">TRANSCRIPT:</span>\n<span class="preview-value">This is an example transcript...</span>`;
+
+    previewContent.innerHTML = preview;
+
+    // Add live update listener
+    if (!promptTextarea.dataset.listenerAttached) {
+        promptTextarea.addEventListener('input', updateCopyForAIPreview);
+        enabledCheckbox.addEventListener('change', updateCopyForAIPreview);
+        promptTextarea.dataset.listenerAttached = 'true';
+    }
+}
+
+// Save API Keys settings
+async function saveApiKeysSettings() {
+    const data = {
+        openai_api_key: document.getElementById('openai-key')?.value || '',
+        anthropic_api_key: document.getElementById('anthropic-key')?.value || '',
+        google_api_key: document.getElementById('google-key')?.value || '',
+        openai_model: document.getElementById('openai-model')?.value || 'gpt-4o-mini',
+        anthropic_model: document.getElementById('anthropic-model')?.value || 'claude-3-5-haiku-latest',
+        google_model: document.getElementById('google-model')?.value || 'gemini-1.5-flash',
+        ollama_model: document.getElementById('ollama-model')?.value || '',
+        default_provider: document.getElementById('default-provider')?.value || 'openai'
+    };
+
+    try {
+        await API.updateSettings(data);
+        cachedSettings = { ...cachedSettings, ...data };
+        showToast('API settings saved!', 'success');
+    } catch (error) {
+        showToast('Failed to save settings: ' + error.message, 'error');
+    }
+}
+
+// Save Rewrite Wizard settings
+async function saveRewriteWizardSettings() {
+    const data = {
+        rewrite_system_prompt: document.getElementById('rewrite-system-prompt')?.value || '',
+        rewrite_system_prompt_mode: cachedSettings?.rewrite_system_prompt_mode || 'append',
+        rewrite_quick_templates: cachedSettings?.rewrite_quick_templates || [],
+        rewrite_defaults: {
+            niche: document.getElementById('default-niche')?.value || '',
+            voice: document.getElementById('default-voice')?.value || '',
+            cta: document.getElementById('default-cta')?.value || '',
+            timeLimit: document.getElementById('default-time-limit')?.value || 'Under 60 seconds'
+        }
+    };
+
+    try {
+        await API.updateSettings(data);
+        cachedSettings = { ...cachedSettings, ...data };
+        showToast('Rewrite Wizard settings saved!', 'success');
+    } catch (error) {
+        showToast('Failed to save settings: ' + error.message, 'error');
+    }
+}
+
+// Save Copy for AI settings
+async function saveCopyForAISettings() {
+    const data = {
+        copy_for_ai_prompt_enabled: document.getElementById('copy-for-ai-enabled')?.checked || false,
+        copy_for_ai_custom_prompt: document.getElementById('copy-for-ai-prompt')?.value || ''
+    };
+
+    try {
+        await API.updateSettings(data);
+        cachedSettings = { ...cachedSettings, ...data };
+        showToast('Copy for AI settings saved!', 'success');
+    } catch (error) {
+        showToast('Failed to save settings: ' + error.message, 'error');
+    }
+}
+
+// Save Preferences settings
+async function savePreferencesSettings() {
+    const libraryViewMode = document.querySelector('input[name="library-view-mode"]:checked')?.value || 'grid-3';
+    const jobsViewMode = document.querySelector('input[name="jobs-view-mode"]:checked')?.value || 'list';
+
+    const data = {
+        asset_view_mode: libraryViewMode,
+        jobs_view_mode: jobsViewMode,
+        detail_panel_width: parseInt(document.getElementById('detail-panel-width')?.value) || 600,
+        output_dir: document.getElementById('output-directory')?.value || ''
+    };
+
+    try {
+        await API.updateSettings(data);
+        cachedSettings = { ...cachedSettings, ...data };
+
+        // Apply view modes immediately
+        currentAssetViewMode = libraryViewMode;
+        currentJobsViewMode = jobsViewMode;
+
+        // Update button states
+        document.querySelectorAll('#library-view-toggle .view-toggle-btn, #favorites-view-toggle .view-toggle-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.viewMode === currentAssetViewMode);
+        });
+        document.querySelectorAll('#jobs-view-toggle .view-toggle-btn, #starred-jobs-view-toggle .view-toggle-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.viewMode === currentJobsViewMode);
+        });
+
+        showToast('Preferences saved!', 'success');
+    } catch (error) {
+        showToast('Failed to save settings: ' + error.message, 'error');
+    }
+}
+
+// Get Copy for AI settings (for use by copyReelForAI)
+function getCopyForAISettings() {
+    return {
+        enabled: cachedSettings?.copy_for_ai_prompt_enabled || false,
+        customPrompt: cachedSettings?.copy_for_ai_custom_prompt || ''
+    };
+}
+
 // Custom context menu for PyWebView (right-click copy/paste)
 function setupContextMenu() {
     // Create context menu element
@@ -4272,7 +4943,6 @@ async function initStarredJobsCount() {
 
 // Rewrite state variables
 let currentRewriteReel = null;
-let cachedSettings = null;
 const TOTAL_WIZARD_STEPS = 8;
 let wizardStep = 0;
 let wizardData = {};
@@ -4856,7 +5526,9 @@ async function generateQuickRewrite() {
                 shortcode: currentRewriteReel.shortcode,
                 context: context,
                 provider: provider,
-                model: model
+                model: model,
+                // Quick mode has no structured wizard data
+                wizard_context: {}
             })
         });
 
@@ -4941,7 +5613,14 @@ async function generateRewrite() {
                 shortcode: currentRewriteReel.shortcode,
                 context: context,
                 provider: provider,
-                model: model
+                model: model,
+                // Pass wizard values for template variable substitution
+                wizard_context: {
+                    niche: wizardData.niche || '',
+                    voice: wizardData.voice || '',
+                    angle: wizardData.angle || '',
+                    cta: wizardData.cta || ''
+                }
             })
         });
 
@@ -5077,3 +5756,22 @@ window.addNewSpinButton = addNewSpinButton;
 window.handleSpinInput = handleSpinInput;
 window.cancelSpinInput = cancelSpinInput;
 window.deleteSpinButton = deleteSpinButton;
+
+// Expose settings functions globally
+window.testApiKey = testApiKey;
+window.refreshOllamaModels = refreshOllamaModels;
+window.setSystemPromptMode = setSystemPromptMode;
+window.revertSystemPrompt = revertSystemPrompt;
+window.copyTemplateVar = copyTemplateVar;
+window.substituteTemplateVars = substituteTemplateVars;
+window.addQuickTemplate = addQuickTemplate;
+window.editQuickTemplate = editQuickTemplate;
+window.deleteQuickTemplate = deleteQuickTemplate;
+window.openTemplateEditor = openTemplateEditor;
+window.closeTemplateEditor = closeTemplateEditor;
+window.saveTemplate = saveTemplate;
+window.insertTemplateField = insertTemplateField;
+window.saveApiKeysSettings = saveApiKeysSettings;
+window.saveRewriteWizardSettings = saveRewriteWizardSettings;
+window.saveCopyForAISettings = saveCopyForAISettings;
+window.savePreferencesSettings = savePreferencesSettings;

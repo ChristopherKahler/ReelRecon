@@ -67,7 +67,30 @@ DEFAULT_CONFIG = {
     'openai_key': '',
     'anthropic_key': '',
     'google_key': '',
-    'output_directory': ''  # Empty = use default (BASE_DIR/output)
+    'output_directory': '',  # Empty = use default (BASE_DIR/output)
+
+    # Rewrite wizard settings
+    'rewrite_system_prompt': '',              # Custom system prompt text
+    'rewrite_system_prompt_mode': 'append',   # 'append' or 'override'
+    'rewrite_quick_templates': [],            # Array of {id, name, content} objects
+    'rewrite_defaults': {                     # Default wizard values
+        'niche': '',
+        'voice': '',
+        'angle': '',
+        'cta': '',
+        'timeLimit': 'Under 60 seconds'
+    },
+
+    # Copy for AI settings
+    'copy_for_ai_prompt_enabled': False,      # Toggle
+    'copy_for_ai_custom_prompt': '',          # Custom prompt to prepend
+
+    # UI preferences (some already exist elsewhere, consolidating here)
+    'detail_panel_width': 600,
+    'jobs_view_mode': 'list',
+    'asset_view_mode': 'grid-3',
+    'library_filter_types': [],
+    'spin_buttons': []
 }
 
 # Universal prompt template
@@ -158,6 +181,56 @@ def generate_ai_prompt(reel):
         transcript=transcript,
         url=reel.get('url', '')
     )
+
+
+def substitute_template_vars(prompt, reel, wizard_context=None):
+    """
+    Substitute template variables in a custom prompt with actual reel data.
+
+    Available variables:
+    - {{VIEWS}}, {{LIKES}}, {{COMMENTS}}, {{SHARES}} - Metrics
+    - {{CREATOR}}, {{PLATFORM}} - Creator info
+    - {{TRANSCRIPT}}, {{CAPTION}}, {{DURATION}} - Content
+    - {{NICHE}}, {{VOICE}}, {{ANGLE}}, {{CTA}} - Wizard context
+    """
+    if not prompt:
+        return prompt
+
+    wizard_context = wizard_context or {}
+
+    # Format numbers with commas
+    def fmt_num(n):
+        try:
+            return f"{int(n):,}"
+        except (ValueError, TypeError):
+            return "0"
+
+    # Build substitution map
+    subs = {
+        # Metrics
+        '{{VIEWS}}': fmt_num(reel.get('views') or reel.get('play_count') or reel.get('plays') or 0),
+        '{{LIKES}}': fmt_num(reel.get('likes') or reel.get('like_count') or 0),
+        '{{COMMENTS}}': fmt_num(reel.get('comments') or reel.get('comment_count') or 0),
+        '{{SHARES}}': fmt_num(reel.get('shares') or reel.get('share_count') or 0),
+        # Creator
+        '{{CREATOR}}': reel.get('creator') or reel.get('username') or reel.get('author') or 'Unknown',
+        '{{PLATFORM}}': reel.get('platform') or 'Instagram',
+        # Content
+        '{{TRANSCRIPT}}': reel.get('transcript') or '[No transcript available]',
+        '{{CAPTION}}': reel.get('caption') or reel.get('description') or '[No caption]',
+        '{{DURATION}}': str(reel.get('duration') or 'Unknown'),
+        # Wizard context
+        '{{NICHE}}': wizard_context.get('niche') or '[Niche not specified]',
+        '{{VOICE}}': wizard_context.get('voice') or '[Voice not specified]',
+        '{{ANGLE}}': wizard_context.get('angle') or '[Angle not specified]',
+        '{{CTA}}': wizard_context.get('cta') or '[CTA not specified]',
+    }
+
+    result = prompt
+    for var, value in subs.items():
+        result = result.replace(var, str(value))
+
+    return result
 
 
 def strip_thinking_output(text):
@@ -1948,6 +2021,7 @@ def get_settings():
     config = load_config()
     # Don't expose API keys in full
     return jsonify({
+        # AI provider settings
         'ai_provider': config.get('ai_provider', 'copy'),
         'local_model': config.get('local_model', ''),
         'openai_model': config.get('openai_model', 'gpt-4o-mini'),
@@ -1958,9 +2032,29 @@ def get_settings():
         'has_google_key': bool(config.get('google_key')),
         'output_directory': config.get('output_directory', ''),
         'default_output_directory': str(OUTPUT_DIR),
+
+        # Rewrite wizard settings
+        'rewrite_system_prompt': config.get('rewrite_system_prompt', ''),
+        'rewrite_system_prompt_mode': config.get('rewrite_system_prompt_mode', 'append'),
+        'rewrite_default_system_prompt': UNIVERSAL_PROMPT_TEMPLATE,  # Read-only for revert
+        'rewrite_quick_templates': config.get('rewrite_quick_templates', []),
+        'rewrite_defaults': config.get('rewrite_defaults', {
+            'niche': '',
+            'voice': '',
+            'angle': '',
+            'cta': '',
+            'timeLimit': 'Under 60 seconds'
+        }),
+
+        # Copy for AI settings
+        'copy_for_ai_prompt_enabled': config.get('copy_for_ai_prompt_enabled', False),
+        'copy_for_ai_custom_prompt': config.get('copy_for_ai_custom_prompt', ''),
+
+        # UI preferences
         'detail_panel_width': config.get('detail_panel_width', 600),
         'jobs_view_mode': config.get('jobs_view_mode', 'list'),
-        'asset_view_mode': config.get('asset_view_mode', 'grid-4'),
+        'asset_view_mode': config.get('asset_view_mode', 'grid-3'),
+        'library_filter_types': config.get('library_filter_types', []),
         'spin_buttons': config.get('spin_buttons', [])
     })
 
@@ -1971,7 +2065,7 @@ def update_settings():
     data = request.json
     config = load_config()
 
-    # Update only provided fields
+    # Update only provided fields - AI provider settings
     if 'ai_provider' in data:
         config['ai_provider'] = data['ai_provider']
     if 'local_model' in data:
@@ -1991,12 +2085,55 @@ def update_settings():
     if 'output_directory' in data:
         # Allow empty string to reset to default
         config['output_directory'] = data['output_directory'].strip()
+
+    # Rewrite wizard settings
+    if 'rewrite_system_prompt' in data:
+        config['rewrite_system_prompt'] = data['rewrite_system_prompt']
+    if 'rewrite_system_prompt_mode' in data:
+        mode = data['rewrite_system_prompt_mode']
+        if mode in ('append', 'override'):
+            config['rewrite_system_prompt_mode'] = mode
+    if 'rewrite_quick_templates' in data:
+        templates = data['rewrite_quick_templates']
+        if isinstance(templates, list):
+            # Validate each template has id, name, content
+            valid_templates = []
+            for t in templates:
+                if isinstance(t, dict) and 'id' in t and 'name' in t and 'content' in t:
+                    valid_templates.append({
+                        'id': str(t['id']),
+                        'name': str(t['name'])[:100],  # Max 100 chars for name
+                        'content': str(t['content'])[:5000]  # Max 5000 chars for content
+                    })
+            config['rewrite_quick_templates'] = valid_templates
+    if 'rewrite_defaults' in data:
+        defaults = data['rewrite_defaults']
+        if isinstance(defaults, dict):
+            config['rewrite_defaults'] = {
+                'niche': str(defaults.get('niche', ''))[:200],
+                'voice': str(defaults.get('voice', ''))[:200],
+                'angle': str(defaults.get('angle', ''))[:500],
+                'cta': str(defaults.get('cta', ''))[:200],
+                'timeLimit': str(defaults.get('timeLimit', 'Under 60 seconds'))
+            }
+
+    # Copy for AI settings
+    if 'copy_for_ai_prompt_enabled' in data:
+        config['copy_for_ai_prompt_enabled'] = bool(data['copy_for_ai_prompt_enabled'])
+    if 'copy_for_ai_custom_prompt' in data:
+        config['copy_for_ai_custom_prompt'] = str(data['copy_for_ai_custom_prompt'])[:5000]
+
+    # UI preferences
     if 'detail_panel_width' in data:
         config['detail_panel_width'] = int(data['detail_panel_width'])
     if 'jobs_view_mode' in data:
         config['jobs_view_mode'] = data['jobs_view_mode']
     if 'asset_view_mode' in data:
         config['asset_view_mode'] = data['asset_view_mode']
+    if 'library_filter_types' in data:
+        filter_types = data['library_filter_types']
+        if isinstance(filter_types, list):
+            config['library_filter_types'] = [str(t) for t in filter_types]
     if 'spin_buttons' in data:
         # Validate it's a list of strings, max 8 items
         spin_buttons = data['spin_buttons']
@@ -2189,8 +2326,27 @@ def rewrite_script():
     if provider == 'copy':
         return jsonify({'error': 'AI provider not configured. Set provider in settings.'}), 400
 
+    # Get wizard context values from request (for template variable substitution)
+    wizard_context = data.get('wizard_context', {})
+
     # Build prompt
     base_prompt = generate_ai_prompt(reel)
+
+    # Apply custom system prompt if configured
+    custom_prompt = config.get('rewrite_system_prompt', '').strip()
+    prompt_mode = config.get('rewrite_system_prompt_mode', 'append')
+
+    if custom_prompt:
+        # Substitute template variables in the custom prompt
+        processed_custom_prompt = substitute_template_vars(custom_prompt, reel, wizard_context)
+
+        if prompt_mode == 'override':
+            # Override mode: use only the custom prompt (user takes responsibility)
+            base_prompt = processed_custom_prompt
+        else:
+            # Append mode: add custom prompt to the base prompt
+            base_prompt = f"{base_prompt}\n\nADDITIONAL INSTRUCTIONS:\n{processed_custom_prompt}"
+
     if user_context:
         full_prompt = f"{base_prompt}\nMY CONTEXT (adapt script for this):\n{user_context}\n\nRemember: Output ONLY the script, no preamble."
     else:

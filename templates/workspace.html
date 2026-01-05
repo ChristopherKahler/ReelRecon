@@ -302,8 +302,371 @@
                     <h1>Settings</h1>
                 </header>
 
+                <!-- Settings Tabs -->
+                <div class="settings-tabs">
+                    <button class="settings-tab active" data-settings-tab="api-keys">API Keys</button>
+                    <button class="settings-tab" data-settings-tab="rewrite-wizard">Rewrite Wizard</button>
+                    <button class="settings-tab" data-settings-tab="copy-for-ai">Copy for AI</button>
+                    <button class="settings-tab" data-settings-tab="preferences">Preferences</button>
+                </div>
+
                 <div class="settings-content">
-                    <p>Settings panel - coming in Phase 5</p>
+                    <!-- API Keys Tab -->
+                    <div class="settings-panel active" data-settings-panel="api-keys">
+                        <div class="settings-section">
+                            <h3 class="settings-section-title">AI PROVIDERS</h3>
+                            <div class="provider-grid">
+                                <!-- OpenAI -->
+                                <div class="provider-row">
+                                    <span class="provider-name">OpenAI</span>
+                                    <input type="password" id="openai-key" class="settings-input settings-input-masked" placeholder="sk-..." autocomplete="off">
+                                    <span class="status-dot" id="openai-dot"></span>
+                                    <select id="openai-model" class="settings-select settings-select-compact">
+                                        <option value="gpt-4o-mini">gpt-4o-mini</option>
+                                        <option value="gpt-4o">gpt-4o</option>
+                                        <option value="gpt-4-turbo">gpt-4-turbo</option>
+                                    </select>
+                                    <button class="settings-btn settings-btn-sm" onclick="testApiKey('openai')">Test</button>
+                                </div>
+                                <!-- Anthropic -->
+                                <div class="provider-row">
+                                    <span class="provider-name">Anthropic</span>
+                                    <input type="password" id="anthropic-key" class="settings-input settings-input-masked" placeholder="sk-ant-..." autocomplete="off">
+                                    <span class="status-dot" id="anthropic-dot"></span>
+                                    <select id="anthropic-model" class="settings-select settings-select-compact">
+                                        <option value="claude-3-5-haiku-20241022">claude-3-5-haiku</option>
+                                        <option value="claude-3-5-sonnet-20241022">claude-3-5-sonnet</option>
+                                        <option value="claude-3-opus-20240229">claude-3-opus</option>
+                                    </select>
+                                    <button class="settings-btn settings-btn-sm" onclick="testApiKey('anthropic')">Test</button>
+                                </div>
+                                <!-- Google -->
+                                <div class="provider-row">
+                                    <span class="provider-name">Google</span>
+                                    <input type="password" id="google-key" class="settings-input settings-input-masked" placeholder="AIza..." autocomplete="off">
+                                    <span class="status-dot" id="google-dot"></span>
+                                    <select id="google-model" class="settings-select settings-select-compact">
+                                        <option value="gemini-1.5-flash">gemini-1.5-flash</option>
+                                        <option value="gemini-1.5-pro">gemini-1.5-pro</option>
+                                    </select>
+                                    <button class="settings-btn settings-btn-sm" onclick="testApiKey('google')">Test</button>
+                                </div>
+                                <!-- Ollama -->
+                                <div class="provider-row">
+                                    <span class="provider-name">Ollama</span>
+                                    <span class="provider-local-label">Local</span>
+                                    <span class="status-dot" id="ollama-dot"></span>
+                                    <select id="ollama-model" class="settings-select settings-select-compact">
+                                        <option value="">-- Select --</option>
+                                    </select>
+                                    <button class="settings-btn settings-btn-sm" onclick="refreshOllamaModels()">Refresh</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="settings-section">
+                            <h3 class="settings-section-title">DEFAULT PROVIDER</h3>
+                            <select id="default-provider" class="settings-select" style="max-width: 250px;">
+                                <option value="copy">Copy Only (no AI)</option>
+                                <option value="local">Ollama (Local)</option>
+                                <option value="openai">OpenAI</option>
+                                <option value="anthropic">Anthropic</option>
+                                <option value="google">Google Gemini</option>
+                            </select>
+                        </div>
+
+                        <div class="settings-actions">
+                            <button class="settings-btn settings-btn-primary" onclick="saveApiKeysSettings()">SAVE CHANGES</button>
+                        </div>
+                    </div>
+
+                    <!-- Rewrite Wizard Tab -->
+                    <div class="settings-panel" data-settings-panel="rewrite-wizard">
+                        <div class="settings-section">
+                            <h3 class="settings-section-title">SYSTEM PROMPT</h3>
+                            <div class="settings-card">
+                                <div class="settings-card-body">
+                                    <div class="settings-field">
+                                        <label class="settings-label">Mode</label>
+                                        <div class="settings-toggle-group">
+                                            <button class="settings-toggle active" data-mode="append" onclick="setSystemPromptMode('append')">Append</button>
+                                            <button class="settings-toggle" data-mode="override" onclick="setSystemPromptMode('override')">Override</button>
+                                        </div>
+                                        <div class="settings-warning" id="override-warning" style="display: none;">
+                                            <span class="warning-icon">⚠</span>
+                                            <span>Override mode replaces the default prompt entirely. This may break output formatting.</span>
+                                        </div>
+                                    </div>
+                                    <div class="system-prompt-columns">
+                                        <div class="system-prompt-col">
+                                            <label class="settings-label">Your Custom Prompt</label>
+                                            <textarea id="rewrite-system-prompt" class="settings-textarea" rows="12" placeholder="Add your custom instructions here..."></textarea>
+                                            <button class="settings-btn settings-btn-sm settings-btn-secondary" style="margin-top: 10px;" onclick="revertSystemPrompt()">Revert to Default</button>
+                                        </div>
+                                        <div class="system-prompt-col">
+                                            <label class="settings-label">Current Default Prompt <span class="label-hint">(read-only)</span></label>
+                                            <textarea id="default-system-prompt" class="settings-textarea settings-textarea-readonly" rows="12" readonly></textarea>
+                                        </div>
+                                    </div>
+                                    <div class="template-variables-reference">
+                                        <label class="settings-label">Available Variables <span class="label-hint">(click to copy)</span></label>
+                                        <div class="template-vars-grid">
+                                            <div class="template-var-group">
+                                                <span class="var-group-title">Metrics</span>
+                                                <code class="template-var" onclick="copyTemplateVar(this)">{{ '{{VIEWS}}' }}</code>
+                                                <code class="template-var" onclick="copyTemplateVar(this)">{{ '{{LIKES}}' }}</code>
+                                                <code class="template-var" onclick="copyTemplateVar(this)">{{ '{{COMMENTS}}' }}</code>
+                                                <code class="template-var" onclick="copyTemplateVar(this)">{{ '{{SHARES}}' }}</code>
+                                            </div>
+                                            <div class="template-var-group">
+                                                <span class="var-group-title">Creator</span>
+                                                <code class="template-var" onclick="copyTemplateVar(this)">{{ '{{CREATOR}}' }}</code>
+                                                <code class="template-var" onclick="copyTemplateVar(this)">{{ '{{PLATFORM}}' }}</code>
+                                            </div>
+                                            <div class="template-var-group">
+                                                <span class="var-group-title">Content</span>
+                                                <code class="template-var" onclick="copyTemplateVar(this)">{{ '{{TRANSCRIPT}}' }}</code>
+                                                <code class="template-var" onclick="copyTemplateVar(this)">{{ '{{CAPTION}}' }}</code>
+                                                <code class="template-var" onclick="copyTemplateVar(this)">{{ '{{DURATION}}' }}</code>
+                                            </div>
+                                            <div class="template-var-group">
+                                                <span class="var-group-title">Context</span>
+                                                <code class="template-var" onclick="copyTemplateVar(this)">{{ '{{NICHE}}' }}</code>
+                                                <code class="template-var" onclick="copyTemplateVar(this)">{{ '{{VOICE}}' }}</code>
+                                                <code class="template-var" onclick="copyTemplateVar(this)">{{ '{{ANGLE}}' }}</code>
+                                                <code class="template-var" onclick="copyTemplateVar(this)">{{ '{{CTA}}' }}</code>
+                                            </div>
+                                        </div>
+                                        <p class="template-vars-hint">Use these variables in your prompt. They'll be replaced with actual values when rewriting.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Two-column layout: Default Values (left) + Quick Templates (right) -->
+                        <div class="wizard-settings-columns">
+                            <!-- LEFT: Default Wizard Values -->
+                            <div class="wizard-settings-col">
+                                <h3 class="settings-section-title">DEFAULT WIZARD VALUES</h3>
+                                <div class="settings-card">
+                                    <div class="settings-card-body">
+                                        <div class="settings-field">
+                                            <label class="settings-label">Default Niche</label>
+                                            <input type="text" id="default-niche" class="settings-input" placeholder="e.g., AI automation, fitness, finance...">
+                                        </div>
+                                        <div class="settings-field">
+                                            <label class="settings-label">Default Voice</label>
+                                            <select id="default-voice" class="settings-select">
+                                                <option value="">-- Select Voice --</option>
+                                                <option value="Passionate & Tactical">Passionate & Tactical</option>
+                                                <option value="Calm & Educational">Calm & Educational</option>
+                                                <option value="Energetic & Hype">Energetic & Hype</option>
+                                                <option value="Professional & Authoritative">Professional & Authoritative</option>
+                                                <option value="Casual & Relatable">Casual & Relatable</option>
+                                                <option value="Humorous & Irreverent">Humorous & Irreverent</option>
+                                            </select>
+                                        </div>
+                                        <div class="settings-field">
+                                            <label class="settings-label">Default CTA</label>
+                                            <select id="default-cta" class="settings-select">
+                                                <option value="">-- Select CTA --</option>
+                                                <option value="Comment [WORD] for the link">Comment [WORD] for the link</option>
+                                                <option value="DM me for the link">DM me for the link</option>
+                                                <option value="Link in bio">Link in bio</option>
+                                                <option value="Follow for more">Follow for more</option>
+                                                <option value="Save this for later">Save this for later</option>
+                                                <option value="Share with someone who needs this">Share with someone</option>
+                                            </select>
+                                        </div>
+                                        <div class="settings-field">
+                                            <label class="settings-label">Default Time Limit</label>
+                                            <select id="default-time-limit" class="settings-select">
+                                                <option value="Under 30 seconds">Under 30 seconds</option>
+                                                <option value="Under 60 seconds" selected>Under 60 seconds</option>
+                                                <option value="Under 90 seconds">Under 90 seconds</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- RIGHT: Quick Context Templates -->
+                            <div class="wizard-settings-col">
+                                <h3 class="settings-section-title">
+                                    QUICK CONTEXT TEMPLATES
+                                    <button class="settings-btn settings-btn-sm" onclick="addQuickTemplate()">+ Add New</button>
+                                </h3>
+                                <div class="settings-templates-list" id="quick-templates-list">
+                                    <!-- Populated by JS -->
+                                    <div class="settings-empty-templates">
+                                        No templates saved yet. Click "+ Add New" to create one.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="settings-actions">
+                            <button class="settings-btn settings-btn-primary" onclick="saveRewriteWizardSettings()">SAVE CHANGES</button>
+                        </div>
+                    </div>
+
+                    <!-- Copy for AI Tab -->
+                    <div class="settings-panel" data-settings-panel="copy-for-ai">
+                        <!-- Two-column layout: Custom Prompt (left) + Preview (right) -->
+                        <div class="wizard-settings-columns">
+                            <!-- LEFT: Custom Prompt -->
+                            <div class="wizard-settings-col">
+                                <h3 class="settings-section-title">CUSTOM PROMPT PREPEND</h3>
+                                <div class="settings-card">
+                                    <div class="settings-card-body">
+                                        <div class="settings-field">
+                                            <label class="settings-checkbox-label">
+                                                <input type="checkbox" id="copy-for-ai-enabled" onchange="toggleCopyForAIPreview()">
+                                                <span class="checkbox-custom"></span>
+                                                <span>Enable custom prompt prepend</span>
+                                            </label>
+                                        </div>
+                                        <div class="settings-field">
+                                            <label class="settings-label">Custom Prompt</label>
+                                            <textarea id="copy-for-ai-prompt" class="settings-textarea copy-for-ai-textarea" rows="10" placeholder="Rewrite this viral reel using my context:
+- Niche: AI automation
+- Voice: Tactical educator
+- Always include a hook in first 3 seconds..." oninput="updateCopyForAIPreview()"></textarea>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- RIGHT: Preview Output -->
+                            <div class="wizard-settings-col">
+                                <h3 class="settings-section-title">PREVIEW OUTPUT</h3>
+                                <div class="settings-preview-box" id="copy-for-ai-preview">
+                                    <pre class="settings-preview-content"><span class="preview-prompt">[Your custom prompt will appear here]</span>
+
+---
+
+CREATOR: @example_user
+PLATFORM: Instagram
+URL: https://instagram.com/reel/abc123
+VIEWS: 125,432
+LIKES: 8,921
+COMMENTS: 342
+
+---
+
+CAPTION:
+This is an example caption...
+
+TRANSCRIPT:
+This is an example transcript...</pre>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="settings-actions">
+                            <button class="settings-btn settings-btn-primary" onclick="saveCopyForAISettings()">SAVE CHANGES</button>
+                        </div>
+                    </div>
+
+                    <!-- Preferences Tab -->
+                    <div class="settings-panel" data-settings-panel="preferences">
+                        <!-- Row 1: Library View | Jobs View -->
+                        <div class="wizard-settings-columns">
+                            <div class="wizard-settings-col">
+                                <div class="settings-section">
+                                    <h3 class="settings-section-title">LIBRARY VIEW</h3>
+                                    <div class="settings-card">
+                                        <div class="settings-card-body">
+                                            <div class="settings-field">
+                                                <label class="settings-label">Default Mode</label>
+                                                <div class="settings-radio-group">
+                                                    <label class="settings-radio-label">
+                                                        <input type="radio" name="asset-view-mode" value="list">
+                                                        <span class="radio-custom"></span>
+                                                        <span>List</span>
+                                                    </label>
+                                                    <label class="settings-radio-label">
+                                                        <input type="radio" name="asset-view-mode" value="grid-2">
+                                                        <span class="radio-custom"></span>
+                                                        <span>Grid-2</span>
+                                                    </label>
+                                                    <label class="settings-radio-label">
+                                                        <input type="radio" name="asset-view-mode" value="grid-3" checked>
+                                                        <span class="radio-custom"></span>
+                                                        <span>Grid-3</span>
+                                                    </label>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="wizard-settings-col">
+                                <div class="settings-section">
+                                    <h3 class="settings-section-title">JOBS VIEW</h3>
+                                    <div class="settings-card">
+                                        <div class="settings-card-body">
+                                            <div class="settings-field">
+                                                <label class="settings-label">Default Mode</label>
+                                                <div class="settings-radio-group">
+                                                    <label class="settings-radio-label">
+                                                        <input type="radio" name="jobs-view-mode" value="list" checked>
+                                                        <span class="radio-custom"></span>
+                                                        <span>List</span>
+                                                    </label>
+                                                    <label class="settings-radio-label">
+                                                        <input type="radio" name="jobs-view-mode" value="grid-2">
+                                                        <span class="radio-custom"></span>
+                                                        <span>Grid-2</span>
+                                                    </label>
+                                                    <label class="settings-radio-label">
+                                                        <input type="radio" name="jobs-view-mode" value="grid-3">
+                                                        <span class="radio-custom"></span>
+                                                        <span>Grid-3</span>
+                                                    </label>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Row 2: Detail Panel | Output Directory -->
+                        <div class="wizard-settings-columns">
+                            <div class="wizard-settings-col">
+                                <div class="settings-section">
+                                    <h3 class="settings-section-title">DETAIL PANEL</h3>
+                                    <div class="settings-card">
+                                        <div class="settings-card-body">
+                                            <div class="settings-field">
+                                                <label class="settings-label">Default Width (px)</label>
+                                                <input type="number" id="detail-panel-width" class="settings-input settings-input-short" value="600" min="400" max="1200">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="wizard-settings-col">
+                                <div class="settings-section">
+                                    <h3 class="settings-section-title">OUTPUT DIRECTORY</h3>
+                                    <div class="settings-card">
+                                        <div class="settings-card-body">
+                                            <div class="settings-field">
+                                                <label class="settings-label">Path</label>
+                                                <input type="text" id="output-directory" class="settings-input" placeholder="Leave empty for default">
+                                                <span class="settings-hint" id="default-output-hint">Default: /Documents/ReelRecon/output</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="settings-actions">
+                            <button class="settings-btn settings-btn-primary" onclick="savePreferencesSettings()">SAVE CHANGES</button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </main>
@@ -380,6 +743,44 @@
                 <div class="modal-actions" id="addCollectionActions">
                     <button class="modal-btn" onclick="closeAddCollectionModal()">CANCEL</button>
                     <button class="modal-btn primary" onclick="confirmAddToCollection()">ADD</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Template Editor Modal -->
+    <div class="modal" id="templateEditorModal">
+        <div class="modal-backdrop" onclick="closeTemplateEditor()"></div>
+        <div class="modal-content template-editor-modal">
+            <div class="modal-header">
+                <span class="modal-title" id="templateEditorTitle">NEW TEMPLATE</span>
+                <button class="modal-close" onclick="closeTemplateEditor()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="template-editor-field">
+                    <label class="template-editor-label">TEMPLATE NAME</label>
+                    <input type="text" id="templateEditorName" class="template-editor-input" placeholder="e.g., My AI Niche, Fitness Brand...">
+                </div>
+                <div class="template-editor-field">
+                    <label class="template-editor-label">TEMPLATE CONTENT</label>
+                    <p class="template-editor-hint">Define your context fields. This will be inserted into the wizard.</p>
+                    <textarea id="templateEditorContent" class="template-editor-textarea" rows="8" placeholder="NICHE: AI automation tools
+VOICE: Tactical & Educational
+ANGLE: Show transformation possible
+CTA: Link in bio
+PRODUCT: My course on building AI agents"></textarea>
+                </div>
+                <div class="template-editor-vars">
+                    <span class="template-editor-vars-label">Quick insert:</span>
+                    <code class="template-var-inline" onclick="insertTemplateField('NICHE')">NICHE</code>
+                    <code class="template-var-inline" onclick="insertTemplateField('VOICE')">VOICE</code>
+                    <code class="template-var-inline" onclick="insertTemplateField('ANGLE')">ANGLE</code>
+                    <code class="template-var-inline" onclick="insertTemplateField('CTA')">CTA</code>
+                    <code class="template-var-inline" onclick="insertTemplateField('PRODUCT')">PRODUCT</code>
+                </div>
+                <div class="modal-actions">
+                    <button class="modal-btn" onclick="closeTemplateEditor()">CANCEL</button>
+                    <button class="modal-btn primary" onclick="saveTemplate()">SAVE TEMPLATE</button>
                 </div>
             </div>
         </div>
