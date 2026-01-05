@@ -4806,15 +4806,15 @@ select.form-input {
 }
 
 .btn-rewrite-sm:hover {
-    background: var(--color-accent-secondary);
-    border-color: var(--color-accent-secondary);
+    background: var(--color-accent-hover);
+    border-color: var(--color-accent-hover);
     color: var(--color-bg-base);
 }
 
 .reel-section-actions {
     display: flex;
     gap: var(--space-sm);
-    margin-top: var(--space-sm);
+    margin-top: var(--space-lg);
 }
 
 .reel-caption-full {
