@@ -1960,7 +1960,8 @@ def get_settings():
         'default_output_directory': str(OUTPUT_DIR),
         'detail_panel_width': config.get('detail_panel_width', 600),
         'jobs_view_mode': config.get('jobs_view_mode', 'list'),
-        'asset_view_mode': config.get('asset_view_mode', 'grid-4')
+        'asset_view_mode': config.get('asset_view_mode', 'grid-4'),
+        'spin_buttons': config.get('spin_buttons', [])
     })
 
 
@@ -1996,6 +1997,11 @@ def update_settings():
         config['jobs_view_mode'] = data['jobs_view_mode']
     if 'asset_view_mode' in data:
         config['asset_view_mode'] = data['asset_view_mode']
+    if 'spin_buttons' in data:
+        # Validate it's a list of strings, max 8 items
+        spin_buttons = data['spin_buttons']
+        if isinstance(spin_buttons, list) and len(spin_buttons) <= 8:
+            config['spin_buttons'] = [str(btn) for btn in spin_buttons if btn]
 
     save_config(config)
     return jsonify({'success': True})
@@ -3298,6 +3304,83 @@ def delete_asset(asset_id):
 
     asset.delete()
     return jsonify({'success': True, 'cleaned_files': cleaned_files})
+
+
+@app.route('/api/assets/<asset_id>/reels/<int:reel_index>', methods=['DELETE'])
+def delete_reel_from_asset(asset_id, reel_index):
+    """Delete a specific reel from a scrape report asset (keeps other reels intact)"""
+    # Check if we should also delete an associated transcript from library
+    delete_transcript_id = request.args.get('delete_transcript')
+
+    # First check if this is from the database asset
+    asset = Asset.get(asset_id)
+
+    # Try to find the scrape data in history
+    history = load_history()
+    scrape_data = None
+
+    if asset:
+        # Asset exists in database - get original_id from metadata
+        original_id = asset.metadata.get('original_id') if asset.metadata else None
+        if original_id:
+            scrape_data = next((h for h in history if h.get('id') == original_id), None)
+    else:
+        # Try to find directly in history by asset_id
+        scrape_data = next((h for h in history if h.get('id') == asset_id), None)
+
+    if not scrape_data:
+        return jsonify({'error': 'Scrape data not found'}), 404
+
+    top_reels = scrape_data.get('top_reels', [])
+
+    if reel_index < 0 or reel_index >= len(top_reels):
+        return jsonify({'error': f'Invalid reel index: {reel_index}. Scrape has {len(top_reels)} reels.'}), 400
+
+    # Get the reel to delete
+    reel_to_delete = top_reels[reel_index]
+    cleaned_files = []
+    transcript_deleted = False
+
+    # Clean up the video file if it exists
+    video_path = reel_to_delete.get('local_video')
+    if video_path and os.path.exists(video_path):
+        try:
+            os.remove(video_path)
+            cleaned_files.append(video_path)
+            print(f"[DELETE REEL] Cleaned up video: {video_path}")
+        except Exception as e:
+            print(f"[DELETE REEL] Failed to remove video {video_path}: {e}")
+
+    # Delete associated transcript from library if requested
+    if delete_transcript_id:
+        transcript_asset = Asset.get(delete_transcript_id)
+        if transcript_asset and transcript_asset.type == 'transcript':
+            transcript_asset.delete()
+            transcript_deleted = True
+            print(f"[DELETE REEL] Also deleted transcript asset: {delete_transcript_id}")
+        else:
+            print(f"[DELETE REEL] Transcript asset not found or not a transcript: {delete_transcript_id}")
+
+    # Remove the reel from the array
+    del top_reels[reel_index]
+    scrape_data['top_reels'] = top_reels
+
+    # Update the history file
+    for i, h in enumerate(history):
+        if h.get('id') == scrape_data.get('id'):
+            history[i] = scrape_data
+            break
+
+    save_history(history)
+
+    print(f"[DELETE REEL] Removed reel #{reel_index + 1} from scrape {scrape_data.get('id')}. {len(top_reels)} reels remaining.")
+
+    return jsonify({
+        'success': True,
+        'remaining_reels': len(top_reels),
+        'cleaned_files': cleaned_files,
+        'transcript_deleted': transcript_deleted
+    })
 
 
 def normalize_path(path_str):

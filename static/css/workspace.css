@@ -74,7 +74,7 @@ body {
     font-family: var(--font-body);
     font-size: var(--text-base);
     line-height: 1.5;
-    background: var(--color-bg-deep);
+    background: var(--color-bg-base);
     color: var(--color-text-primary);
     min-height: 100vh;
     overflow-x: hidden;
@@ -4602,7 +4602,7 @@ select.form-input {
 .reel-header-title {
     display: flex;
     align-items: center;
-    gap: var(--space-sm);
+    gap: var(--space-md);
 }
 
 .reel-accordion-header .reel-index {
@@ -4612,6 +4612,24 @@ select.form-input {
     flex-shrink: 0;
 }
 
+/* Stats as primary title elements */
+.reel-stat-primary {
+    color: var(--color-text-primary);
+    font-size: var(--text-sm);
+    font-family: var(--font-mono);
+}
+
+/* Caption as muted subtitle */
+.reel-header-caption-subtitle {
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding-left: calc(var(--space-md) + 1.5em); /* Align with stats after #index */
+}
+
+/* Legacy - keep for compatibility */
 .reel-header-caption {
     color: var(--color-text-primary);
     font-size: var(--text-sm);
@@ -4624,7 +4642,7 @@ select.form-input {
     display: flex;
     align-items: center;
     gap: var(--space-md);
-    padding-left: calc(var(--space-sm) + 1.5em); /* Align with caption after #index */
+    padding-left: calc(var(--space-sm) + 1.5em);
 }
 
 .reel-stat-mini {
@@ -4666,11 +4684,175 @@ select.form-input {
     letter-spacing: 0.5px;
 }
 
+/* Library indicator - shows not saved state with red dot */
+.reel-indicator.not-saved .indicator-dot {
+    background: #ef4444;
+}
+
+.reel-indicator-library .indicator-eye-icon {
+    margin-left: 2px;
+    color: var(--color-accent-primary);
+    filter: drop-shadow(0 0 3px var(--color-accent-primary));
+}
+
 .reel-accordion-arrow {
     color: var(--color-text-muted);
     font-size: 10px;
     transition: transform 0.15s ease;
     margin-left: var(--space-sm);
+}
+
+/* Accordion row wrapper - contains header + options button side by side */
+.reel-accordion-row {
+    display: flex;
+    align-items: stretch;
+}
+
+.reel-accordion-row .reel-accordion-header {
+    flex: 1;
+    min-width: 0;
+}
+
+/* Three-dot options button and dropdown */
+.reel-options-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    padding: 0 var(--space-sm);
+    border-left: 1px solid var(--color-border-dim);
+}
+
+.reel-options-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-sm);
+    color: var(--color-text-muted);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.reel-options-btn:hover {
+    background: var(--color-bg-hover);
+    color: var(--color-text-primary);
+}
+
+.reel-options-btn.active {
+    background: var(--color-bg-elevated);
+    color: var(--color-text-primary);
+}
+
+/* Reel options dropdown menu */
+.reel-options-menu {
+    position: fixed;
+    background: var(--color-bg-elevated);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 4px 0;
+    min-width: 180px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    z-index: 9999;
+    display: none;
+}
+
+.reel-options-menu.visible {
+    display: block;
+}
+
+.reel-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 14px;
+    color: var(--color-text-primary);
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.1s;
+}
+
+.reel-menu-item:hover {
+    background: var(--color-bg-hover);
+}
+
+.reel-menu-item .menu-icon {
+    width: 16px;
+    text-align: center;
+    font-size: 14px;
+}
+
+.reel-menu-separator {
+    height: 1px;
+    background: var(--color-border);
+    margin: 6px 12px;
+}
+
+.reel-menu-item-danger {
+    color: #ef4444;
+}
+
+.reel-menu-item-danger:hover {
+    background: rgba(239, 68, 68, 0.15);
+}
+
+.reel-menu-item-muted {
+    color: var(--color-text-tertiary);
+    cursor: default;
+    opacity: 0.6;
+}
+
+.reel-menu-item-muted:hover {
+    background: transparent;
+}
+
+.reel-menu-item-muted .menu-icon {
+    color: var(--color-accent-primary);
+}
+
+.reel-menu-item-saved {
+    color: var(--color-text-tertiary);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: default;
+}
+
+.reel-menu-item-saved:hover {
+    background: transparent;
+}
+
+.reel-menu-item-saved .menu-icon {
+    color: var(--color-accent-primary);
+}
+
+.transcript-visibility-toggle {
+    background: transparent;
+    border: none;
+    padding: 4px;
+    margin-left: auto;
+    cursor: pointer;
+    color: var(--color-text-tertiary);
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+}
+
+.transcript-visibility-toggle:hover {
+    background: var(--color-bg-base);
+    color: var(--color-text-primary);
+}
+
+.transcript-visibility-toggle.active {
+    color: var(--color-accent-primary);
+}
+
+.transcript-visibility-toggle.active .eye-icon {
+    filter: drop-shadow(0 0 4px var(--color-accent-primary));
 }
 
 .reel-accordion-body {
@@ -4725,6 +4907,56 @@ select.form-input {
     text-transform: uppercase;
     letter-spacing: 0.5px;
     margin-bottom: var(--space-xs);
+}
+
+/* Collapsible sections (caption, transcript, metadata) */
+.reel-collapsible-section {
+    border-top: 1px solid var(--color-border);
+    padding-top: var(--space-sm);
+}
+
+.reel-section-toggle {
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-xs) 0;
+    user-select: none;
+    transition: color 0.15s ease;
+}
+
+.reel-section-toggle:hover {
+    color: var(--color-text-primary);
+}
+
+.section-toggle-arrow {
+    font-size: var(--text-xs);
+    opacity: 0.6;
+    transition: transform 0.15s ease;
+}
+
+.reel-section-content {
+    margin-top: var(--space-sm);
+}
+
+/* Metadata-specific styles */
+.reel-metadata-json {
+    background: var(--color-bg-tertiary);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: var(--space-sm);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    color: var(--color-text-secondary);
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 300px;
+    overflow-y: auto;
+    margin-bottom: var(--space-sm);
+}
+
+.reel-metadata-section .btn-copy-sm {
+    margin-top: 0;
 }
 
 .reel-url-row {
@@ -6210,6 +6442,7 @@ input[type="number"].form-input::-webkit-inner-spin-button {
     gap: var(--space-md);
     margin-top: var(--space-sm);
     padding-top: var(--space-sm);
+    margin-bottom: var(--space-lg);
 }
 
 .job-date,
@@ -7090,4 +7323,166 @@ input[type="number"].form-input::-webkit-inner-spin-button {
     flex: 1;
     overflow: auto;
     min-height: 0; /* Allow shrinking in flex */
+}
+
+/* =====================
+   WIZARD ENHANCEMENTS
+   ===================== */
+
+/* Resizable vertical textarea */
+.resizable-vertical {
+    resize: vertical;
+    min-height: 60px;
+    max-height: 300px;
+}
+
+/* Spin buttons container */
+.spin-buttons-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: var(--space-sm);
+}
+
+/* Individual spin button */
+.spin-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    background: var(--color-bg-elevated);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    color: var(--color-text-secondary);
+    font-size: var(--text-xs);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.spin-btn:hover {
+    background: var(--color-bg-panel);
+    border-color: var(--color-accent-primary);
+    color: var(--color-text-primary);
+}
+
+.spin-btn .plus-icon {
+    color: var(--color-accent-primary);
+    font-weight: bold;
+    font-size: 14px;
+}
+
+/* Spin button in edit mode */
+.spin-btn.editing {
+    position: relative;
+    padding-right: 28px;
+}
+
+.spin-btn .delete-btn {
+    position: absolute;
+    right: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    background: var(--color-danger);
+    border: none;
+    border-radius: 50%;
+    color: white;
+    font-size: 12px;
+    line-height: 1;
+    cursor: pointer;
+    display: none;
+}
+
+.spin-btn.editing .delete-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Add new spin button */
+.spin-btn-add {
+    border-style: dashed;
+    border-color: var(--color-border);
+    color: var(--color-text-muted);
+}
+
+.spin-btn-add:hover {
+    border-color: var(--color-accent-primary);
+    color: var(--color-accent-primary);
+}
+
+/* Edit toggle button */
+.spin-edit-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: var(--space-sm);
+    padding: 4px 8px;
+    background: transparent;
+    border: none;
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+    cursor: pointer;
+    transition: color 0.15s ease;
+}
+
+.spin-edit-toggle:hover {
+    color: var(--color-accent-primary);
+}
+
+.spin-edit-toggle.active {
+    color: var(--color-accent-primary);
+}
+
+/* Wizard example text */
+.wizard-example {
+    margin-top: var(--space-sm);
+    padding: var(--space-sm);
+    background: rgba(16, 185, 129, 0.05);
+    border-left: 2px solid var(--color-accent-primary);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    overflow: hidden;
+    max-height: 80px;
+    transition: max-height 0.2s ease;
+}
+
+.wizard-example .example-label {
+    color: var(--color-accent-primary);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.wizard-example .example-text {
+    display: block;
+    margin-top: 4px;
+    color: var(--color-text-secondary);
+    font-size: var(--text-xs);
+    font-style: italic;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+}
+
+/* Spin button input for editing */
+.spin-btn-input {
+    background: var(--color-bg-input);
+    border: 1px solid var(--color-accent-primary);
+    border-radius: var(--radius-sm);
+    padding: 6px 10px;
+    color: var(--color-text-primary);
+    font-size: var(--text-xs);
+    min-width: 150px;
+}
+
+.spin-btn-input:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--color-accent-dim);
 }

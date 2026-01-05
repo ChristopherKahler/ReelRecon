@@ -168,6 +168,20 @@ export const API = {
         }
     },
 
+    async updateAsset(id, data) {
+        // Try database first, then history
+        try {
+            return await request(`/api/assets/${id}`, { method: 'PUT', body: data });
+        } catch (e) {
+            return request(`/api/history/${id}`, { method: 'PUT', body: data });
+        }
+    },
+
+    async deleteReelFromAsset(assetId, reelIndex, transcriptIdToDelete = null) {
+        const params = transcriptIdToDelete ? `?delete_transcript=${transcriptIdToDelete}` : '';
+        return request(`/api/assets/${assetId}/reels/${reelIndex}${params}`, { method: 'DELETE' });
+    },
+
     async toggleStar(id) {
         // Try database first, then history
         try {

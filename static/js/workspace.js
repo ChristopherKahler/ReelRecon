@@ -67,6 +67,10 @@ function setupEventListeners() {
                 document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
                 e.target.classList.add('active');
                 Store.dispatch({ type: 'SET_FILTER', payload: { types: [] } });
+                // Persist to server
+                API.updateSettings({ library_filter_types: [] }).catch(err => {
+                    console.warn('[Workspace] Failed to save filter preference:', err);
+                });
             } else {
                 // Toggle this chip
                 e.target.classList.toggle('active');
@@ -84,6 +88,10 @@ function setupEventListeners() {
                 }
 
                 Store.dispatch({ type: 'SET_FILTER', payload: { types: activeTypes } });
+                // Persist to server
+                API.updateSettings({ library_filter_types: activeTypes }).catch(err => {
+                    console.warn('[Workspace] Failed to save filter preference:', err);
+                });
             }
             console.log('[Workspace] Filters changed:', Store.getState().filters.types || 'all');
         });
@@ -397,6 +405,24 @@ async function loadViewPreferences() {
                 favoritesGrid.classList.remove('view-list', 'view-grid-2', 'view-grid-3', 'view-grid-4');
                 favoritesGrid.classList.add(`view-${currentAssetViewMode}`);
             }
+        }
+
+        // Apply library filter types
+        if (settings.library_filter_types && settings.library_filter_types.length > 0) {
+            const filterTypes = settings.library_filter_types;
+
+            // Update filter chip UI
+            const allChip = document.querySelector('.filter-chip[data-filter-type=""]');
+            if (allChip) allChip.classList.remove('active');
+
+            filterTypes.forEach(type => {
+                const chip = document.querySelector(`.filter-chip[data-filter-type="${type}"]`);
+                if (chip) chip.classList.add('active');
+            });
+
+            // Update store
+            Store.dispatch({ type: 'SET_FILTER', payload: { types: filterTypes } });
+            console.log('[Workspace] Restored library filter:', filterTypes);
         }
 
         console.log('[Workspace] Loaded view preferences:', { jobs: currentJobsViewMode, assets: currentAssetViewMode });
@@ -1055,8 +1081,15 @@ async function abortJob(jobId, jobType, batchId) {
 
 // Subscribe to store changes for filtering
 Store.subscribe((state) => {
-    const filtered = filterAssets(state.assets, state.filters);
-    renderAssets(filtered);
+    // If transcript visibility filter is active, use that instead of normal filtering
+    if (typeof visibleTranscriptIds !== 'undefined' && visibleTranscriptIds.size > 0) {
+        const visibleAssets = state.assets.filter(a => visibleTranscriptIds.has(a.id));
+        renderAssets(visibleAssets);
+        updateAssetCount(visibleAssets.length);
+    } else {
+        const filtered = filterAssets(state.assets, state.filters);
+        renderAssets(filtered);
+    }
 });
 
 function filterAssets(assets, filters) {
@@ -1354,13 +1387,17 @@ function renderCollections(collections) {
     });
 }
 
-async function reloadAssets(filters = {}) {
+async function reloadAssets(filters = null) {
     try {
-        const response = await API.getAssets(filters);
+        // Always fetch all assets - filtering is done client-side via Store subscription
+        const response = await API.getAssets({});
         const assets = response.assets || response || [];
+        // Store subscription at line ~1083 will apply filters and call renderAssets
         Store.dispatch({ type: 'SET_ASSETS', payload: assets });
-        renderAssets(assets);
-        updateAssetCount(assets.length);
+        // Update count based on filtered results
+        const currentFilters = Store.getState().filters || {};
+        const filtered = filterAssets(assets, currentFilters);
+        updateAssetCount(filtered.length);
     } catch (error) {
         console.warn('[Workspace] Failed to reload assets:', error.message);
     }
@@ -1400,6 +1437,12 @@ function closeAssetDetail() {
     const panel = document.getElementById('detail-panel');
     panel.classList.remove('open');
     Store.dispatch({ type: 'SELECT_ASSET', payload: null });
+
+    // Clear transcript visibility filter and restore normal filtering
+    if (visibleTranscriptIds.size > 0) {
+        visibleTranscriptIds.clear();
+        applyTranscriptVisibilityFilter();
+    }
 }
 
 function renderDetailPanel(asset) {
@@ -1478,6 +1521,9 @@ function renderDetailPanel(asset) {
         </div>
         ` : ''}
     `;
+
+    // Sync eye toggle buttons with current visibility state
+    syncTranscriptVisibilityToggles();
 }
 
 function calculateSkeletonStats(skeletons) {
@@ -1690,6 +1736,14 @@ function renderAssetContent(asset) {
             ? `https://www.tiktok.com/@${asset.username}`
             : `https://www.instagram.com/${asset.username}/`;
 
+        // Build map of video URLs to transcript asset IDs
+        const allAssets = Store.getState().assets || [];
+        const savedTranscriptMap = new Map(
+            allAssets
+                .filter(a => a.type === 'transcript' && a.metadata?.video_url)
+                .map(a => [a.metadata.video_url, a.id])
+        );
+
         return `
             <div class="scrape-results">
                 ${renderScrapeMetadataHeader(stats, asset.username, platform)}
@@ -1697,7 +1751,7 @@ function renderAssetContent(asset) {
                     <strong>${asset.top_reels.length} reel${asset.top_reels.length === 1 ? '' : 's'}</strong> from <a href="${profileUrl}" target="_blank" rel="noopener noreferrer" class="creator-link" onclick="event.stopPropagation();">@${asset.username}</a>
                 </div>
                 <div class="reels-accordion">
-                    ${asset.top_reels.map((reel, i) => renderReelAccordionItem(reel, i, asset.id)).join('')}
+                    ${asset.top_reels.map((reel, i) => renderReelAccordionItem(reel, i, asset.id, savedTranscriptMap, asset.username, platform)).join('')}
                 </div>
             </div>
         `;
@@ -1776,7 +1830,7 @@ function renderAssetContent(asset) {
     return `<div class="detail-body">${escapeHtml(asset.preview || 'No content available')}</div>`;
 }
 
-function renderReelAccordionItem(reel, index, scrapeId) {
+function renderReelAccordionItem(reel, index, scrapeId, savedTranscriptMap = new Map(), username = 'unknown', platform = 'instagram') {
     const views = reel.play_count || reel.plays || reel.views || 0;
     const likes = reel.like_count || reel.likes || 0;
     const comments = reel.comment_count || reel.comments || 0;
@@ -1785,31 +1839,97 @@ function renderReelAccordionItem(reel, index, scrapeId) {
     const hasVideo = reel.local_video ? true : false;
     const url = reel.url || reel.video_url || '';
     const shortcode = reel.shortcode || reel.id || '';
+    const savedTranscriptId = url ? savedTranscriptMap.get(url) : null;
+    const transcriptAlreadySaved = !!savedTranscriptId;
+
+    // Encode reel data for menu actions
+    const reelDataAttr = escapeHtml(JSON.stringify({
+        index,
+        scrapeId,
+        shortcode,
+        url,
+        hasVideo,
+        hasTranscript: !!transcript
+    }));
 
     return `
         <div class="reel-accordion-item" data-index="${index}">
-            <div class="reel-accordion-header" onclick="toggleReelAccordion(${index})">
-                <div class="reel-header-content">
-                    <div class="reel-header-title">
-                        <span class="reel-index">#${index + 1}</span>
-                        <span class="reel-header-caption">${escapeHtml(caption.substring(0, 80))}${caption.length > 80 ? '...' : ''}</span>
+            <div class="reel-accordion-row">
+                <div class="reel-accordion-header" onclick="toggleReelAccordion(${index})">
+                    <div class="reel-header-content">
+                        <div class="reel-header-title">
+                            <span class="reel-index">#${index + 1}</span>
+                            <span class="reel-stat-primary">${formatNumber(views)} views</span>
+                            <span class="reel-stat-primary">${formatNumber(likes)} likes</span>
+                            <span class="reel-stat-primary">${formatNumber(comments)} comments</span>
+                        </div>
+                        <div class="reel-header-caption-subtitle">
+                            ${escapeHtml(caption.substring(0, 80))}${caption.length > 80 ? '...' : ''}
+                        </div>
                     </div>
-                    <div class="reel-header-stats">
-                        <span class="reel-stat-mini">${formatNumber(views)} views</span>
-                        <span class="reel-stat-mini">${formatNumber(likes)} likes</span>
-                        <span class="reel-stat-mini">${formatNumber(comments)} comments</span>
+                    <div class="reel-header-indicators">
+                        <div class="reel-indicator ${transcript ? 'active' : ''}" title="${transcript ? 'Transcript available' : 'No transcript'}">
+                            <span class="indicator-dot"></span>
+                            <span class="indicator-label">${transcript ? 'Transcript' : 'No Transcript'}</span>
+                        </div>
+                        ${transcript ? `
+                        <div class="reel-indicator reel-indicator-library ${transcriptAlreadySaved ? 'active' : 'not-saved'}"
+                             data-transcript-id="${savedTranscriptId || ''}"
+                             title="${transcriptAlreadySaved ? 'Saved to Library' : 'Not saved to Library'}">
+                            <span class="indicator-dot"></span>
+                            <span class="indicator-label">${transcriptAlreadySaved ? 'Library' : 'Not Saved'}</span>
+                            ${transcriptAlreadySaved && visibleTranscriptIds.has(savedTranscriptId) ? `
+                            <svg class="indicator-eye-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                                <circle cx="12" cy="12" r="3"/>
+                            </svg>` : ''}
+                        </div>
+                        ` : ''}
+                        <div class="reel-indicator ${hasVideo ? 'active' : ''}" title="${hasVideo ? 'Video downloaded' : 'Video not downloaded'}">
+                            <span class="indicator-dot"></span>
+                            <span class="indicator-label">${hasVideo ? 'Video' : 'No Video'}</span>
+                        </div>
+                        <span class="reel-accordion-arrow">▼</span>
                     </div>
                 </div>
-                <div class="reel-header-indicators">
-                    <div class="reel-indicator ${transcript ? 'active' : ''}" title="${transcript ? 'Transcript available' : 'No transcript'}">
-                        <span class="indicator-dot"></span>
-                        <span class="indicator-label">${transcript ? 'Transcript' : 'No Transcript'}</span>
+                <div class="reel-options-wrapper">
+                    <button class="reel-options-btn" onclick="toggleReelOptionsMenu(event, ${index})" title="Options">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                            <circle cx="8" cy="3" r="1.5"/>
+                            <circle cx="8" cy="8" r="1.5"/>
+                            <circle cx="8" cy="13" r="1.5"/>
+                        </svg>
+                    </button>
+                    <div class="reel-options-menu" id="reel-options-menu-${index}" data-reel='${reelDataAttr}'>
+                        ${hasVideo
+                            ? '<div class="reel-menu-item" onclick="handleReelMenuAction(event, \'watch-video\')"><span class="menu-icon">▶</span>Watch Video</div>'
+                            : '<div class="reel-menu-item" onclick="handleReelMenuAction(event, \'download-video\')"><span class="menu-icon">⬇</span>Download Video</div>'
+                        }
+                        ${url ? '<div class="reel-menu-item" onclick="handleReelMenuAction(event, \'view-instagram\')"><span class="menu-icon">↗</span>View in Instagram</div>' : ''}
+                        <div class="reel-menu-separator"></div>
+                        ${transcript
+                            ? '<div class="reel-menu-item" onclick="handleReelMenuAction(event, \'copy-transcript\')"><span class="menu-icon">📋</span>Copy Transcript</div>'
+                            : '<div class="reel-menu-item" onclick="handleReelMenuAction(event, \'transcribe\')"><span class="menu-icon">🎙</span>Transcribe</div>'
+                        }
+                        ${transcript
+                            ? (transcriptAlreadySaved
+                                ? `<div class="reel-menu-item reel-menu-item-saved">
+                                    <span class="menu-icon">✓</span>Saved
+                                    <button class="transcript-visibility-toggle" onclick="toggleTranscriptVisibility(event, '${savedTranscriptId}')" title="Toggle visibility in library">
+                                        <svg class="eye-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                                            <circle cx="12" cy="12" r="3"/>
+                                        </svg>
+                                    </button>
+                                   </div>`
+                                : '<div class="reel-menu-item" onclick="handleReelMenuAction(event, \'save-transcript\')"><span class="menu-icon">💾</span>Save as Transcript</div>')
+                            : ''}
+                        <div class="reel-menu-item" onclick="handleReelMenuAction(event, \'rewrite-ai\')"><span class="menu-icon">✨</span>Rewrite with AI</div>
+                        <div class="reel-menu-separator"></div>
+                        <div class="reel-menu-item" onclick="handleReelMenuAction(event, \'copy-for-ai\')"><span class="menu-icon">📄</span>Copy for AI</div>
+                        <div class="reel-menu-separator"></div>
+                        <div class="reel-menu-item reel-menu-item-danger" onclick="handleReelMenuAction(event, \'delete-reel\')"><span class="menu-icon">🗑</span>Delete Reel</div>
                     </div>
-                    <div class="reel-indicator ${hasVideo ? 'active' : ''}" title="${hasVideo ? 'Video downloaded' : 'Video not downloaded'}">
-                        <span class="indicator-dot"></span>
-                        <span class="indicator-label">${hasVideo ? 'Video' : 'No Video'}</span>
-                    </div>
-                    <span class="reel-accordion-arrow">▼</span>
                 </div>
             </div>
             <div class="reel-accordion-body" id="reel-body-${index}" style="display: none;">
@@ -1840,29 +1960,71 @@ function renderReelAccordionItem(reel, index, scrapeId) {
                 </div>
                 ` : ''}
 
-                <!-- Caption -->
-                <div class="reel-section">
-                    <div class="reel-section-title">CAPTION / HOOK</div>
-                    <div class="reel-caption-full">${escapeHtml(caption)}</div>
+                <!-- Caption (collapsible) -->
+                <div class="reel-section reel-collapsible-section">
+                    <div class="reel-section-title reel-section-toggle" onclick="toggleReelSection(${index}, 'caption')">
+                        <span>CAPTION / HOOK</span>
+                        <span class="section-toggle-arrow" id="caption-arrow-${index}">▼</span>
+                    </div>
+                    <div class="reel-section-content" id="reel-caption-${index}">
+                        <div class="reel-caption-full">${escapeHtml(caption)}</div>
+                    </div>
                 </div>
 
-                <!-- Transcript -->
+                <!-- Transcript (collapsible) -->
                 ${transcript ? `
-                <div class="reel-section">
-                    <div class="reel-section-title">TRANSCRIPT</div>
-                    <div class="reel-transcript">${escapeHtml(transcript)}</div>
-                    <div class="reel-section-actions">
-                        <button class="btn-copy-sm" onclick="copyTranscriptFromReel(${index})">COPY</button>
-                        <button class="btn-save-sm" onclick="saveTranscriptAsAsset(${index}, '${scrapeId}')">SAVE TO LIBRARY</button>
-                        <button class="btn-rewrite-sm" onclick="openRewriteModal('${scrapeId}', '${shortcode}')">REWRITE WITH AI</button>
+                <div class="reel-section reel-collapsible-section">
+                    <div class="reel-section-title reel-section-toggle" onclick="toggleReelSection(${index}, 'transcript')">
+                        <span>TRANSCRIPT</span>
+                        <span class="section-toggle-arrow" id="transcript-arrow-${index}">▼</span>
+                    </div>
+                    <div class="reel-section-content" id="reel-transcript-${index}">
+                        <div class="reel-transcript">${escapeHtml(transcript)}</div>
+                        <div class="reel-section-actions">
+                            <button class="btn-copy-sm" onclick="copyTranscriptFromReel(${index})">COPY</button>
+                            ${transcriptAlreadySaved
+                                ? '<button class="btn-save-sm saved" disabled>✓ SAVED</button>'
+                                : `<button class="btn-save-sm" onclick="saveTranscriptAsAsset(${index}, '${scrapeId}')">SAVE TO LIBRARY</button>`
+                            }
+                            <button class="btn-rewrite-sm" onclick="openRewriteModal('${scrapeId}', '${shortcode}')">REWRITE WITH AI</button>
+                        </div>
                     </div>
                 </div>
                 ` : `
-                <div class="reel-section reel-no-transcript">
-                    <div class="reel-section-title">TRANSCRIPT</div>
-                    <div class="reel-transcript-empty">No transcript available</div>
+                <div class="reel-section reel-collapsible-section reel-no-transcript">
+                    <div class="reel-section-title reel-section-toggle" onclick="toggleReelSection(${index}, 'transcript')">
+                        <span>TRANSCRIPT</span>
+                        <span class="section-toggle-arrow" id="transcript-arrow-${index}">▼</span>
+                    </div>
+                    <div class="reel-section-content" id="reel-transcript-${index}">
+                        <div class="reel-transcript-empty">No transcript available</div>
+                    </div>
                 </div>
                 `}
+
+                <!-- Metadata (collapsible, open by default) -->
+                <div class="reel-section reel-collapsible-section reel-metadata-section">
+                    <div class="reel-section-title reel-section-toggle" onclick="toggleReelSection(${index}, 'metadata')">
+                        <span>METADATA</span>
+                        <span class="section-toggle-arrow" id="metadata-arrow-${index}">▼</span>
+                    </div>
+                    <div class="reel-section-content" id="reel-metadata-${index}">
+                        <pre class="reel-metadata-json">${escapeHtml(JSON.stringify({
+                            username: username,
+                            platform: platform,
+                            video_url: url || null,
+                            views: views,
+                            likes: likes,
+                            comments: comments,
+                            caption: caption,
+                            transcript: transcript || null,
+                            shortcode: shortcode || null,
+                            has_video: hasVideo,
+                            source_report_id: scrapeId
+                        }, null, 2))}</pre>
+                        <button class="btn-copy-sm" onclick="copyReelMetadata(${index})">COPY JSON</button>
+                    </div>
+                </div>
 
                 <!-- Actions -->
                 <div class="reel-actions">
@@ -1890,6 +2052,367 @@ function toggleReelAccordion(index) {
     }
 }
 
+// Reel Options Menu Functions
+let activeReelMenu = null;
+
+// Track which transcript assets are currently visible in the library filter
+let visibleTranscriptIds = new Set();
+
+window.toggleTranscriptVisibility = function(event, transcriptId) {
+    event.stopPropagation();
+
+    const btn = event.currentTarget;
+    const isActive = visibleTranscriptIds.has(transcriptId);
+
+    if (isActive) {
+        // Remove from visible set
+        visibleTranscriptIds.delete(transcriptId);
+        btn.classList.remove('active');
+    } else {
+        // Add to visible set
+        visibleTranscriptIds.add(transcriptId);
+        btn.classList.add('active');
+    }
+
+    // Update all header indicators to show/hide eye icons
+    syncHeaderIndicatorEyes();
+
+    // Update the library filter to show/hide these specific assets
+    applyTranscriptVisibilityFilter();
+};
+
+function syncHeaderIndicatorEyes() {
+    // Find all library indicators and update their eye icons
+    document.querySelectorAll('.reel-indicator-library[data-transcript-id]').forEach(indicator => {
+        const transcriptId = indicator.dataset.transcriptId;
+        const existingEye = indicator.querySelector('.indicator-eye-icon');
+
+        if (visibleTranscriptIds.has(transcriptId)) {
+            // Add eye if not present
+            if (!existingEye) {
+                const eyeSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                eyeSvg.classList.add('indicator-eye-icon');
+                eyeSvg.setAttribute('width', '12');
+                eyeSvg.setAttribute('height', '12');
+                eyeSvg.setAttribute('viewBox', '0 0 24 24');
+                eyeSvg.setAttribute('fill', 'none');
+                eyeSvg.setAttribute('stroke', 'currentColor');
+                eyeSvg.setAttribute('stroke-width', '2');
+                eyeSvg.innerHTML = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>';
+                indicator.appendChild(eyeSvg);
+            }
+        } else {
+            // Remove eye if present
+            if (existingEye) {
+                existingEye.remove();
+            }
+        }
+    });
+}
+
+function applyTranscriptVisibilityFilter() {
+    const assets = Store.getState().assets || [];
+    const currentFilters = Store.getState().filters || {};
+
+    if (visibleTranscriptIds.size === 0) {
+        // No specific transcripts selected - use normal filtering
+        const filtered = filterAssets(assets, currentFilters);
+        renderAssets(filtered);
+        updateAssetCount(filtered.length);
+    } else {
+        // Filter to show ONLY the selected transcript IDs
+        const visibleAssets = assets.filter(a => visibleTranscriptIds.has(a.id));
+        renderAssets(visibleAssets);
+        updateAssetCount(visibleAssets.length);
+    }
+}
+
+// Update all eye toggle buttons to reflect current state when panel opens
+function syncTranscriptVisibilityToggles() {
+    document.querySelectorAll('.transcript-visibility-toggle').forEach(btn => {
+        const onclick = btn.getAttribute('onclick');
+        const match = onclick?.match(/toggleTranscriptVisibility\(event, '([^']+)'\)/);
+        if (match) {
+            const transcriptId = match[1];
+            if (visibleTranscriptIds.has(transcriptId)) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        }
+    });
+}
+
+window.toggleReelOptionsMenu = function(event, index) {
+    event.stopPropagation();
+
+    const menu = document.getElementById(`reel-options-menu-${index}`);
+    const btn = event.currentTarget;
+
+    // Close any other open menu
+    if (activeReelMenu && activeReelMenu !== menu) {
+        activeReelMenu.classList.remove('visible');
+        document.querySelector('.reel-options-btn.active')?.classList.remove('active');
+    }
+
+    // Toggle this menu
+    const isOpen = menu.classList.contains('visible');
+    if (isOpen) {
+        menu.classList.remove('visible');
+        btn.classList.remove('active');
+        activeReelMenu = null;
+    } else {
+        // Position the menu using fixed positioning
+        const btnRect = btn.getBoundingClientRect();
+        menu.style.top = `${btnRect.bottom + 4}px`;
+        menu.style.right = `${window.innerWidth - btnRect.right}px`;
+
+        menu.classList.add('visible');
+        btn.classList.add('active');
+        activeReelMenu = menu;
+    }
+}
+
+function closeAllReelMenus() {
+    document.querySelectorAll('.reel-options-menu.visible').forEach(menu => {
+        menu.classList.remove('visible');
+        menu.previousElementSibling?.classList.remove('active');
+    });
+    activeReelMenu = null;
+}
+
+// Close menu when clicking outside
+document.addEventListener('click', (e) => {
+    if (activeReelMenu && !e.target.closest('.reel-options-wrapper')) {
+        closeAllReelMenus();
+    }
+});
+
+// Close menu on Escape
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && activeReelMenu) {
+        closeAllReelMenus();
+    }
+});
+
+window.handleReelMenuAction = function(event, action) {
+    event.stopPropagation();
+
+    const menu = event.target.closest('.reel-options-menu');
+    const reelData = JSON.parse(menu.dataset.reel);
+    const { index, scrapeId, shortcode, url, hasVideo, hasTranscript } = reelData;
+
+    // Menu stays open - user closes manually by clicking outside or three-dots
+
+    switch (action) {
+        case 'watch-video':
+            // Placeholder - video viewer not yet implemented
+            console.log('Watch video:', index, scrapeId);
+            alert('Video viewer coming soon!');
+            break;
+
+        case 'download-video':
+            downloadReelVideo(index, scrapeId, shortcode);
+            break;
+
+        case 'view-instagram':
+            if (url) {
+                window.open(url, '_blank', 'noopener,noreferrer');
+            }
+            break;
+
+        case 'copy-transcript':
+            copyTranscriptFromReel(index);
+            showMenuItemFeedback(event.target.closest('.reel-menu-item'), 'Copied');
+            return; // Don't close menu immediately
+
+        case 'transcribe':
+            transcribeReel(index, scrapeId, shortcode);
+            break;
+
+        case 'rewrite-ai':
+            openRewriteModal(scrapeId, shortcode);
+            break;
+
+        case 'copy-for-ai':
+            copyReelForAI(index);
+            showMenuItemFeedback(event.target.closest('.reel-menu-item'), 'Copied');
+            return; // Don't close menu immediately
+
+        case 'save-transcript':
+            // saveTranscriptAsAsset handles its own UI updates - don't use showMenuItemFeedback
+            // as it would restore the original HTML and overwrite the permanent "Saved" state
+            saveTranscriptAsAsset(index, scrapeId, event.target.closest('.reel-menu-item'));
+            return;
+
+        case 'delete-reel':
+            deleteReelFromAsset(index, scrapeId);
+            break;
+    }
+}
+
+function showMenuItemFeedback(menuItem, message) {
+    if (!menuItem) return;
+
+    const originalHTML = menuItem.innerHTML;
+    menuItem.innerHTML = `<span class="menu-icon" style="color: #10b981;">✓</span><span style="color: #10b981;">${message}</span>`;
+    menuItem.style.pointerEvents = 'none';
+
+    setTimeout(() => {
+        menuItem.innerHTML = originalHTML;
+        menuItem.style.pointerEvents = '';
+        // Menu stays open - user closes manually
+    }, 1500);
+}
+
+// Delete reel modal state
+let pendingDeleteReel = null;
+
+function openDeleteReelModal(index, scrapeId) {
+    if (!currentDetailAsset || !currentDetailAsset.top_reels) {
+        console.error('[Workspace] Cannot delete: asset data not loaded');
+        return;
+    }
+
+    const reel = currentDetailAsset.top_reels[index];
+    if (!reel) {
+        console.error('[Workspace] Reel not found at index:', index);
+        return;
+    }
+
+    // Check if this reel has a saved transcript in the library
+    const reelUrl = reel.url || reel.video_url || '';
+    const allAssets = Store.getState().assets || [];
+    const savedTranscript = allAssets.find(a =>
+        a.type === 'transcript' && a.metadata?.video_url === reelUrl
+    );
+
+    // Store pending delete info including transcript ID if it exists
+    pendingDeleteReel = {
+        index,
+        scrapeId,
+        reel,
+        savedTranscriptId: savedTranscript?.id || null
+    };
+
+    // Update modal message
+    const messageEl = document.getElementById('deleteReelMessage');
+    if (messageEl) {
+        const caption = (reel.caption || 'No caption').substring(0, 50);
+        messageEl.innerHTML = `Delete <strong>Reel #${index + 1}</strong> from this scrape report?<br><br><span style="color: var(--color-text-muted); font-size: var(--text-xs);">"${caption}${reel.caption?.length > 50 ? '...' : ''}"</span>`;
+    }
+
+    // Show/hide transcript deletion option
+    const transcriptOption = document.getElementById('deleteTranscriptOption');
+    const transcriptCheckbox = document.getElementById('deleteTranscriptCheckbox');
+    if (transcriptOption && transcriptCheckbox) {
+        if (savedTranscript) {
+            transcriptOption.style.display = 'block';
+            transcriptCheckbox.checked = false; // Default unchecked
+        } else {
+            transcriptOption.style.display = 'none';
+            transcriptCheckbox.checked = false;
+        }
+    }
+
+    // Reset confirm button
+    const confirmBtn = document.getElementById('confirmDeleteReelBtn');
+    if (confirmBtn) {
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = 'Delete Reel';
+    }
+
+    // Show modal
+    const modal = document.getElementById('deleteReelModal');
+    if (modal) {
+        modal.classList.add('active');
+    }
+
+    // Close the options menu
+    closeAllReelMenus();
+}
+
+function closeDeleteReelModal() {
+    const modal = document.getElementById('deleteReelModal');
+    if (modal) {
+        modal.classList.remove('active');
+    }
+    pendingDeleteReel = null;
+}
+
+window.openDeleteReelModal = openDeleteReelModal;
+window.closeDeleteReelModal = closeDeleteReelModal;
+
+async function confirmDeleteReel() {
+    if (!pendingDeleteReel) {
+        closeDeleteReelModal();
+        return;
+    }
+
+    const { index, scrapeId, savedTranscriptId } = pendingDeleteReel;
+    const confirmBtn = document.getElementById('confirmDeleteReelBtn');
+
+    // Check if user wants to delete the transcript too
+    const deleteTranscriptCheckbox = document.getElementById('deleteTranscriptCheckbox');
+    const deleteTranscript = savedTranscriptId && deleteTranscriptCheckbox?.checked;
+
+    // Show loading state
+    if (confirmBtn) {
+        confirmBtn.disabled = true;
+        confirmBtn.textContent = 'Deleting...';
+    }
+
+    try {
+        // Call API to delete just this reel from the scrape report (not the whole scrape)
+        const response = await API.deleteReelFromAsset(scrapeId, index, deleteTranscript ? savedTranscriptId : null);
+
+        if (response.success) {
+            // If transcript was also deleted, remove it from visibility filter if active
+            if (deleteTranscript && savedTranscriptId) {
+                visibleTranscriptIds.delete(savedTranscriptId);
+            }
+
+            closeDeleteReelModal();
+            // Refresh the detail panel to show remaining reels
+            await openAssetDetail(scrapeId);
+            // Refresh library to update reel counts (and remove deleted transcript)
+            reloadAssets();
+        } else {
+            throw new Error(response.error || 'Unknown error');
+        }
+    } catch (error) {
+        console.error('[Workspace] Error deleting reel:', error);
+        // Show error in modal instead of alert
+        const messageEl = document.getElementById('deleteReelMessage');
+        if (messageEl) {
+            messageEl.innerHTML = `<span style="color: #ef4444;">Failed to delete reel: ${error.message}</span>`;
+        }
+        if (confirmBtn) {
+            confirmBtn.disabled = false;
+            confirmBtn.textContent = 'Try Again';
+        }
+    }
+}
+
+window.confirmDeleteReel = confirmDeleteReel;
+
+// Opens the delete confirmation modal
+async function deleteReelFromAsset(index, scrapeId) {
+    openDeleteReelModal(index, scrapeId);
+}
+
+async function downloadReelVideo(index, scrapeId, shortcode) {
+    // TODO: Implement video download via API
+    console.log('Download video:', index, scrapeId, shortcode);
+    alert('Video download functionality coming soon!');
+}
+
+async function transcribeReel(index, scrapeId, shortcode) {
+    // TODO: Implement transcription via API
+    console.log('Transcribe reel:', index, scrapeId, shortcode);
+    alert('Transcription functionality coming soon!');
+}
+
 function copyToClipboard(text, btn) {
     navigator.clipboard.writeText(text).then(() => {
         if (btn) {
@@ -1901,17 +2424,45 @@ function copyToClipboard(text, btn) {
 }
 
 function copyReelForAI(index) {
-    const item = document.querySelector(`.reel-accordion-item[data-index="${index}"]`);
-    if (!item) return;
+    // Use stored asset data for complete metadata
+    if (!currentDetailAsset || !currentDetailAsset.top_reels) {
+        // Fallback to DOM scraping if asset not loaded
+        const item = document.querySelector(`.reel-accordion-item[data-index="${index}"]`);
+        if (!item) return;
+        const caption = item.querySelector('.reel-caption-full')?.textContent || '';
+        const transcript = item.querySelector('.reel-transcript')?.textContent || '';
+        let text = '';
+        if (caption) text += `CAPTION:\n${caption}\n\n`;
+        if (transcript) text += `TRANSCRIPT:\n${transcript}`;
+        copyToClipboard(text.trim());
+        return;
+    }
 
-    const caption = item.querySelector('.reel-caption-full')?.textContent || '';
-    const transcript = item.querySelector('.reel-transcript')?.textContent || '';
+    const reel = currentDetailAsset.top_reels[index];
+    if (!reel) return;
 
-    let text = '';
+    // Get all metadata
+    const username = currentDetailAsset.username || currentDetailAsset.metadata?.username || 'unknown';
+    const platform = currentDetailAsset.platform || currentDetailAsset.metadata?.platform || 'instagram';
+    const videoUrl = reel.url || reel.video_url || reel.permalink || '';
+    const views = reel.play_count || reel.plays || reel.views || 0;
+    const likes = reel.like_count || reel.likes || 0;
+    const comments = reel.comment_count || reel.comments || 0;
+    const caption = reel.caption || '';
+    const transcript = reel.transcript || '';
+
+    // Format for AI with full context
+    let text = `CREATOR: @${username}\n`;
+    text += `PLATFORM: ${platform.charAt(0).toUpperCase() + platform.slice(1)}\n`;
+    text += `URL: ${videoUrl}\n`;
+    text += `VIEWS: ${views.toLocaleString()}\n`;
+    text += `LIKES: ${likes.toLocaleString()}\n`;
+    text += `COMMENTS: ${comments.toLocaleString()}\n`;
+    text += `\n---\n\n`;
     if (caption) text += `CAPTION:\n${caption}\n\n`;
     if (transcript) text += `TRANSCRIPT:\n${transcript}`;
 
-    copyToClipboard(text.trim(), item.querySelector('.reel-actions .btn:last-child'));
+    copyToClipboard(text.trim());
 }
 
 function copyTranscriptFromReel(index) {
@@ -1932,10 +2483,63 @@ function copyUrlFromReel(index) {
     copyToClipboard(url, btn);
 }
 
+function toggleReelSection(index, section) {
+    const content = document.getElementById(`reel-${section}-${index}`);
+    const arrow = document.getElementById(`${section}-arrow-${index}`);
+    if (!content) return;
+
+    const isHidden = content.style.display === 'none';
+    content.style.display = isHidden ? 'block' : 'none';
+    if (arrow) arrow.textContent = isHidden ? '▼' : '▶';
+}
+
+// Legacy alias for backwards compatibility
+function toggleReelMetadata(index) {
+    toggleReelSection(index, 'metadata');
+}
+
+function copyReelMetadata(index) {
+    // Use stored asset data for complete metadata including username/platform
+    if (!currentDetailAsset || !currentDetailAsset.top_reels) {
+        // Fallback to DOM scraping
+        const item = document.querySelector(`.reel-accordion-item[data-index="${index}"]`);
+        if (!item) return;
+        const json = item.querySelector('.reel-metadata-json')?.textContent || '{}';
+        const btn = item.querySelector('.reel-metadata-content .btn-copy-sm');
+        copyToClipboard(json, btn);
+        return;
+    }
+
+    const reel = currentDetailAsset.top_reels[index];
+    if (!reel) return;
+
+    // Build complete metadata object with asset-level context
+    const username = currentDetailAsset.username || currentDetailAsset.metadata?.username || 'unknown';
+    const platform = currentDetailAsset.platform || currentDetailAsset.metadata?.platform || 'instagram';
+
+    const metadata = {
+        username: username,
+        platform: platform,
+        video_url: reel.url || reel.video_url || reel.permalink || null,
+        views: reel.play_count || reel.plays || reel.views || 0,
+        likes: reel.like_count || reel.likes || 0,
+        comments: reel.comment_count || reel.comments || 0,
+        caption: reel.caption || null,
+        transcript: reel.transcript || null,
+        shortcode: reel.shortcode || reel.id || null,
+        has_video: !!reel.local_video,
+        source_report_id: currentDetailAsset.id || null
+    };
+
+    const item = document.querySelector(`.reel-accordion-item[data-index="${index}"]`);
+    const btn = item?.querySelector('.reel-metadata-content .btn-copy-sm');
+    copyToClipboard(JSON.stringify(metadata, null, 2), btn);
+}
+
 // Store current asset for save operations
 let currentDetailAsset = null;
 
-async function saveTranscriptAsAsset(index, scrapeId) {
+async function saveTranscriptAsAsset(index, scrapeId, menuItemElement = null) {
     if (!currentDetailAsset || !currentDetailAsset.top_reels) {
         alert('Unable to save: asset data not loaded');
         return;
@@ -1953,6 +2557,12 @@ async function saveTranscriptAsAsset(index, scrapeId) {
         btn.textContent = 'SAVING...';
     }
 
+    // Show saving state in menu item immediately
+    if (menuItemElement) {
+        menuItemElement.innerHTML = `<span class="menu-icon" style="color: #10b981;">⏳</span><span style="color: var(--color-text-secondary);">Saving...</span>`;
+        menuItemElement.style.pointerEvents = 'none';
+    }
+
     try {
         const response = await fetch('/api/assets/save-transcript', {
             method: 'POST',
@@ -1966,12 +2576,42 @@ async function saveTranscriptAsAsset(index, scrapeId) {
 
         const result = await response.json();
         if (response.ok) {
+            const newAssetId = result.id;
             if (btn) {
                 btn.textContent = '✓ SAVED';
                 btn.classList.add('saved');
             }
+            // Update the menu item to show "Saved" state with eye toggle
+            const menuItem = menuItemElement || document.querySelector(`#reel-options-menu-${index} .reel-menu-item[onclick*="save-transcript"]`);
+            if (menuItem) {
+                menuItem.className = 'reel-menu-item reel-menu-item-saved';
+                menuItem.removeAttribute('onclick');
+                menuItem.style.pointerEvents = '';
+                menuItem.innerHTML = `<span class="menu-icon">✓</span>Saved
+                    <button class="transcript-visibility-toggle" onclick="toggleTranscriptVisibility(event, '${newAssetId}')" title="Toggle visibility in library">
+                        <svg class="eye-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                            <circle cx="12" cy="12" r="3"/>
+                        </svg>
+                    </button>`;
+            }
+
+            // Update the header indicator to show "Library" (green) with data-transcript-id
+            const accordionItem = document.querySelector(`.reel-accordion-item[data-index="${index}"]`);
+            if (accordionItem) {
+                const libraryIndicator = accordionItem.querySelector('.reel-indicator-library');
+                if (libraryIndicator) {
+                    // Update existing indicator
+                    libraryIndicator.classList.remove('not-saved');
+                    libraryIndicator.classList.add('active');
+                    libraryIndicator.dataset.transcriptId = newAssetId;
+                    libraryIndicator.title = 'Saved to Library';
+                    libraryIndicator.querySelector('.indicator-label').textContent = 'Library';
+                }
+            }
+
             // Refresh library to show new asset
-            loadAssets();
+            reloadAssets();
         } else {
             throw new Error(result.error || 'Failed to save');
         }
@@ -1980,6 +2620,11 @@ async function saveTranscriptAsAsset(index, scrapeId) {
         if (btn) {
             btn.disabled = false;
             btn.textContent = 'SAVE TO LIBRARY';
+        }
+        // Restore menu item on failure
+        if (menuItemElement) {
+            menuItemElement.style.pointerEvents = '';
+            menuItemElement.innerHTML = '<span class="menu-icon">💾</span>Save as Transcript';
         }
         alert('Failed to save transcript: ' + error.message);
     }
@@ -2156,7 +2801,7 @@ async function saveSkeletonAsAsset(index, reportId) {
                 btn.textContent = '✓ SAVED';
                 btn.classList.add('saved');
             }
-            loadAssets();
+            reloadAssets();
         } else {
             throw new Error(result.error || 'Failed to save');
         }
@@ -3618,6 +4263,156 @@ const providerModels = {
     google: ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.0-flash-exp']
 };
 
+// =====================
+// SPIN BUTTONS
+// =====================
+
+// Default spin suggestions
+const DEFAULT_SPIN_BUTTONS = [
+    'Instead of paying, get it all free',
+    'No coding required',
+    'Works in under 5 minutes',
+    'The lazy way to do it',
+    'What nobody tells you about this'
+];
+
+// Current spin buttons (loaded from server or defaults)
+let spinButtons = [...DEFAULT_SPIN_BUTTONS];
+let spinEditMode = false;
+const MAX_SPIN_BUTTONS = 8;
+
+// Load custom spin buttons from server
+async function loadSpinButtons() {
+    try {
+        const response = await fetch('/api/settings');
+        const settings = await response.json();
+        if (settings.spin_buttons && settings.spin_buttons.length > 0) {
+            spinButtons = settings.spin_buttons;
+        }
+    } catch (error) {
+        console.warn('Failed to load spin buttons, using defaults');
+    }
+    renderSpinButtons();
+}
+
+// Save spin buttons to server
+async function saveSpinButtons() {
+    try {
+        await fetch('/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ spin_buttons: spinButtons })
+        });
+    } catch (error) {
+        console.warn('Failed to save spin buttons:', error);
+    }
+}
+
+// Render spin buttons
+function renderSpinButtons() {
+    const container = document.getElementById('spinButtonsContainer');
+    if (!container) return;
+
+    container.innerHTML = spinButtons.map((text, index) => `
+        <button class="spin-btn ${spinEditMode ? 'editing' : ''}"
+                onclick="${spinEditMode ? '' : `insertSpinText('${escapeHtml(text.replace(/'/g, "\\'"))}')`}"
+                data-index="${index}">
+            <span class="plus-icon">+</span>
+            <span class="spin-text">${escapeHtml(text)}</span>
+            ${spinEditMode ? `<button class="delete-btn" onclick="event.stopPropagation(); deleteSpinButton(${index})">×</button>` : ''}
+        </button>
+    `).join('');
+
+    // Add "Add new" button if under limit and in edit mode
+    if (spinEditMode && spinButtons.length < MAX_SPIN_BUTTONS) {
+        container.innerHTML += `
+            <button class="spin-btn spin-btn-add" onclick="addNewSpinButton()">
+                <span class="plus-icon">+</span>
+                <span>Add new...</span>
+            </button>
+        `;
+    }
+
+    // Update edit toggle state
+    const toggle = document.getElementById('spinEditToggle');
+    if (toggle) {
+        toggle.classList.toggle('active', spinEditMode);
+        toggle.querySelector('span').textContent = spinEditMode ? 'Done' : 'Customize';
+    }
+}
+
+// Insert spin text into the angle input
+function insertSpinText(text) {
+    const input = document.getElementById('wizardAngle');
+    if (input) {
+        input.value = text;
+        input.focus();
+    }
+}
+
+// Toggle edit mode
+function toggleSpinEditMode() {
+    spinEditMode = !spinEditMode;
+    renderSpinButtons();
+}
+
+// Add new spin button
+function addNewSpinButton() {
+    if (spinButtons.length >= MAX_SPIN_BUTTONS) return;
+
+    const container = document.getElementById('spinButtonsContainer');
+    const addBtn = container.querySelector('.spin-btn-add');
+
+    // Replace add button with input
+    const inputHtml = `
+        <input type="text" class="spin-btn-input"
+               placeholder="Enter your spin..."
+               onkeydown="handleSpinInput(event)"
+               onblur="cancelSpinInput(this)"
+               autofocus>
+    `;
+
+    if (addBtn) {
+        addBtn.outerHTML = inputHtml;
+        const input = container.querySelector('.spin-btn-input');
+        if (input) input.focus();
+    }
+}
+
+// Handle spin input keydown
+function handleSpinInput(event) {
+    if (event.key === 'Enter') {
+        const value = event.target.value.trim();
+        if (value && spinButtons.length < MAX_SPIN_BUTTONS) {
+            spinButtons.push(value);
+            saveSpinButtons();
+        }
+        renderSpinButtons();
+    } else if (event.key === 'Escape') {
+        renderSpinButtons();
+    }
+}
+
+// Cancel spin input on blur
+function cancelSpinInput(input) {
+    // Small delay to allow Enter key to process
+    setTimeout(() => {
+        const value = input.value.trim();
+        if (value && spinButtons.length < MAX_SPIN_BUTTONS) {
+            spinButtons.push(value);
+            saveSpinButtons();
+        }
+        renderSpinButtons();
+    }, 100);
+}
+
+// Delete spin button
+function deleteSpinButton(index) {
+    spinButtons.splice(index, 1);
+    saveSpinButtons();
+    renderSpinButtons();
+}
+
 // Fetch settings and Ollama models for rewrite modal
 async function fetchRewriteSettings() {
     try {
@@ -3734,6 +4529,13 @@ function setupRewriteModal() {
             providerSelect.value = 'local';
         }
     }
+
+    // Load spin buttons from cached settings or server
+    if (cachedSettings?.spin_buttons && cachedSettings.spin_buttons.length > 0) {
+        spinButtons = cachedSettings.spin_buttons;
+    }
+    spinEditMode = false;
+    renderSpinButtons();
 
     updateRewriteModel();
     initWizardOptionButtons();
@@ -4211,6 +5013,9 @@ window.copyToClipboard = copyToClipboard;
 window.copyReelForAI = copyReelForAI;
 window.copyTranscriptFromReel = copyTranscriptFromReel;
 window.copyUrlFromReel = copyUrlFromReel;
+window.toggleReelSection = toggleReelSection;
+window.toggleReelMetadata = toggleReelMetadata;
+window.copyReelMetadata = copyReelMetadata;
 window.abortJob = abortJob;
 
 // Expose new functions globally
@@ -4241,3 +5046,11 @@ window.wizardBack = wizardBack;
 window.wizardSkip = wizardSkip;
 window.resetWizard = resetWizard;
 window.editWizardContext = editWizardContext;
+
+// Expose spin button functions globally
+window.insertSpinText = insertSpinText;
+window.toggleSpinEditMode = toggleSpinEditMode;
+window.addNewSpinButton = addNewSpinButton;
+window.handleSpinInput = handleSpinInput;
+window.cancelSpinInput = cancelSpinInput;
+window.deleteSpinButton = deleteSpinButton;

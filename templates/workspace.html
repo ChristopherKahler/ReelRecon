@@ -432,6 +432,38 @@
         </div>
     </div>
 
+    <!-- Delete Reel Confirmation Modal -->
+    <div class="modal" id="deleteReelModal">
+        <div class="modal-backdrop" onclick="closeDeleteReelModal()"></div>
+        <div class="modal-content delete-confirm-modal" style="max-width: 420px;">
+            <div class="modal-header">
+                <span class="modal-title">DELETE REEL</span>
+                <button class="modal-close" onclick="closeDeleteReelModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p id="deleteReelMessage" style="margin-bottom: var(--space-md); color: var(--color-text-secondary);">
+                    Are you sure you want to delete this reel from the scrape report?
+                </p>
+                <div id="deleteTranscriptOption" style="display: none; margin: var(--space-md) 0; padding: var(--space-sm); background: var(--color-bg-elevated); border-radius: var(--radius-sm); border: 1px solid var(--color-border);">
+                    <label style="display: flex; align-items: center; gap: var(--space-sm); cursor: pointer; font-size: var(--text-sm);">
+                        <input type="checkbox" id="deleteTranscriptCheckbox" style="width: 16px; height: 16px; accent-color: #ef4444;">
+                        <span style="color: var(--color-text-secondary);">Also delete saved transcript from Library</span>
+                    </label>
+                    <p style="margin-top: var(--space-xs); margin-left: 24px; font-size: var(--text-xs); color: var(--color-text-muted);">
+                        This transcript was saved as a separate asset.
+                    </p>
+                </div>
+                <p style="font-size: var(--text-xs); color: var(--color-text-muted);">
+                    This action cannot be undone.
+                </p>
+            </div>
+            <div class="modal-actions" style="display: flex; gap: var(--space-sm); justify-content: flex-end;">
+                <button class="modal-btn" onclick="closeDeleteReelModal()">Cancel</button>
+                <button class="modal-btn danger" id="confirmDeleteReelBtn" onclick="confirmDeleteReel()">Delete Reel</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Rewrite Modal (from index.html) -->
     <div class="modal" id="rewriteModal">
         <div class="modal-backdrop" onclick="closeRewriteModal()"></div>
@@ -482,7 +514,7 @@
                         <div class="wizard-step" data-step="1">
                             <div class="wizard-question">What's the topic or niche?</div>
                             <div class="wizard-hint">The subject area or industry this content is about</div>
-                            <input type="text" id="wizardNiche" class="form-input" placeholder="AI tools, fitness, finance, entertainment...">
+                            <textarea id="wizardNiche" class="form-input textarea resizable-vertical" rows="2" placeholder="AI tools, fitness, finance, entertainment..."></textarea>
                         </div>
 
                         <!-- Step 2: Voice/Tone -->
@@ -505,20 +537,35 @@
                             <div class="wizard-question">What's your unique spin?</div>
                             <div class="wizard-hint">What makes YOUR version different from the original?</div>
                             <input type="text" id="wizardAngle" class="form-input" placeholder="Your perspective, twist, or differentiator...">
+                            <div class="spin-buttons-container" id="spinButtonsContainer">
+                                <!-- Buttons populated by JS -->
+                            </div>
+                            <button class="spin-edit-toggle" id="spinEditToggle" onclick="toggleSpinEditMode()">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                                <span>Customize</span>
+                            </button>
                         </div>
 
                         <!-- Step 4: Main Focus -->
                         <div class="wizard-step" data-step="4">
                             <div class="wizard-question">What's the main focus?</div>
                             <div class="wizard-hint">Product, service, idea, story, or message to highlight</div>
-                            <textarea id="wizardProduct" class="form-input textarea" rows="3" placeholder="What you're promoting, teaching, or sharing..."></textarea>
+                            <textarea id="wizardProduct" class="form-input textarea resizable-vertical" rows="3" placeholder="What you're promoting, teaching, or sharing..."></textarea>
+                            <div class="wizard-example">
+                                <span class="example-label">Example:</span>
+                                <span class="example-text">"My free Instagram scraping tool that finds viral reels, extracts transcripts, and helps creators reverse-engineer what's working in their niche - no subscriptions, no API costs."</span>
+                            </div>
                         </div>
 
                         <!-- Step 5: Key Details -->
                         <div class="wizard-step" data-step="5">
                             <div class="wizard-question">Any key details to include?</div>
                             <div class="wizard-hint">Steps, features, facts, or specifics to work in</div>
-                            <textarea id="wizardSetup" class="form-input textarea" rows="3" placeholder="Bullet points, steps, or details..."></textarea>
+                            <textarea id="wizardSetup" class="form-input textarea resizable-vertical" rows="3" placeholder="Bullet points, steps, or details..."></textarea>
+                            <div class="wizard-example">
+                                <span class="example-label">Example:</span>
+                                <span class="example-text">"- Scrapes top 10 reels from any creator<br>- Auto-transcribes with Whisper AI<br>- Analyzes hook patterns and engagement<br>- Works on both Instagram and TikTok<br>- Export to markdown or copy for ChatGPT"</span>
+                            </div>
                         </div>
 
                         <!-- Step 6: CTA -->
